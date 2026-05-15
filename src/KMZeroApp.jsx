@@ -26,12 +26,174 @@ const LIGHT = "#f2f4f8";
 /* ── STORAGE ── */
 const store = {
   async get(key) {
-    try { const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; } catch { return null; }
+    try {
+      // Tenta localStorage primeiro (Vercel/produção)
+      const v = localStorage.getItem("kmzero_" + key);
+      if (v) return JSON.parse(v);
+      // Fallback pra storage do Claude.ai (durante desenvolvimento)
+      if (typeof window !== "undefined" && window.storage && window.storage.get) {
+        const r = await window.storage.get(key);
+        return r ? JSON.parse(r.value) : null;
+      }
+      return null;
+    } catch (e) { console.warn("store.get error:", e); return null; }
   },
   async set(key, val) {
-    try { await window.storage.set(key, JSON.stringify(val)); } catch {}
+    try {
+      const json = JSON.stringify(val);
+      // Salva no localStorage (Vercel/produção)
+      localStorage.setItem("kmzero_" + key, json);
+      // Espelha no storage do Claude.ai se disponível
+      if (typeof window !== "undefined" && window.storage && window.storage.set) {
+        try { await window.storage.set(key, json); } catch {}
+      }
+    } catch (e) {
+      console.warn("store.set error:", e);
+      // localStorage cheio? Tenta limpar e salvar
+      if (e.name === "QuotaExceededError") {
+        alert("⚠️ Armazenamento cheio! Faça backup e limpe dados antigos.");
+      }
+    }
+  },
+  async clear() {
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith("kmzero_"));
+      keys.forEach(k => localStorage.removeItem(k));
+    } catch (e) { console.warn(e); }
   }
 };
+
+/* ════════════════════════════════════════════════════
+   FILE STORE — Armazenamento de arquivos via IndexedDB
+   Preparado para migração futura ao Firebase/Supabase Storage
+══════════════════════════════════════════════════════ */
+const FILE_DB_NAME = "kmzero_files";
+const FILE_DB_VERSION = 1;
+const FILE_STORE_NAME = "anexos";
+
+let _dbInstance = null;
+
+function openFileDB() {
+  if (_dbInstance) return Promise.resolve(_dbInstance);
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB não disponível neste navegador"));
+      return;
+    }
+    const req = indexedDB.open(FILE_DB_NAME, FILE_DB_VERSION);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => { _dbInstance = req.result; resolve(req.result); };
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(FILE_STORE_NAME)) {
+        const os = db.createObjectStore(FILE_STORE_NAME, { keyPath: "id" });
+        os.createIndex("obraId", "obraId", { unique: false });
+        os.createIndex("uploadedAt", "uploadedAt", { unique: false });
+      }
+    };
+  });
+}
+
+const fileStore = {
+  async save(arquivo) {
+    try {
+      const db = await openFileDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([FILE_STORE_NAME], "readwrite");
+        const os = tx.objectStore(FILE_STORE_NAME);
+        const req = os.put(arquivo);
+        req.onsuccess = () => resolve(arquivo);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { console.error("fileStore.save:", e); throw e; }
+  },
+
+  async get(id) {
+    try {
+      const db = await openFileDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([FILE_STORE_NAME], "readonly");
+        const os = tx.objectStore(FILE_STORE_NAME);
+        const req = os.get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { console.error("fileStore.get:", e); return null; }
+  },
+
+  async listByObra(obraId) {
+    try {
+      const db = await openFileDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([FILE_STORE_NAME], "readonly");
+        const os = tx.objectStore(FILE_STORE_NAME);
+        const idx = os.index("obraId");
+        const req = idx.getAll(obraId);
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { console.error("fileStore.listByObra:", e); return []; }
+  },
+
+  async delete(id) {
+    try {
+      const db = await openFileDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([FILE_STORE_NAME], "readwrite");
+        const os = tx.objectStore(FILE_STORE_NAME);
+        const req = os.delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { console.error("fileStore.delete:", e); return false; }
+  },
+
+  async getQuotaInfo() {
+    try {
+      if (navigator.storage && navigator.storage.estimate) {
+        const est = await navigator.storage.estimate();
+        return {
+          usado: est.usage || 0,
+          total: est.quota || 0,
+          percentual: est.quota ? (est.usage / est.quota * 100) : 0,
+        };
+      }
+      return null;
+    } catch { return null; }
+  },
+};
+
+function lerArquivoComoBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatarTamanhoBytes(bytes) {
+  if (!bytes || bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function iconePorTipoArquivo(mime, nome) {
+  const n = (nome || "").toLowerCase();
+  const m = (mime || "").toLowerCase();
+  if (m.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp)$/.test(n)) return "🖼️";
+  if (m === "application/pdf" || n.endsWith(".pdf")) return "📕";
+  if (m.includes("spreadsheet") || m.includes("excel") || /\.(xlsx|xls|csv|ods)$/.test(n)) return "📊";
+  if (m.includes("word") || m.includes("document") || /\.(docx|doc|odt|rtf)$/.test(n)) return "📝";
+  if (m.includes("presentation") || /\.(pptx|ppt|odp)$/.test(n)) return "📈";
+  if (m.startsWith("video/") || /\.(mp4|mov|avi|mkv|webm)$/.test(n)) return "🎬";
+  if (m.startsWith("audio/") || /\.(mp3|wav|m4a|ogg)$/.test(n)) return "🎵";
+  if (/\.(zip|rar|7z|tar|gz)$/.test(n)) return "🗜️";
+  if (/\.(dwg|dxf|rvt|ifc)$/.test(n)) return "📐";
+  return "📄";
+}
 
 /* ── CARREGAR BIBLIOTECAS PDF DINAMICAMENTE ── */
 const carregarScript = (src) => new Promise((resolve, reject) => {
@@ -60,12 +222,28 @@ const KM_PDF_PAGE_CSS = `
   @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   body { max-width: 190mm; margin: 0 auto; padding: 8mm 0; box-sizing: border-box; }
 
-  /* Quebra de página inteligente */
-  h1, h2, h3 { page-break-after: avoid; break-after: avoid; }
+  /* ═══ Quebra de página inteligente — itens nunca cortam no meio ═══ */
+  h1, h2, h3, h4, h5, h6 { page-break-after: avoid; break-after: avoid; page-break-inside: avoid; break-inside: avoid; }
   table { page-break-inside: auto; break-inside: auto; }
-  tr { page-break-inside: avoid; break-inside: avoid; }
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }
+  tr, td, th { page-break-inside: avoid; break-inside: avoid; }
+  li { page-break-inside: avoid; break-inside: avoid; }
+  img, figure { page-break-inside: avoid; break-inside: avoid; max-width: 100%; }
+  blockquote, pre { page-break-inside: avoid; break-inside: avoid; }
+
+  /* Classes específicas do app — blocos que não podem cortar */
+  .kpi, .kpis, .card, .card-pedido, .card-rdo, .card-trab,
+  .secao, .secao-item, .item-pedido, .item-rdo, .resumo-final,
+  .info-box, .item-foto, .grupo-fotos, .ficha-item,
+  .km-header, .km-footer, .assinatura-bloco, .resumo-financeiro,
+  .bloco-pedido, .bloco-mov, .bloco-despesa, .bloco-diario {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Garante margem mínima antes de quebrar */
+  p, div { orphans: 3; widows: 3; }
 `;
 
 const KM_PDF_CSS = `
@@ -2202,6 +2380,192 @@ const MATERIAIS_BANCO_DETALHADO = [
 // Lista plana só com nomes — pra busca textual
 const MATERIAIS_BANCO = MATERIAIS_BANCO_DETALHADO.map(m => m.nome);
 const MATERIAIS = MATERIAIS_BANCO; // mantém compatibilidade
+
+/* ════════════════════════════════════════════════════
+   CATÁLOGO PROFISSIONAL — FROTA / ATIVOS
+   Máquinas pesadas, veículos, equipamentos motorizados
+══════════════════════════════════════════════════════ */
+const CATALOGO_FROTA = [
+  // 🚚 CAMINHÕES
+  { nome: "Caminhão Basculante 6m³", tipo: "Caminhão", icon: "🚚", combustivel: "Diesel", consumoMedio: 3.5, valorHora: 150 },
+  { nome: "Caminhão Basculante 10m³", tipo: "Caminhão", icon: "🚚", combustivel: "Diesel", consumoMedio: 2.8, valorHora: 180 },
+  { nome: "Caminhão Basculante 12m³", tipo: "Caminhão", icon: "🚚", combustivel: "Diesel", consumoMedio: 2.5, valorHora: 200 },
+  { nome: "Caminhão Carroceria 4 ton", tipo: "Caminhão", icon: "🚛", combustivel: "Diesel", consumoMedio: 5, valorHora: 120 },
+  { nome: "Caminhão Carroceria 8 ton", tipo: "Caminhão", icon: "🚛", combustivel: "Diesel", consumoMedio: 4, valorHora: 140 },
+  { nome: "Caminhão Munck 6 ton", tipo: "Caminhão", icon: "🏗️", combustivel: "Diesel", consumoMedio: 3.5, valorHora: 180 },
+  { nome: "Caminhão Munck 10 ton", tipo: "Caminhão", icon: "🏗️", combustivel: "Diesel", consumoMedio: 3, valorHora: 220 },
+  { nome: "Caminhão Pipa 8.000L", tipo: "Caminhão", icon: "💧", combustivel: "Diesel", consumoMedio: 3.5, valorHora: 160 },
+  { nome: "Caminhão Pipa 10.000L", tipo: "Caminhão", icon: "💧", combustivel: "Diesel", consumoMedio: 3, valorHora: 180 },
+  { nome: "Caminhão Pipa 15.000L", tipo: "Caminhão", icon: "💧", combustivel: "Diesel", consumoMedio: 2.5, valorHora: 220 },
+  { nome: "Caminhão Betoneira 8m³", tipo: "Caminhão", icon: "🚧", combustivel: "Diesel", consumoMedio: 2.5, valorHora: 250 },
+  { nome: "Caminhão de Combustível", tipo: "Caminhão", icon: "⛽", combustivel: "Diesel", consumoMedio: 4, valorHora: 180 },
+  { nome: "Caminhão Plataforma", tipo: "Caminhão", icon: "🚚", combustivel: "Diesel", consumoMedio: 4, valorHora: 150 },
+  { nome: "Caminhão Toco", tipo: "Caminhão", icon: "🚛", combustivel: "Diesel", consumoMedio: 5, valorHora: 110 },
+  { nome: "Caminhão Truck", tipo: "Caminhão", icon: "🚚", combustivel: "Diesel", consumoMedio: 3, valorHora: 170 },
+
+  // 🚜 MÁQUINAS PESADAS
+  { nome: "Retroescavadeira", tipo: "Retroescavadeira", icon: "🚜", combustivel: "Diesel", consumoMedio: 8, valorHora: 130 },
+  { nome: "Retroescavadeira 4x4", tipo: "Retroescavadeira", icon: "🚜", combustivel: "Diesel", consumoMedio: 9, valorHora: 150 },
+  { nome: "Escavadeira Hidráulica 14 ton", tipo: "Escavadeira", icon: "⛏️", combustivel: "Diesel", consumoMedio: 14, valorHora: 180 },
+  { nome: "Escavadeira Hidráulica 20 ton", tipo: "Escavadeira", icon: "⛏️", combustivel: "Diesel", consumoMedio: 18, valorHora: 220 },
+  { nome: "Escavadeira Hidráulica 30 ton", tipo: "Escavadeira", icon: "⛏️", combustivel: "Diesel", consumoMedio: 25, valorHora: 280 },
+  { nome: "Mini Escavadeira", tipo: "Escavadeira", icon: "⛏️", combustivel: "Diesel", consumoMedio: 5, valorHora: 110 },
+  { nome: "Pá Carregadeira", tipo: "Pá Carregadeira", icon: "🚜", combustivel: "Diesel", consumoMedio: 12, valorHora: 160 },
+  { nome: "Pá Carregadeira Compacta (Bobcat)", tipo: "Mini Carregadeira", icon: "🚜", combustivel: "Diesel", consumoMedio: 6, valorHora: 120 },
+  { nome: "Motoniveladora (Patrol)", tipo: "Motoniveladora", icon: "🚜", combustivel: "Diesel", consumoMedio: 15, valorHora: 200 },
+  { nome: "Rolo Compactador Vibratório", tipo: "Rolo", icon: "🚧", combustivel: "Diesel", consumoMedio: 8, valorHora: 140 },
+  { nome: "Rolo Compactador Pé de Carneiro", tipo: "Rolo", icon: "🚧", combustivel: "Diesel", consumoMedio: 9, valorHora: 150 },
+  { nome: "Rolo Compactador Pneu", tipo: "Rolo", icon: "🚧", combustivel: "Diesel", consumoMedio: 7, valorHora: 130 },
+  { nome: "Trator de Esteira", tipo: "Trator", icon: "🚜", combustivel: "Diesel", consumoMedio: 18, valorHora: 220 },
+  { nome: "Trator Agrícola", tipo: "Trator", icon: "🚜", combustivel: "Diesel", consumoMedio: 8, valorHora: 100 },
+  { nome: "Empilhadeira Diesel", tipo: "Empilhadeira", icon: "🏗️", combustivel: "Diesel", consumoMedio: 4, valorHora: 80 },
+  { nome: "Empilhadeira Elétrica", tipo: "Empilhadeira", icon: "🏗️", combustivel: "Elétrico", consumoMedio: 0, valorHora: 70 },
+
+  // 🏗️ EQUIPAMENTOS ESPECIAIS
+  { nome: "Grua / Guindaste", tipo: "Grua", icon: "🏗️", combustivel: "Diesel", consumoMedio: 8, valorHora: 280 },
+  { nome: "Plataforma Elevatória Tesoura", tipo: "Plataforma", icon: "🏗️", combustivel: "Elétrico", consumoMedio: 0, valorHora: 100 },
+  { nome: "Plataforma Elevatória Articulada", tipo: "Plataforma", icon: "🏗️", combustivel: "Diesel", consumoMedio: 4, valorHora: 130 },
+  { nome: "Usina de Asfalto Portátil", tipo: "Usina", icon: "🏗️", combustivel: "Diesel", consumoMedio: 20, valorHora: 400 },
+  { nome: "Acabadora de Asfalto", tipo: "Acabadora", icon: "🚧", combustivel: "Diesel", consumoMedio: 14, valorHora: 250 },
+  { nome: "Espargidor de Asfalto", tipo: "Espargidor", icon: "🚧", combustivel: "Diesel", consumoMedio: 6, valorHora: 140 },
+  { nome: "Compressor Diesel Móvel", tipo: "Compressor", icon: "💨", combustivel: "Diesel", consumoMedio: 4, valorHora: 80 },
+  { nome: "Gerador Diesel 50 KVA", tipo: "Gerador", icon: "⚡", combustivel: "Diesel", consumoMedio: 6, valorHora: 90 },
+  { nome: "Gerador Diesel 150 KVA", tipo: "Gerador", icon: "⚡", combustivel: "Diesel", consumoMedio: 15, valorHora: 150 },
+
+  // 🚗 VEÍCULOS LEVES
+  { nome: "Carro / Veículo de Apoio", tipo: "Carro", icon: "🚗", combustivel: "Gasolina", consumoMedio: 10, valorHora: 0 },
+  { nome: "Caminhonete (Pick-up)", tipo: "Caminhonete", icon: "🛻", combustivel: "Diesel", consumoMedio: 8, valorHora: 0 },
+  { nome: "Van / Furgão", tipo: "Van", icon: "🚐", combustivel: "Diesel", consumoMedio: 9, valorHora: 0 },
+  { nome: "Moto / Motocicleta", tipo: "Moto", icon: "🏍️", combustivel: "Gasolina", consumoMedio: 35, valorHora: 0 },
+];
+
+const CATALOGO_FROTA_NOMES = CATALOGO_FROTA.map(f => f.nome);
+
+/* ════════════════════════════════════════════════════
+   CATÁLOGO PROFISSIONAL — EQUIPAMENTOS
+   Ferramentas e equipamentos menores de obra
+══════════════════════════════════════════════════════ */
+const CATALOGO_EQUIPAMENTOS = [
+  // 🔄 CONCRETAGEM
+  { nome: "Betoneira 150L", icon: "🔄", valorAprox: 1800 },
+  { nome: "Betoneira 250L", icon: "🔄", valorAprox: 2200 },
+  { nome: "Betoneira 400L", icon: "🔄", valorAprox: 2500 },
+  { nome: "Betoneira 600L", icon: "🔄", valorAprox: 3200 },
+  { nome: "Vibrador de Concreto Elétrico", icon: "⚙️", valorAprox: 1800 },
+  { nome: "Vibrador de Concreto Gasolina", icon: "⚙️", valorAprox: 2500 },
+  { nome: "Régua Vibratória", icon: "🔄", valorAprox: 2200 },
+  { nome: "Acabadora de Concreto (Helicóptero)", icon: "⚙️", valorAprox: 4500 },
+  { nome: "Bomba de Concreto Manual", icon: "🔧", valorAprox: 1200 },
+
+  // 🛠️ DEMOLIÇÃO E PERFURAÇÃO
+  { nome: "Martelete / Rompedor Elétrico", icon: "🔨", valorAprox: 1200 },
+  { nome: "Martelete Pneumático", icon: "🔨", valorAprox: 1800 },
+  { nome: "Marreta Demolidora", icon: "🔨", valorAprox: 850 },
+  { nome: "Furadeira de Impacto", icon: "🔧", valorAprox: 400 },
+  { nome: "Furadeira Industrial", icon: "🔧", valorAprox: 850 },
+  { nome: "Parafusadeira", icon: "🔧", valorAprox: 350 },
+  { nome: "Perfuratriz", icon: "🔧", valorAprox: 2500 },
+
+  // 🪚 CORTE E DESBASTE
+  { nome: "Serra Circular", icon: "⚙️", valorAprox: 600 },
+  { nome: "Serra Mármore", icon: "⚙️", valorAprox: 700 },
+  { nome: "Serra Tico-tico", icon: "⚙️", valorAprox: 400 },
+  { nome: "Serra de Bancada", icon: "⚙️", valorAprox: 1500 },
+  { nome: "Serra Policorte", icon: "⚙️", valorAprox: 1200 },
+  { nome: "Esmerilhadeira Angular", icon: "⚙️", valorAprox: 350 },
+  { nome: "Esmerilhadeira Grande", icon: "⚙️", valorAprox: 650 },
+  { nome: "Lixadeira Orbital", icon: "🛠️", valorAprox: 450 },
+  { nome: "Lixadeira de Parede", icon: "🛠️", valorAprox: 850 },
+  { nome: "Lixadeira de Cinta", icon: "🛠️", valorAprox: 600 },
+  { nome: "Plaina Elétrica", icon: "🛠️", valorAprox: 550 },
+
+  // 🚧 COMPACTAÇÃO
+  { nome: "Compactador de Placa (Sapinho)", icon: "🛠️", valorAprox: 5000 },
+  { nome: "Compactador Tipo Sapo", icon: "🛠️", valorAprox: 5500 },
+  { nome: "Mini Rolo Compactador", icon: "🚧", valorAprox: 8000 },
+  { nome: "Soquete Pneumático", icon: "🔨", valorAprox: 1500 },
+
+  // ⚡ ELÉTRICOS E PNEUMÁTICOS
+  { nome: "Gerador Gasolina 2,5 KVA", icon: "⚡", valorAprox: 2000 },
+  { nome: "Gerador Gasolina 5 KVA", icon: "⚡", valorAprox: 3500 },
+  { nome: "Gerador Diesel 10 KVA", icon: "⚡", valorAprox: 12000 },
+  { nome: "Compressor de Ar 10pcm", icon: "💨", valorAprox: 2500 },
+  { nome: "Compressor de Ar 20pcm", icon: "💨", valorAprox: 4500 },
+  { nome: "Soldadora Inversora", icon: "⚡", valorAprox: 1500 },
+  { nome: "Soldadora a Diesel", icon: "⚡", valorAprox: 8000 },
+  { nome: "Transformador 220/110V", icon: "⚡", valorAprox: 800 },
+
+  // 💧 BOMBAS E ÁGUA
+  { nome: "Bomba Submersa Pequena", icon: "💧", valorAprox: 850 },
+  { nome: "Bomba Submersa Grande", icon: "💧", valorAprox: 2200 },
+  { nome: "Motobomba Centrífuga", icon: "💧", valorAprox: 1200 },
+  { nome: "Motobomba de Lama", icon: "💧", valorAprox: 2800 },
+  { nome: "Bomba Recalque", icon: "💧", valorAprox: 1500 },
+  { nome: "Lavadora de Alta Pressão", icon: "💧", valorAprox: 1800 },
+
+  // 📏 MEDIÇÃO
+  { nome: "Trena Laser", icon: "📏", valorAprox: 350 },
+  { nome: "Nível a Laser", icon: "📏", valorAprox: 800 },
+  { nome: "Nível de Mangueira", icon: "📏", valorAprox: 80 },
+  { nome: "Esquadro Magnético", icon: "📏", valorAprox: 120 },
+  { nome: "Teodolito", icon: "📏", valorAprox: 6500 },
+  { nome: "Estação Total", icon: "📏", valorAprox: 25000 },
+  { nome: "Nível Óptico", icon: "📏", valorAprox: 2200 },
+  { nome: "GPS Topográfico", icon: "📏", valorAprox: 18000 },
+
+  // 🏗️ ANDAIMES E ESTRUTURAS
+  { nome: "Andaime Tubular (módulo)", icon: "🏗️", valorAprox: 280 },
+  { nome: "Andaime Fachadeiro (módulo)", icon: "🏗️", valorAprox: 350 },
+  { nome: "Andaime Multidirecional (módulo)", icon: "🏗️", valorAprox: 450 },
+  { nome: "Escora Metálica Regulável", icon: "🏗️", valorAprox: 85 },
+  { nome: "Escora Metálica Tubular", icon: "🏗️", valorAprox: 120 },
+  { nome: "Escada Extensível Alumínio", icon: "🪜", valorAprox: 600 },
+  { nome: "Escada Industrial 13 degraus", icon: "🪜", valorAprox: 350 },
+
+  // 🛒 TRANSPORTE
+  { nome: "Carrinho de Mão", icon: "🛒", valorAprox: 180 },
+  { nome: "Carrinho Plataforma", icon: "🛒", valorAprox: 280 },
+  { nome: "Carrinho Hidráulico (Paleteira)", icon: "🛒", valorAprox: 1500 },
+  { nome: "Padiola", icon: "🛒", valorAprox: 60 },
+  { nome: "Giricos / Caçamba Plástica", icon: "🛒", valorAprox: 120 },
+
+  // 🔧 FERRAMENTAS MANUAIS
+  { nome: "Pá Quadrada", icon: "🔧", valorAprox: 35 },
+  { nome: "Pá Curva (de bico)", icon: "🔧", valorAprox: 35 },
+  { nome: "Enxada", icon: "🔧", valorAprox: 30 },
+  { nome: "Picareta", icon: "🔧", valorAprox: 45 },
+  { nome: "Marreta", icon: "🔧", valorAprox: 40 },
+  { nome: "Chave de Fenda Industrial", icon: "🔧", valorAprox: 35 },
+  { nome: "Alicate Industrial", icon: "🔧", valorAprox: 50 },
+  { nome: "Jogo de Chaves Combinadas", icon: "🔧", valorAprox: 180 },
+
+  // 🛡️ EPIs E SEGURANÇA
+  { nome: "Capacete Aba Frontal", icon: "🛡️", valorAprox: 25 },
+  { nome: "Capacete com Jugular", icon: "🛡️", valorAprox: 35 },
+  { nome: "Cinto Paraquedista", icon: "🛡️", valorAprox: 280 },
+  { nome: "Talabarte Y", icon: "🛡️", valorAprox: 180 },
+  { nome: "Linha de Vida", icon: "🛡️", valorAprox: 350 },
+  { nome: "Cone Sinalização 75cm", icon: "🛡️", valorAprox: 35 },
+  { nome: "Cone Sinalização 100cm", icon: "🛡️", valorAprox: 55 },
+  { nome: "Tela de Sinalização (m)", icon: "🛡️", valorAprox: 8 },
+  { nome: "Fita Zebrada (rolo)", icon: "🛡️", valorAprox: 25 },
+
+  // 💡 ILUMINAÇÃO
+  { nome: "Refletor LED Obra 50W", icon: "💡", valorAprox: 120 },
+  { nome: "Refletor LED Obra 100W", icon: "💡", valorAprox: 200 },
+  { nome: "Refletor LED Obra 200W", icon: "💡", valorAprox: 380 },
+  { nome: "Holofote (Balizador)", icon: "💡", valorAprox: 850 },
+  { nome: "Lâmpada Portátil c/ Gancho", icon: "💡", valorAprox: 65 },
+
+  // 🧰 OUTROS
+  { nome: "Caixa Ferramenta Profissional", icon: "🧰", valorAprox: 280 },
+  { nome: "Bancada de Marceneiro", icon: "🪚", valorAprox: 1200 },
+  { nome: "Cavalete de Apoio", icon: "🪚", valorAprox: 180 },
+  { nome: "Container 6 metros", icon: "📦", valorAprox: 8500 },
+  { nome: "Container 12 metros", icon: "📦", valorAprox: 15000 },
+];
+
+const CATALOGO_EQUIPAMENTOS_NOMES = CATALOGO_EQUIPAMENTOS.map(e => e.nome);
 // Acesso rápido por nome -> objeto detalhado
 const MATERIAL_INFO = {};
 MATERIAIS_BANCO_DETALHADO.forEach(m => { MATERIAL_INFO[m.nome] = m; });
@@ -2213,12 +2577,27 @@ const DEFAULT_USUARIOS = [
 ];
 
 const EMPRESA_PADRAO = {
-  razaoSocial: "KM Consultoria, Assessoria e Serviços de Engenharia Ltda",
-  cnpj: "00.000.000/0001-00",
+  razaoSocial: "KM CONSULTORIA, ASSESSORIA E SERVICOS DE ENGENHARIA LTDA",
+  nomeFantasia: "KM SERVICOS",
+  cnpj: "60.368.233/0001-73",
+  inscEstadual: "",
+  porte: "ME",
+  natureza: "Sociedade Empresária Limitada",
+  atividadePrincipal: "71.12-0-00 - Serviços de engenharia",
+  dataAbertura: "11/04/2025",
   responsavel: "Kleber Vieira Martins",
   email: "kvmprojetos@gmail.com",
   telefone: "(28) 99925-8172",
   registro: "CREA-ES",
+  // Endereço completo
+  logradouro: "R Pastor da Silva Colares",
+  numero: "148",
+  complemento: "",
+  bairro: "Guararema",
+  cidade: "Alegre",
+  uf: "ES",
+  cep: "29.500-000",
+  endereco: "R Pastor da Silva Colares, 148 - Guararema, Alegre - ES, 29.500-000",
   // Alimentação (valores configuráveis)
   valorCafeManha: 13,
   valorCafeTarde: 0,
@@ -4415,7 +4794,8 @@ function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, onRemove
 /* ════════════════════════════════════
    GALERIA DE FOTOS POR OBRA
 ════════════════════════════════════ */
-function TelaGaleria({ obras, fotos = [], onBack, onRemover }) {
+function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
+  const isGestor = usuario && usuario.perfil === "gestor";
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroData, setFiltroData] = useState("");
   const [fotoExpandida, setFotoExpandida] = useState(null);
@@ -4528,7 +4908,7 @@ function TelaGaleria({ obras, fotos = [], onBack, onRemover }) {
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button onClick={() => baixarFoto(fotoExpandida)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 10, padding: 12, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>📥 Baixar</button>
-              <button onClick={() => { confirmar("Excluir esta foto da galeria?", () => { onRemover(fotoExpandida.id); setFotoExpandida(null); }) }} style={{ background: RED, color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>🗑️</button>
+              {isGestor && <button onClick={() => { confirmar("Excluir esta foto da galeria?", () => { onRemover(fotoExpandida.id); setFotoExpandida(null); }) }} style={{ background: RED, color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>🗑️</button>}
             </div>
           </div>
         </div>
@@ -5396,6 +5776,7 @@ function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, me
         { icon: "🏢", l: "Empresa",       nav: "empresa", c: "#334155" },
         { icon: "💾", l: "Backup",        nav: "backup",  c: "#6b7280" },
         { icon: "🎬", l: "Gerar 30 dias",  nav: "gerar_simulacao", c: "#7c3aed" },
+        { icon: "🧹", l: "Zerar Tudo",    nav: "zerar_tudo", c: "#dc2626" },
       ],
     },
   ];
@@ -5601,7 +5982,7 @@ function CategoriaCard({ categoria, onNav }) {
 /* ════════════════════════════════════
    OBRAS (GESTOR)
 ════════════════════════════════════ */
-function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav }) {
+function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
   const [modal, setModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [obraSelecionada, setObraSelecionada] = useState(null);
@@ -5634,7 +6015,13 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
       rdosEmitidos={rdosEmitidos}
       onBack={() => setObraSelecionada(null)}
       onEditar={() => abrirEdit(obraSelecionada)}
-      onNav={onNav}
+      onNav={(destino) => {
+        if (destino === "anexos_obra" && onNavAnexos) {
+          onNavAnexos(obraSelecionada);
+        } else if (onNav) {
+          onNav(destino);
+        }
+      }}
     />;
   }
 
@@ -5916,6 +6303,13 @@ function TelaObraDetalhe({ obra, trabalhadores, ativos, equips, ferramentas, ped
             </div>
           </Secao>
         )}
+
+        {/* ANEXOS */}
+        <Secao titulo="Anexos" icone="📎" valor="" cor="#0891b2" onClickAcao={() => onNav && onNav("anexos_obra")} acaoLabel="Gerenciar anexos">
+          <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
+            Projetos, contratos, ART/RRT, planilhas, licenças e demais documentos da obra.
+          </div>
+        </Secao>
 
         {/* CRONOGRAMA */}
         {cron.length > 0 ? (
@@ -7023,6 +7417,7 @@ function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
     <head>
       <title>Pedido Nº ${numeroPedido}</title>
       <style>
+        ${KM_PDF_PAGE_CSS}
         @page { size: A6; margin: 4mm; }
         * { box-sizing: border-box; }
         body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; font-size: 7.5pt; line-height: 1.25; margin: 0; padding: 0; width: 97mm; }
@@ -7231,6 +7626,7 @@ function gerarFichaCadastralPDF(t, obra, empresa) {
     <head>
       <title>Ficha Cadastral - ${t.nome}</title>
       <style>
+        ${KM_PDF_PAGE_CSS}
         @page { size: A4 portrait; margin: 12mm 10mm; }
         @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
         body { font-family: Arial, sans-serif; color: #000; font-size: 10pt; line-height: 1.25; margin: 0 auto; max-width: 190mm; padding: 4mm; box-sizing: border-box; }
@@ -8259,7 +8655,14 @@ function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onAdd, onR
           <div key={d.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
               <div style={{ fontSize: 11, color: "#888", fontWeight: 600 }}>📌 {d.autor} • {new Date(d.ts).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
-              <button onClick={() => onRemove(d.id)} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", cursor: "pointer", fontSize: 16, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+              {(() => {
+                const isGestor = usuario && usuario.perfil === "gestor";
+                const ehMeuLancamentoDeHoje = usuario && d.autor === usuario.nome && (Date.now() - d.ts) < 24 * 60 * 60 * 1000;
+                if (isGestor || ehMeuLancamentoDeHoje) {
+                  return <button onClick={() => onRemove(d.id)} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", cursor: "pointer", fontSize: 16, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>;
+                }
+                return null;
+              })()}
             </div>
             {d.texto && <div style={{ fontSize: 14, color: NAVY, whiteSpace: "pre-wrap", lineHeight: 1.4, marginBottom: d.foto ? 8 : 0 }}>{d.texto}</div>}
             {d.foto && <img src={d.foto} alt="Foto da ocorrência" onClick={() => setFotoVer({ src: d.foto, legenda: d.texto })} style={{ width: "100%", borderRadius: 8, border: "1px solid #eee", cursor: "pointer" }} />}
@@ -8324,7 +8727,22 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
 
       <Modal show={modal} title={editandoId ? "Editar Equipamento" : "Novo Equipamento"} onClose={() => setModal(false)}>
         <label style={labelS}>Nome</label>
-        <input value={form.nome} onChange={e => set("nome", e.target.value)} placeholder="Ex: Betoneira" style={inputS} />
+        <input
+          value={form.nome}
+          onChange={e => {
+            const novoNome = e.target.value;
+            set("nome", novoNome);
+            // Auto-preenche o ícone se o nome bater com um do catálogo
+            const itemCat = CATALOGO_EQUIPAMENTOS.find(c => c.nome === novoNome);
+            if (itemCat) set("icon", itemCat.icon);
+          }}
+          list="catalogo-equipamentos"
+          placeholder="Ex: Betoneira"
+          style={inputS}
+        />
+        <datalist id="catalogo-equipamentos">
+          {CATALOGO_EQUIPAMENTOS_NOMES.map(n => <option key={n} value={n} />)}
+        </datalist>
         <label style={labelS}>Código</label>
         <input value={form.codigo} onChange={e => set("codigo", e.target.value)} placeholder="Ex: EQ045" style={inputS} />
         <label style={labelS}>Obra</label>
@@ -8888,6 +9306,7 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
   const exportar = () => {
     const html = `<html><head><title>Relatório Consolidado - ${tituloPeriodo}</title>
       <style>
+        ${KM_PDF_PAGE_CSS}
         body{font-family:Arial;padding:30px;color:#222;}
         h1{color:${NAVY};border-bottom:3px solid ${GOLD};padding-bottom:8px;}
         h2{color:${NAVY};margin-top:24px;}
@@ -9076,7 +9495,27 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
           {TIPOS.map(t => <option key={t}>{t}</option>)}
         </select>
         <label style={labelS}>Nome / Identificação</label>
-        <input value={form.nome} onChange={e => set("nome", e.target.value)} placeholder="Ex: Retro 01" style={inputS} />
+        <input
+          value={form.nome}
+          onChange={e => {
+            const novoNome = e.target.value;
+            set("nome", novoNome);
+            // Auto-preenche tipo, combustível, valor-hora, etc se bater com catálogo
+            const itemCat = CATALOGO_FROTA.find(c => c.nome === novoNome);
+            if (itemCat) {
+              set("tipo", itemCat.tipo);
+              if (itemCat.combustivel) set("combustivel", itemCat.combustivel);
+              if (itemCat.consumoMedio !== undefined) set("consumoMedio", itemCat.consumoMedio);
+              if (itemCat.valorHora !== undefined) set("valorHora", itemCat.valorHora);
+            }
+          }}
+          list="catalogo-frota"
+          placeholder="Ex: Retro 01, Caminhão Pipa, Escavadeira..."
+          style={inputS}
+        />
+        <datalist id="catalogo-frota">
+          {CATALOGO_FROTA_NOMES.map(n => <option key={n} value={n} />)}
+        </datalist>
         <label style={labelS}>Placa</label>
         <input value={form.placa} onChange={e => set("placa", e.target.value)} placeholder="ABC-1234" style={inputS} />
         <label style={labelS}>Obra</label>
@@ -11457,6 +11896,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     const periodo = `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
     const html = `<html><head><title>Folha Quinzenal — ${meses[mes]}/${ano} (${quinzena}ª)</title>
       <style>
+        ${KM_PDF_PAGE_CSS}
         @page { size: A4 landscape; margin: 10mm; }
         @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
         body { font-family: Arial; color: #1a1a1a; font-size: 9pt; margin: 0 auto; max-width: 277mm; box-sizing: border-box; padding: 4mm; }
@@ -12831,6 +13271,7 @@ function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
     const titulo = { vencido: "ASO Vencidos", vence_30: "ASO Vencendo (30 dias)", apto: "Aptos", inapto: "Inaptos / Restrições", sem_aso: "Sem ASO Cadastrado" }[filtro];
     const html = `<html><head><title>${titulo}</title>
       <style>
+        ${KM_PDF_PAGE_CSS}
         @page { size: A4 portrait; margin: 12mm 10mm; }
         @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
         body { font-family: Arial; color: #222; margin: 0 auto; max-width: 190mm; padding: 6mm 4mm; box-sizing: border-box; }
@@ -13300,6 +13741,661 @@ function TelaDiagnostico({ onNav, onBack }) {
 /* ════════════════════════════════════
    APP ROOT COM STORAGE
 ════════════════════════════════════ */
+/* ════════════════════════════════════
+   ZERAR TUDO — tela com confirmação por digitação
+════════════════════════════════════ */
+/* ════════════════════════════════════════════════════
+   TELA DE ANEXOS DA OBRA
+   Gestor anexa qualquer tipo, encarregado anexa fotos e atestados
+══════════════════════════════════════════════════════ */
+const CATEGORIAS_ANEXO_GESTOR = [
+  { id: "projetos", label: "Projetos", icon: "📐", cor: "#0891b2" },
+  { id: "contratos", label: "Contratos", icon: "📋", cor: "#7c3aed" },
+  { id: "art_rrt", label: "ART/RRT", icon: "📜", cor: "#dc2626" },
+  { id: "planilhas", label: "Planilhas/Orçamentos", icon: "📊", cor: "#16a34a" },
+  { id: "licencas", label: "Licenças/Alvarás", icon: "🏛️", cor: "#ca8a04" },
+  { id: "memoriais", label: "Memoriais Descritivos", icon: "📝", cor: "#475569" },
+  { id: "diario_oficial", label: "Diário Oficial", icon: "📰", cor: "#334155" },
+  { id: "outros_gestor", label: "Outros (Gestor)", icon: "📁", cor: "#6b7280" },
+];
+
+const CATEGORIAS_ANEXO_ENCARREGADO = [
+  { id: "fotos_extras", label: "Fotos Extras", icon: "📷", cor: "#0891b2" },
+  { id: "atestados", label: "Atestados Médicos", icon: "🏥", cor: "#dc2626" },
+  { id: "notas_fiscais", label: "Notas Fiscais", icon: "🧾", cor: "#16a34a" },
+  { id: "comprovantes", label: "Comprovantes", icon: "📑", cor: "#7c3aed" },
+];
+
+function TelaAnexosObra({ obra, usuario, onBack }) {
+  const isGestor = usuario && usuario.perfil === "gestor";
+  const categorias = isGestor
+    ? [...CATEGORIAS_ANEXO_GESTOR, ...CATEGORIAS_ANEXO_ENCARREGADO]
+    : CATEGORIAS_ANEXO_ENCARREGADO;
+
+  const [arquivos, setArquivos] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [filtroCat, setFiltroCat] = useState("todas");
+  const [modalUpload, setModalUpload] = useState(false);
+  const [categoriaUpload, setCategoriaUpload] = useState(categorias[0]?.id || "");
+  const [descricaoUpload, setDescricaoUpload] = useState("");
+  const [arquivoSelecionado, setArquivoSelecionado] = useState(null);
+  const [progresso, setProgresso] = useState({ atual: 0, total: 0, fase: "" });
+  const [quotaInfo, setQuotaInfo] = useState(null);
+  const [visualizando, setVisualizando] = useState(null);
+
+  const carregarArquivos = async () => {
+    setCarregando(true);
+    try {
+      const lista = await fileStore.listByObra(obra.id);
+      lista.sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+      setArquivos(lista);
+      const q = await fileStore.getQuotaInfo();
+      setQuotaInfo(q);
+    } catch (e) {
+      console.error("Erro ao carregar anexos:", e);
+      alert("Não foi possível carregar os anexos. " + (e.message || ""));
+    }
+    setCarregando(false);
+  };
+
+  useEffect(() => { carregarArquivos(); }, [obra.id]);
+
+  const onSelecionarArquivo = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      alert("⚠️ Arquivo muito grande.\n\nTamanho máximo: 25 MB\nTamanho do arquivo: " + formatarTamanhoBytes(file.size));
+      e.target.value = "";
+      return;
+    }
+    setArquivoSelecionado(file);
+    if (!descricaoUpload) setDescricaoUpload(file.name.replace(/\.[^.]+$/, ""));
+  };
+
+  const fazerUpload = async () => {
+    if (!arquivoSelecionado) {
+      alert("Selecione um arquivo primeiro.");
+      return;
+    }
+    if (!categoriaUpload) {
+      alert("Escolha uma categoria.");
+      return;
+    }
+
+    try {
+      setProgresso({ atual: 30, total: 100, fase: "Lendo arquivo..." });
+      const base64 = await lerArquivoComoBase64(arquivoSelecionado);
+
+      setProgresso({ atual: 70, total: 100, fase: "Salvando..." });
+      const novoAnexo = {
+        id: Date.now() + "_" + Math.random().toString(36).substring(2, 9),
+        obraId: obra.id,
+        obraNome: obra.nome,
+        categoria: categoriaUpload,
+        descricao: descricaoUpload.trim() || arquivoSelecionado.name,
+        nomeOriginal: arquivoSelecionado.name,
+        tamanho: arquivoSelecionado.size,
+        mime: arquivoSelecionado.type || "application/octet-stream",
+        conteudoBase64: base64,
+        uploadedBy: usuario ? usuario.nome : "Desconhecido",
+        uploadedByPerfil: usuario ? usuario.perfil : "encarregado",
+        uploadedAt: Date.now(),
+      };
+
+      await fileStore.save(novoAnexo);
+
+      setProgresso({ atual: 100, total: 100, fase: "Concluído!" });
+      setTimeout(() => {
+        setProgresso({ atual: 0, total: 0, fase: "" });
+        setModalUpload(false);
+        setArquivoSelecionado(null);
+        setDescricaoUpload("");
+        setCategoriaUpload(categorias[0]?.id || "");
+        carregarArquivos();
+      }, 400);
+    } catch (e) {
+      console.error("Erro no upload:", e);
+      setProgresso({ atual: 0, total: 0, fase: "" });
+      if (e.name === "QuotaExceededError" || (e.message && e.message.includes("quota"))) {
+        alert("❌ Armazenamento cheio.\n\nApague arquivos antigos para liberar espaço.");
+      } else {
+        alert("❌ Erro ao salvar: " + (e.message || e));
+      }
+    }
+  };
+
+  const baixarArquivo = (anexo) => {
+    try {
+      const link = document.createElement("a");
+      link.href = anexo.conteudoBase64;
+      link.download = anexo.nomeOriginal || "arquivo";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      alert("Erro ao baixar: " + (e.message || e));
+    }
+  };
+
+  const visualizarArquivo = (anexo) => {
+    const ehImagem = (anexo.mime || "").startsWith("image/");
+    const ehPdf = anexo.mime === "application/pdf";
+    if (ehImagem || ehPdf) {
+      setVisualizando(anexo);
+    } else {
+      baixarArquivo(anexo);
+    }
+  };
+
+  const excluirArquivo = async (anexo) => {
+    const podeExcluir = isGestor || (anexo.uploadedBy === (usuario && usuario.nome));
+    if (!podeExcluir) {
+      alert("Você só pode excluir anexos que você mesmo enviou.");
+      return;
+    }
+    if (!confirm("Excluir o arquivo \"" + anexo.descricao + "\"?\n\nEsta ação não pode ser desfeita.")) return;
+    try {
+      await fileStore.delete(anexo.id);
+      carregarArquivos();
+    } catch (e) {
+      alert("Erro ao excluir: " + (e.message || e));
+    }
+  };
+
+  const arquivosFiltrados = filtroCat === "todas"
+    ? arquivos
+    : arquivos.filter(a => a.categoria === filtroCat);
+
+  const totalTamanho = arquivos.reduce((s, a) => s + (a.tamanho || 0), 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      <KMHeader title="📎 Anexos da Obra" sub={obra.nome} onBack={onBack} />
+
+      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+
+        <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid #e5e7eb" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>📊 Resumo</div>
+            {quotaInfo && quotaInfo.total > 0 && (
+              <div style={{ fontSize: 10, color: "#888" }}>
+                {formatarTamanhoBytes(quotaInfo.usado)} de {formatarTamanhoBytes(quotaInfo.total)} ({quotaInfo.percentual.toFixed(1)}%)
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
+            <div><b style={{ color: NAVY }}>{arquivos.length}</b> arquivo(s)</div>
+            <div style={{ color: "#666" }}>•</div>
+            <div><b style={{ color: NAVY }}>{formatarTamanhoBytes(totalTamanho)}</b> nesta obra</div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setModalUpload(true)}
+          style={{
+            width: "100%", padding: 14, background: NAVY, color: "#fff",
+            border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14,
+            cursor: "pointer", marginBottom: 12, boxShadow: "0 3px 10px rgba(15,33,81,0.25)"
+          }}
+        >
+          ⬆️ ANEXAR NOVO ARQUIVO
+        </button>
+
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 12, paddingBottom: 4 }}>
+          <button
+            onClick={() => setFiltroCat("todas")}
+            style={{
+              padding: "8px 14px", borderRadius: 20, border: "none",
+              background: filtroCat === "todas" ? NAVY : "#fff",
+              color: filtroCat === "todas" ? "#fff" : NAVY,
+              fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+              border: filtroCat === "todas" ? "none" : "1px solid #e5e7eb",
+            }}
+          >
+            Todas ({arquivos.length})
+          </button>
+          {categorias.map(c => {
+            const qtd = arquivos.filter(a => a.categoria === c.id).length;
+            if (qtd === 0 && filtroCat !== c.id) return null;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setFiltroCat(c.id)}
+                style={{
+                  padding: "8px 14px", borderRadius: 20, border: "none",
+                  background: filtroCat === c.id ? c.cor : "#fff",
+                  color: filtroCat === c.id ? "#fff" : c.cor,
+                  fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+                  border: filtroCat === c.id ? "none" : "1px solid " + c.cor + "55",
+                }}
+              >
+                {c.icon} {c.label} ({qtd})
+              </button>
+            );
+          })}
+        </div>
+
+        {carregando ? (
+          <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Carregando anexos...</div>
+        ) : arquivosFiltrados.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
+            <div style={{ fontSize: 13 }}>
+              {arquivos.length === 0
+                ? "Nenhum arquivo anexado ainda."
+                : "Nenhum arquivo nesta categoria."}
+            </div>
+          </div>
+        ) : (
+          arquivosFiltrados.map(a => {
+            const cat = categorias.find(c => c.id === a.categoria) || { label: "Outros", icon: "📄", cor: "#6b7280" };
+            const podeExcluir = isGestor || (a.uploadedBy === (usuario && usuario.nome));
+            return (
+              <div key={a.id} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, border: "1px solid #e5e7eb", borderLeft: "4px solid " + cat.cor }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ fontSize: 32 }}>{iconePorTipoArquivo(a.mime, a.nomeOriginal)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: NAVY, fontSize: 13, marginBottom: 3, wordBreak: "break-word" }}>
+                      {a.descricao}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#666", marginBottom: 3, wordBreak: "break-word" }}>
+                      📄 {a.nomeOriginal} • {formatarTamanhoBytes(a.tamanho)}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#888", marginBottom: 6 }}>
+                      <span style={{ background: cat.cor + "22", color: cat.cor, padding: "2px 6px", borderRadius: 4, fontWeight: 700, marginRight: 6 }}>
+                        {cat.icon} {cat.label}
+                      </span>
+                      por {a.uploadedBy} • {new Date(a.uploadedAt).toLocaleDateString("pt-BR")}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => visualizarArquivo(a)}
+                        style={{ flex: 1, padding: "6px 8px", background: "#eff6ff", color: BLUE, border: "1px solid " + BLUE + "55", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        👁️ Ver
+                      </button>
+                      <button
+                        onClick={() => baixarArquivo(a)}
+                        style={{ flex: 1, padding: "6px 8px", background: "#dcfce7", color: "#15803d", border: "1px solid #16a34a55", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        ⬇️ Baixar
+                      </button>
+                      {podeExcluir && (
+                        <button
+                          onClick={() => excluirArquivo(a)}
+                          style={{ padding: "6px 10px", background: "#fee2e2", color: RED, border: "1px solid " + RED + "55", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <Modal show={modalUpload} title="⬆️ Anexar Arquivo" onClose={() => { if (!progresso.fase) { setModalUpload(false); setArquivoSelecionado(null); setDescricaoUpload(""); } }}>
+        {progresso.fase ? (
+          <div style={{ padding: 20, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⬆️</div>
+            <div style={{ fontWeight: 700, color: NAVY, marginBottom: 10 }}>{progresso.fase}</div>
+            <div style={{ background: "#e5e7eb", borderRadius: 8, height: 10, overflow: "hidden", marginBottom: 8 }}>
+              <div style={{ background: NAVY, height: "100%", width: progresso.atual + "%", transition: "width 0.3s" }}></div>
+            </div>
+            <div style={{ fontSize: 11, color: "#666" }}>{progresso.atual}%</div>
+          </div>
+        ) : (
+          <>
+            <label style={labelS}>Categoria</label>
+            <select value={categoriaUpload} onChange={e => setCategoriaUpload(e.target.value)} style={selS}>
+              {categorias.map(c => (
+                <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+              ))}
+            </select>
+
+            <label style={labelS}>Descrição (opcional)</label>
+            <input
+              value={descricaoUpload}
+              onChange={e => setDescricaoUpload(e.target.value)}
+              placeholder="Ex: Projeto arquitetônico revisão 02"
+              style={inputS}
+            />
+
+            <label style={labelS}>Arquivo (máx. 25 MB)</label>
+            <input
+              type="file"
+              onChange={onSelecionarArquivo}
+              accept={isGestor
+                ? ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.gif,.zip,.rar,.dwg,.dxf,.txt,.csv"
+                : ".pdf,.jpg,.jpeg,.png,.webp,.gif"}
+              style={{ ...inputS, padding: 8 }}
+            />
+
+            {arquivoSelecionado && (
+              <div style={{ background: "#eff6ff", borderRadius: 8, padding: 10, marginTop: 6, marginBottom: 10, fontSize: 12, color: "#1e40af" }}>
+                <div style={{ fontWeight: 700 }}>{iconePorTipoArquivo(arquivoSelecionado.type, arquivoSelecionado.name)} {arquivoSelecionado.name}</div>
+                <div style={{ fontSize: 11, opacity: 0.8 }}>{formatarTamanhoBytes(arquivoSelecionado.size)}</div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              <button onClick={() => { setModalUpload(false); setArquivoSelecionado(null); setDescricaoUpload(""); }} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: "#eee", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
+              <button onClick={fazerUpload} disabled={!arquivoSelecionado} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: arquivoSelecionado ? NAVY : "#9ca3af", color: "#fff", fontWeight: 700, cursor: arquivoSelecionado ? "pointer" : "not-allowed", fontSize: 12 }}>⬆️ Anexar</button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {visualizando && (
+        <div
+          onClick={() => setVisualizando(null)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 99999,
+            display: "flex", flexDirection: "column", padding: 0,
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: "#0f2151", padding: "10px 14px", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {iconePorTipoArquivo(visualizando.mime, visualizando.nomeOriginal)} {visualizando.descricao}
+            </div>
+            <button onClick={() => setVisualizando(null)} style={{ background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", borderRadius: 16, width: 32, height: 32, fontSize: 16, cursor: "pointer", marginLeft: 8 }}>✕</button>
+          </div>
+          <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {(visualizando.mime || "").startsWith("image/") ? (
+              <img src={visualizando.conteudoBase64} alt={visualizando.descricao} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            ) : (
+              <iframe
+                src={visualizando.conteudoBase64}
+                style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+                title={visualizando.descricao}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      <KMFooter />
+    </div>
+  );
+}
+
+function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
+  const [etapa, setEtapa] = useState(0); // 0=escolher modo, 1=aviso lancamentos, 2=digitar senha lancamentos, 3=aviso total, 4=digitar senha total
+  const [senhaDigit, setSenhaDigit] = useState("");
+  const [erro, setErro] = useState("");
+
+  const confirmarLancamentos = () => {
+    if (senhaDigit.trim().toUpperCase() === "ZERAR") {
+      onZerar();
+    } else {
+      setErro("❌ Digite ZERAR para confirmar");
+    }
+  };
+
+  const confirmarTotal = () => {
+    if (senhaDigit.trim().toUpperCase() === "RESETAR TUDO") {
+      onResetTotal();
+    } else {
+      setErro("❌ Digite RESETAR TUDO para confirmar");
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      <KMHeader title="🧹 Limpar Dados" sub="Escolher o que apagar" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 18 }}>
+
+        {/* ETAPA 0: ESCOLHA */}
+        {etapa === 0 && (
+          <>
+            <div style={{ fontSize: 13, color: "#666", marginBottom: 14, lineHeight: 1.5 }}>
+              Escolha o que deseja fazer:
+            </div>
+
+            {/* Opção 1: Lançamentos */}
+            <button onClick={() => setEtapa(1)} style={{ width: "100%", textAlign: "left", padding: 16, background: "#fff", border: "2px solid #f97316", borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                <div style={{ fontSize: 28 }}>🧹</div>
+                <div style={{ fontWeight: 800, color: "#9a3412", fontSize: 14 }}>Apagar Lançamentos</div>
+              </div>
+              <div style={{ fontSize: 11, color: "#7c2d12", lineHeight: 1.5, marginBottom: 6 }}>
+                Apaga só os dados de movimento (RDOs, pedidos, fotos, presenças, despesas, etc).
+              </div>
+              <div style={{ fontSize: 11, color: "#15803d", lineHeight: 1.5 }}>
+                ✅ Mantém obras, trabalhadores, acessos, empresa, fornecedores
+              </div>
+            </button>
+
+            {/* Opção 2: Reset Total */}
+            <button onClick={() => setEtapa(3)} style={{ width: "100%", textAlign: "left", padding: 16, background: "#fff", border: "2px solid #dc2626", borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                <div style={{ fontSize: 28 }}>💣</div>
+                <div style={{ fontWeight: 800, color: "#991b1b", fontSize: 14 }}>Reset Total</div>
+              </div>
+              <div style={{ fontSize: 11, color: "#7f1d1d", lineHeight: 1.5, marginBottom: 6 }}>
+                <b>APAGA ABSOLUTAMENTE TUDO</b> e deixa o app como se fosse a primeira instalação.
+              </div>
+              <div style={{ fontSize: 11, color: "#991b1b", lineHeight: 1.5 }}>
+                ⚠️ Apaga: obras, trabalhadores, acessos, empresa, lançamentos, TUDO.
+              </div>
+            </button>
+
+            <button onClick={onBack} style={{ width: "100%", marginTop: 6, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              Cancelar
+            </button>
+          </>
+        )}
+
+        {/* ETAPA 1: AVISO LANCAMENTOS */}
+        {etapa === 1 && (
+          <>
+            <div style={{ background: "#fff7ed", border: "2px solid #f97316", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>🧹</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#9a3412", marginBottom: 6 }}>Apagar Lançamentos</div>
+              <div style={{ fontSize: 13, color: "#7c2d12", lineHeight: 1.5 }}>
+                Será apagado:
+                <ul style={{ margin: "8px 0 0 20px", padding: 0, lineHeight: 1.7 }}>
+                  <li>RDOs emitidos</li>
+                  <li>Pedidos de material</li>
+                  <li>Fotos da galeria</li>
+                  <li>Despesas avulsas</li>
+                  <li>Histórico de presenças</li>
+                  <li>Movimentações</li>
+                  <li>Adiantamentos</li>
+                  <li>Anotações do diário</li>
+                  <li>Abastecimentos</li>
+                  <li>Produtividade</li>
+                </ul>
+              </div>
+            </div>
+
+            <div style={{ background: "#dcfce7", border: "1px solid #16a34a", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#166534", marginBottom: 6 }}>✅ NÃO será apagado:</div>
+              <ul style={{ margin: "0 0 0 20px", padding: 0, fontSize: 12, color: "#15803d", lineHeight: 1.6 }}>
+                <li>Obras cadastradas</li>
+                <li>Trabalhadores (folha)</li>
+                <li>Acessos do app (logins)</li>
+                <li>Dados da empresa</li>
+                <li>Fornecedores</li>
+                <li>Equipamentos e ativos</li>
+              </ul>
+            </div>
+
+            <button onClick={() => setEtapa(2)} style={{ width: "100%", padding: 14, background: "#f97316", color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 12px rgba(249,115,22,0.3)" }}>
+              🧹 PROSSEGUIR COM A LIMPEZA
+            </button>
+
+            <button onClick={() => setEtapa(0)} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              ← Voltar
+            </button>
+          </>
+        )}
+
+        {/* ETAPA 2: SENHA LANCAMENTOS */}
+        {etapa === 2 && (
+          <>
+            <div style={{ background: "#fff7ed", border: "2px solid #f97316", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+              <div style={{ fontSize: 32, marginBottom: 8, textAlign: "center" }}>🔐</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#9a3412", marginBottom: 8, textAlign: "center" }}>Confirmação</div>
+              <div style={{ fontSize: 13, color: "#7c2d12", lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+                Digite a palavra<br/>
+                <b style={{ fontSize: 18, color: "#f97316", fontFamily: "monospace", letterSpacing: 2 }}>ZERAR</b>
+              </div>
+
+              <input
+                type="text"
+                value={senhaDigit}
+                onChange={e => { setSenhaDigit(e.target.value); setErro(""); }}
+                placeholder="Digite ZERAR"
+                autoFocus
+                autoComplete="off"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  border: erro ? "2px solid #dc2626" : "2px solid #fed7aa",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  textAlign: "center",
+                  letterSpacing: 2,
+                  marginBottom: 8,
+                  background: "#fff",
+                  color: "#f97316",
+                  textTransform: "uppercase",
+                }}
+              />
+
+              {erro && (
+                <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>
+                  {erro}
+                </div>
+              )}
+            </div>
+
+            <button onClick={confirmarLancamentos} disabled={!senhaDigit.trim()} style={{
+              width: "100%", padding: 14, background: senhaDigit.trim() ? "#f97316" : "#fdba74",
+              color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14,
+              cursor: senhaDigit.trim() ? "pointer" : "not-allowed",
+            }}>
+              ✓ CONFIRMAR E ZERAR LANÇAMENTOS
+            </button>
+
+            <button onClick={() => { setEtapa(1); setSenhaDigit(""); setErro(""); }} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              ← Voltar
+            </button>
+          </>
+        )}
+
+        {/* ETAPA 3: AVISO RESET TOTAL */}
+        {etapa === 3 && (
+          <>
+            <div style={{ background: "#fef2f2", border: "3px solid #dc2626", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+              <div style={{ fontSize: 36, marginBottom: 8, textAlign: "center" }}>💣</div>
+              <div style={{ fontSize: 17, fontWeight: 900, color: "#7f1d1d", marginBottom: 10, textAlign: "center" }}>RESET TOTAL</div>
+              <div style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 1.6 }}>
+                <p style={{ margin: "0 0 10px 0" }}><b>⚠️ Atenção MÁXIMA!</b></p>
+                <p style={{ margin: "0 0 10px 0" }}>
+                  Esta ação vai apagar <b>TUDO</b>:
+                </p>
+                <ul style={{ margin: "0 0 0 20px", padding: 0, lineHeight: 1.7 }}>
+                  <li>🏗️ Todas as obras</li>
+                  <li>👥 Todos os trabalhadores</li>
+                  <li>🔑 Todos os acessos (exceto o seu)</li>
+                  <li>🏢 Dados da empresa</li>
+                  <li>🏪 Fornecedores</li>
+                  <li>⚙️ Equipamentos e ativos</li>
+                  <li>📄 Todos os RDOs</li>
+                  <li>📦 Todos os pedidos</li>
+                  <li>📷 Todas as fotos</li>
+                  <li>💸 Tudo de financeiro</li>
+                  <li>📊 Histórico, presença, diário, mensagens</li>
+                  <li>🎯 Cronogramas</li>
+                  <li>📈 Produtividade</li>
+                  <li>... e <b>todo o resto</b></li>
+                </ul>
+                <p style={{ margin: "12px 0 0 0", fontWeight: 700 }}>
+                  O app vai voltar ao estado inicial, como se fosse a primeira instalação.
+                </p>
+              </div>
+            </div>
+
+            <button onClick={() => setEtapa(4)} style={{ width: "100%", padding: 14, background: "#dc2626", color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 12px rgba(220,38,38,0.4)" }}>
+              💣 PROSSEGUIR COM RESET TOTAL
+            </button>
+
+            <button onClick={() => setEtapa(0)} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              ← Voltar
+            </button>
+          </>
+        )}
+
+        {/* ETAPA 4: SENHA RESET TOTAL */}
+        {etapa === 4 && (
+          <>
+            <div style={{ background: "#fef2f2", border: "3px solid #dc2626", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+              <div style={{ fontSize: 36, marginBottom: 8, textAlign: "center" }}>🔐💣</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#7f1d1d", marginBottom: 8, textAlign: "center" }}>Confirmação Final</div>
+              <div style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+                Para confirmar o reset total, digite a frase<br/>
+                <b style={{ fontSize: 18, color: "#dc2626", fontFamily: "monospace", letterSpacing: 1 }}>RESETAR TUDO</b>
+              </div>
+
+              <input
+                type="text"
+                value={senhaDigit}
+                onChange={e => { setSenhaDigit(e.target.value); setErro(""); }}
+                placeholder="Digite RESETAR TUDO"
+                autoFocus
+                autoComplete="off"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  border: erro ? "2px solid #dc2626" : "2px solid #fca5a5",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  textAlign: "center",
+                  letterSpacing: 1,
+                  marginBottom: 8,
+                  background: "#fff",
+                  color: "#dc2626",
+                  textTransform: "uppercase",
+                }}
+              />
+
+              {erro && (
+                <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>
+                  {erro}
+                </div>
+              )}
+            </div>
+
+            <button onClick={confirmarTotal} disabled={!senhaDigit.trim()} style={{
+              width: "100%", padding: 14, background: senhaDigit.trim() ? "#dc2626" : "#fca5a5",
+              color: "#fff", border: "none", borderRadius: 12, fontWeight: 900, fontSize: 14,
+              cursor: senhaDigit.trim() ? "pointer" : "not-allowed",
+              boxShadow: senhaDigit.trim() ? "0 4px 12px rgba(220,38,38,0.5)" : "none",
+            }}>
+              💣 CONFIRMAR RESET TOTAL
+            </button>
+
+            <button onClick={() => { setEtapa(3); setSenhaDigit(""); setErro(""); }} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              ← Voltar
+            </button>
+          </>
+        )}
+
+      </div>
+      <KMFooter />
+    </div>
+  );
+}
+
 export default function App() {
   const [tela, setTelaRaw]        = useState("login");
   const [historicoTelas, setHistoricoTelas] = useState([]); // pilha de navegação
@@ -13363,6 +14459,7 @@ export default function App() {
   const [despesasAvulsas, setDespesasAvulsas] = useState([]);
   const [trabSelecionado, setTrabSelecionado] = useState(null);
   const [pedidoSelecionado, setPedidoSelecionado] = useState(null);
+  const [obraAnexos, setObraAnexos] = useState(null);
   const [movEquipSel, setMovEquipSel] = useState(null);
   const [movPessSel, setMovPessSel] = useState(null);
   const [fotosObras, setFotosObras] = useState([]); // galeria por obra
@@ -13432,27 +14529,9 @@ export default function App() {
         setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
       }
 
-      // ⭐ AUTO-POPULA 30 DIAS se o histórico estiver vazio (primeira abertura)
-      if (!hist_ || Object.keys(hist_).length === 0) {
-        try {
-          const sim = gerarDadosMes30Dias();
-          setHistorico(sim.historico);
-          setFotosObras(sim.fotosObras);
-          setRdos(sim.rdosEmitidos);
-          setPedidos(sim.pedidos);
-          setMov(sim.movimentacoes);
-          setMovEquip(sim.movEquip);
-          setDiario(sim.diario);
-          setDespesasAvulsas(sim.despesasAvulsas);
-          setAdiant(sim.adiantamentos);
-          setReceb(sim.recebimentos);
-          setAbast(sim.abastecimentos);
-          setProd(sim.produtividade);
-          console.log("✅ 30 dias de dados pré-populados");
-        } catch (e) {
-          console.warn("Erro ao gerar simulação:", e);
-        }
-      }
+      // ⭐ AUTO-POPULA 30 DIAS apenas se ativado manualmente em Sistema > Gerar 30 dias
+      // (Desativado por padrão para produção - usuário deve gerar manualmente se quiser teste)
+      // if (!hist_ || Object.keys(hist_).length === 0) { ... }
 
       setCarregando(false);
     })();
@@ -13614,6 +14693,41 @@ export default function App() {
     </div>
   );
 
+  // 🔒 SEGURANÇA: telas restritas ao gestor (encarregado não tem acesso)
+  const TELAS_GESTOR = new Set([
+    "gestor", "obras", "cronograma", "cronograma_pro", "equipe", "trab_detalhe", "fichas",
+    "ativos", "frota", "manutencoes", "equipamentos_gestao", "ferramentas_gestao",
+    "custos", "folha", "folha_mensal", "historico", "adiantamentos", "movimentacoes",
+    "dashboard", "diagnostico", "consolidado", "mapa", "calendario", "alertas",
+    "fornecedores", "empresa", "acessos", "backup", "gerar_simulacao", "zerar_tudo",
+    "aso_aniversarios", "ferias", "contatos_emergencia", "links", "produtividade_gestor",
+    "pedidos", "pedido_detalhe", "despesas_avulsas", "mov_pess_detalhe",
+    "recebimentos_gestor", "comissionamento"
+  ]);
+
+  // Se for encarregado e tentar acessar tela do gestor, bloqueia
+  if (usuario && usuario.perfil === "encarregado" && TELAS_GESTOR.has(tela)) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+        <KMHeader title="Acesso restrito" sub="Apenas gestores" onBack={() => setTela("home")} />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
+          <div>
+            <div style={{ fontSize: 64, marginBottom: 16 }}>🔒</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Acesso Restrito</div>
+            <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, marginBottom: 20 }}>
+              Esta área é apenas para o gestor.<br/>
+              Se precisar, fale com o Kleber.
+            </div>
+            <button onClick={() => setTela("home")} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+              ← Voltar ao Início
+            </button>
+          </div>
+        </div>
+        <KMFooter />
+      </div>
+    );
+  }
+
   const render = () => {
     switch (tela) {
       case "login":      return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} />;
@@ -13621,12 +14735,12 @@ export default function App() {
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={r => setRdos(rs => [r, ...rs])} onSalvarFotoObra={f => setFotosObras(fs => [f, ...fs])} />;
       case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={p => setPedidos(ps => [p, ...ps])} />;
       case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => f.obraId === obraAtual?.id).length} onBack={() => setTela("home")} onSalvar={f => setFotosObras(fs => [f, ...fs])} />;
-      case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => f.id !== id))} />;
+      case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} usuario={usuario} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => f.id !== id))} />;
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
       case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={f => setFotosObras(fs => [f, ...fs])} />;
       case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} />;
-      case "obras":      return <TelaObras obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} />;
+      case "obras":      return <TelaObras obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "mov_equip":  return <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} onVerDetalhe={m => { setMovEquipSel(m); setTela("mov_equip_detalhe"); }} />;
@@ -13703,6 +14817,45 @@ export default function App() {
       case "contatos":      return <TelaContatos obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onVerTrabalhador={verTrabalhador} />;
       case "adiantamentos": return <TelaAdiantamentos obras={obras} trabalhadores={trabalhadores} adiantamentos={adiantamentos} onBack={voltar} onAdd={a => setAdiant(ads => [a, ...ads])} onRemove={id => setAdiant(ads => ads.filter(a => a.id !== id))} />;
       case "backup":     return <TelaBackup todoEstado={todoEstado} onRestaurar={restaurarBackup} onBack={voltar} />;
+      case "anexos_obra": return obraAnexos ? <TelaAnexosObra obra={obraAnexos} usuario={usuario} onBack={voltar} /> : <TelaObras obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} />;
+
+      case "zerar_tudo": return <TelaZerarTudo
+        onBack={voltar}
+        onZerar={() => {
+          setHistorico({});
+          setRdos([]);
+          setPedidos([]);
+          setFotosObras([]);
+          setDespesasAvulsas([]);
+          setMov([]);
+          setMovEquip([]);
+          setDiario([]);
+          setAdiant([]);
+          setReceb([]);
+          setAbast([]);
+          setProd([]);
+          setFolhasSalvas([]);
+          setMensagens([]);
+          setManut([]);
+          alert("✅ Tudo zerado!\n\nO app está pronto pra começar do zero com dados reais.");
+          voltar();
+        }}
+        onResetTotal={() => {
+          try {
+            // Limpa TUDO do localStorage (não só do kmzero, mas pelo prefixo)
+            const keys = Object.keys(localStorage).filter(k => k.startsWith("kmzero_"));
+            keys.forEach(k => localStorage.removeItem(k));
+
+            // Avisa e recarrega — o useEffect inicial vai carregar os defaults limpos
+            alert("💣 RESET TOTAL CONCLUÍDO!\n\nVou recarregar a página agora.");
+            window.location.reload();
+          } catch (e) {
+            console.error("Erro no reset:", e);
+            alert("❌ Erro: " + (e && e.message ? e.message : e));
+          }
+        }}
+      />;
+
       case "gerar_simulacao": return <TelaGerarSimulacao onGerar={() => {
         confirmar("⚠️ ATENÇÃO!\n\nIsto vai SUBSTITUIR todos os RDOs, pedidos, fotos, despesas, presenças, etc.\n\nUse apenas pra testar o app.\n\nDeseja continuar?", () => {
           const sim = gerarDadosMes30Dias();
