@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
+import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "./firebase.js";
 
 /* ── HELPERS DATA ── */
 const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
@@ -319,11 +320,17 @@ const KM_PDF_CSS = `
 function gerarHeaderHTML({ tipo, numero, empresa = {}, periodo, info_extra }) {
   const numeroFmt = numero ? `Nº ${typeof numero === "number" ? String(numero).padStart(3, "0") : numero}` : "";
   const dataAgora = new Date().toLocaleString("pt-BR");
+  const logoEmpresa = empresa.logoBase64
+    ? `<img src="${empresa.logoBase64}" alt="Logo" style="max-height:54px;max-width:150px;object-fit:contain;margin-left:14px;" />`
+    : "";
   return `
     <div class="km-header">
-      <div class="km-header-logo">
-        <div class="logo"><span class="km">KM</span><span class="zero">ZERO</span></div>
-        <div class="tagline">Gestão de Obras</div>
+      <div class="km-header-logo" style="display:flex;align-items:center;">
+        <div>
+          <div class="logo"><span class="km">KM</span><span class="zero">ZERO</span></div>
+          <div class="tagline">Gestão de Obras</div>
+        </div>
+        ${logoEmpresa}
       </div>
       <div class="km-header-info">
         <div>
@@ -2645,14 +2652,41 @@ const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx 
 
 function KMHeader({ title, sub, onBack, right }) {
   return (
-    <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "0 14px", flexShrink: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", paddingTop: 10, paddingBottom: 6, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-        {onBack && <button onClick={onBack} style={{ background: "none", border: "none", color: "#fff", fontSize: 24, cursor: "pointer", padding: "0 10px 0 0", lineHeight: 1 }}>‹</button>}
-        <div style={{ flex: 1 }}>
+    <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "0 14px", flexShrink: 0, paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <div style={{ display: "flex", alignItems: "center", paddingTop: 12, paddingBottom: 6, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        {onBack && (
+          <button
+            onClick={onBack}
+            aria-label="Voltar"
+            style={{
+              background: "rgba(255,255,255,0.12)",
+              border: "none",
+              color: "#fff",
+              fontSize: 26,
+              cursor: "pointer",
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              borderRadius: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 10,
+              lineHeight: 1,
+              padding: 0,
+              flexShrink: 0,
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "rgba(255,255,255,0.3)",
+            }}
+          >
+            ‹
+          </button>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div><span style={{ fontWeight: 900, fontSize: 22, color: "#fff", letterSpacing: -1 }}>KM</span><span style={{ fontWeight: 900, fontSize: 22, color: GOLD, letterSpacing: -1 }}>ZERO</span></div>
           <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: 2.5, marginTop: -2 }}>GESTÃO DE OBRAS</div>
         </div>
-        {right !== undefined ? right : <div style={{ width: 36, height: 36, borderRadius: 18, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>👷</div>}
+        {right !== undefined ? right : <div style={{ width: 36, height: 36, borderRadius: 18, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>👷</div>}
       </div>
       {(title || sub) && (
         <div style={{ paddingTop: 8, paddingBottom: 10 }}>
@@ -2666,7 +2700,7 @@ function KMHeader({ title, sub, onBack, right }) {
 
 function KMFooter() {
   return (
-    <div style={{ background: `linear-gradient(180deg,${NAVY2} 0%,${NAVY} 100%)`, padding: "10px 0", textAlign: "center", flexShrink: 0 }}>
+    <div style={{ background: `linear-gradient(180deg,${NAVY2} 0%,${NAVY} 100%)`, padding: "10px 0", paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))", textAlign: "center", flexShrink: 0 }}>
       <span style={{ fontWeight: 900, fontSize: 16, color: "#fff", letterSpacing: -0.5 }}>KM</span>
       <span style={{ fontWeight: 900, fontSize: 16, color: GOLD, letterSpacing: -0.5 }}>ZERO</span>
       <div style={{ fontSize: 8, color: "rgba(255,255,255,0.45)", letterSpacing: 2, marginTop: -1 }}>GESTÃO DE OBRAS</div>
@@ -3231,11 +3265,48 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
     if (u) setUltimoUsuario(u);
   }, [usuarios]);
 
-  const entrarGestor = () => {
+  const [carregando, setCarregando] = useState(false);
+
+  const entrarGestor = async () => {
     setErro("");
-    const u = usuarios.find(u => u.email.toLowerCase() === emailGestor.toLowerCase().trim() && u.senha === senhaGestor && u.perfil === "gestor");
-    if (!u) return setErro("E-mail ou senha incorretos.");
-    onLogin(u);
+    if (!emailGestor || !senhaGestor) {
+      return setErro("Preencha email e senha.");
+    }
+    setCarregando(true);
+
+    // Tenta primeiro autenticar via Firebase (login real com senha criptografada)
+    const r = await loginFirebase(emailGestor.trim(), senhaGestor);
+    if (r.ok) {
+      // Sucesso no Firebase: busca o usuário gestor correspondente no cadastro local
+      let u = usuarios.find(x => x.email.toLowerCase() === r.user.email.toLowerCase() && x.perfil === "gestor");
+      if (!u) {
+        // Caso ainda não exista cadastro local para este email, cria um perfil de gestor padrão
+        u = {
+          id: r.user.uid,
+          nome: "Gestor",
+          email: r.user.email,
+          perfil: "gestor",
+          ativo: true,
+          firebaseUid: r.user.uid,
+        };
+      }
+      setCarregando(false);
+      onLogin({ ...u, firebaseUid: r.user.uid, ultimoLogin: Date.now() });
+      return;
+    }
+
+    // Se o erro foi de email não cadastrado no Firebase, tenta o sistema antigo como fallback
+    if (r.codigo === "auth/user-not-found" || r.codigo === "auth/invalid-credential") {
+      const u = usuarios.find(u => u.email.toLowerCase() === emailGestor.toLowerCase().trim() && u.senha === senhaGestor && u.perfil === "gestor");
+      if (u) {
+        setCarregando(false);
+        onLogin(u);
+        return;
+      }
+    }
+
+    setCarregando(false);
+    setErro(r.erro || "Email ou senha incorretos.");
   };
 
   const entrarPrimeiroAcesso = () => {
@@ -3268,7 +3339,7 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
   }
 
   return (
-    <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", justifyContent: "center", padding: "28px 24px", overflow: "hidden" }}>
+    <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", justifyContent: "center", padding: "28px 24px", paddingTop: "max(28px, env(safe-area-inset-top, 28px))", paddingBottom: "max(28px, env(safe-area-inset-bottom, 28px))", overflow: "hidden" }}>
       {/* CSS animation injetado */}
       <style>{`
         @keyframes kmGradiente {
@@ -3517,8 +3588,51 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
               </div>
             )}
 
-            <button onClick={entrarGestor} className="km-btn-glow" style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: GOLD, color: NAVY, fontWeight: 800, cursor: "pointer", fontSize: 15 }}>
-              ▶  ENTRAR
+            <button
+              onClick={entrarGestor}
+              disabled={carregando}
+              className="km-btn-glow"
+              style={{
+                width: "100%",
+                padding: 14,
+                borderRadius: 12,
+                border: "none",
+                background: carregando ? "rgba(192,160,64,0.5)" : GOLD,
+                color: NAVY,
+                fontWeight: 800,
+                cursor: carregando ? "wait" : "pointer",
+                fontSize: 15,
+              }}
+            >
+              {carregando ? "Verificando..." : "▶  ENTRAR"}
+            </button>
+
+            <button
+              onClick={async () => {
+                if (!emailGestor) {
+                  setErro("Digite seu email para receber o link de recuperação.");
+                  return;
+                }
+                const r = await recuperarSenha(emailGestor.trim());
+                if (r.ok) {
+                  alert("Enviamos um link de recuperação para " + emailGestor + ". Verifique sua caixa de entrada e a pasta de spam.");
+                } else {
+                  setErro(r.erro || "Não foi possível enviar o email de recuperação.");
+                }
+              }}
+              style={{
+                width: "100%",
+                marginTop: 10,
+                padding: 8,
+                background: "transparent",
+                border: "none",
+                color: "rgba(255,255,255,0.7)",
+                fontSize: 12,
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              Esqueci minha senha
             </button>
           </div>
         )}
@@ -7809,6 +7923,140 @@ function gerarFichaCadastralPDF(t, obra, empresa) {
 /* ════════════════════════════════════
    DETALHE DO TRABALHADOR
 ════════════════════════════════════ */
+function CalendarioPresenca({ trabalhador, historico }) {
+  const [mesOffset, setMesOffset] = useState(0);
+
+  const hoje = new Date();
+  const ref = new Date(hoje.getFullYear(), hoje.getMonth() + mesOffset, 1);
+  const ano = ref.getFullYear();
+  const mes = ref.getMonth();
+
+  const nomesMes = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  const diasSemana = ["D", "S", "T", "Q", "Q", "S", "S"];
+
+  const primeiroDia = new Date(ano, mes, 1).getDay();
+  const totalDias = new Date(ano, mes + 1, 0).getDate();
+
+  const statusDoDia = (dia) => {
+    const mm = String(mes + 1).padStart(2, "0");
+    const dd = String(dia).padStart(2, "0");
+    const chaveISO = `${ano}-${mm}-${dd}`;
+    const registro = historico[chaveISO] || {};
+    return registro[trabalhador.id] || null;
+  };
+
+  const corFundo = (st) => {
+    if (st === "Presente") return "#dcfce7";
+    if (st === "Falta") return "#fee2e2";
+    if (st === "Atestado") return "#fef3c7";
+    return "#f8fafc";
+  };
+  const corTexto = (st) => {
+    if (st === "Presente") return "#15803d";
+    if (st === "Falta") return "#b91c1c";
+    if (st === "Atestado") return "#a16207";
+    return "#cbd5e1";
+  };
+
+  const celulas = [];
+  for (let i = 0; i < primeiroDia; i++) celulas.push(null);
+  for (let d = 1; d <= totalDias; d++) celulas.push(d);
+
+  let contPresente = 0, contFalta = 0, contAtestado = 0;
+  for (let d = 1; d <= totalDias; d++) {
+    const st = statusDoDia(d);
+    if (st === "Presente") contPresente++;
+    else if (st === "Falta") contFalta++;
+    else if (st === "Atestado") contAtestado++;
+  }
+
+  const ehMesAtual = mesOffset === 0;
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <button
+          onClick={() => setMesOffset(mesOffset - 1)}
+          aria-label="Mês anterior"
+          style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer", color: NAVY, fontWeight: 700 }}
+        >
+          ‹
+        </button>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontWeight: 800, color: NAVY, fontSize: 14 }}>📅 {nomesMes[mes]} {ano}</div>
+          <div style={{ fontSize: 10, color: "#888" }}>Calendário de presença</div>
+        </div>
+        <button
+          onClick={() => setMesOffset(Math.min(0, mesOffset + 1))}
+          aria-label="Próximo mês"
+          disabled={ehMesAtual}
+          style={{ background: ehMesAtual ? "#f8fafc" : "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: ehMesAtual ? "default" : "pointer", color: ehMesAtual ? "#cbd5e1" : NAVY, fontWeight: 700 }}
+        >
+          ›
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+        {diasSemana.map((ds, i) => (
+          <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: "#94a3b8", padding: "2px 0" }}>{ds}</div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+        {celulas.map((dia, i) => {
+          if (dia === null) return <div key={i} />;
+          const st = statusDoDia(dia);
+          const ehHoje = ehMesAtual && dia === hoje.getDate();
+          return (
+            <div
+              key={i}
+              style={{
+                aspectRatio: "1",
+                background: corFundo(st),
+                borderRadius: 8,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                border: ehHoje ? `2px solid ${NAVY}` : "1px solid #f1f5f9",
+                minHeight: 34,
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, color: st ? corTexto(st) : "#94a3b8" }}>{dia}</div>
+              {st && (
+                <div style={{ fontSize: 9, lineHeight: 1 }}>
+                  {st === "Presente" ? "✓" : st === "Falta" ? "✕" : "⚕"}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-around", marginTop: 12, paddingTop: 12, borderTop: "1px solid #f1f5f9" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#15803d" }}>{contPresente}</div>
+          <div style={{ fontSize: 9, color: "#888" }}>Presenças</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#b91c1c" }}>{contFalta}</div>
+          <div style={{ fontSize: 9, color: "#888" }}>Faltas</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#a16207" }}>{contAtestado}</div>
+          <div style={{ fontSize: 9, color: "#888" }}>Atestados</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 10, fontSize: 9, color: "#94a3b8" }}>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#dcfce7", borderRadius: 2, marginRight: 3 }}></span>Presente</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fee2e2", borderRadius: 2, marginRight: 3 }}></span>Falta</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fef3c7", borderRadius: 2, marginRight: 3 }}></span>Atestado</span>
+      </div>
+    </div>
+  );
+}
+
 function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = [], empresa = {}, onBack, onEditar }) {
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState(trabalhador || {});
@@ -7951,6 +8199,9 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
             <div style={{ flex: 1, background: "#fff8f0", borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: ORANGE }}>{stats.Atestado}</div><div style={{ fontSize: 9, color: "#666" }}>Atestado</div></div>
           </div>
         </div>
+
+        {/* CALENDÁRIO DE PRESENÇA DO MÊS */}
+        <CalendarioPresenca trabalhador={trabalhador} historico={historico} />
 
         {/* ALIMENTAÇÃO DO MÊS */}
         {(() => {
@@ -11572,26 +11823,49 @@ function TelaConfigEmpresa({ empresa, onSave, onBack }) {
           <input value={form.telefone} onChange={e => set("telefone", e.target.value)} style={inputS} />
 
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: "2px solid #f3f4f6" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 4 }}>☕ Valores de Alimentação</div>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>Valores por pessoa lançados no RDO automaticamente.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div>
-                <label style={labelS}>☕ Café da manhã (R$)</label>
-                <input value={form.valorCafeManha || 4} onChange={e => set("valorCafeManha", parseFloat(e.target.value) || 0)} type="number" step="0.50" style={inputS} />
-              </div>
-              <div>
-                <label style={labelS}>☕ Café da tarde (R$)</label>
-                <input value={form.valorCafeTarde || 4} onChange={e => set("valorCafeTarde", parseFloat(e.target.value) || 0)} type="number" step="0.50" style={inputS} />
-              </div>
-              <div>
-                <label style={labelS}>🍱 Marmita (R$)</label>
-                <input value={form.valorMarmita || 18} onChange={e => set("valorMarmita", parseFloat(e.target.value) || 0)} type="number" step="0.50" style={inputS} />
-              </div>
-              <div>
-                <label style={labelS}>🥪 Lanche (R$)</label>
-                <input value={form.valorLanche || 10} onChange={e => set("valorLanche", parseFloat(e.target.value) || 0)} type="number" step="0.50" style={inputS} />
-              </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 4 }}>🏢 Logomarca da Empresa</div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>
+              A logo aparece nos cabeçalhos dos relatórios (RDO, pedidos, folha) ao lado da identidade KMZERO. Use uma imagem PNG ou JPG, de preferência com fundo transparente.
             </div>
+
+            {form.logoBase64 ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+                  <img src={form.logoBase64} alt="Logo da empresa" style={{ maxWidth: "100%", maxHeight: 90, objectFit: "contain" }} />
+                </div>
+                <button
+                  onClick={() => set("logoBase64", "")}
+                  style={{ width: "100%", padding: 10, background: "#fee2e2", color: RED, border: "1px solid " + RED + "55", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                >
+                  🗑️ Remover logomarca
+                </button>
+              </div>
+            ) : (
+              <div style={{ background: "#f9fafb", border: "1px dashed #cbd5e1", borderRadius: 10, padding: 20, textAlign: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 28, marginBottom: 4 }}>🖼️</div>
+                <div style={{ fontSize: 12, color: "#888" }}>Nenhuma logomarca carregada</div>
+              </div>
+            )}
+
+            <label style={{ ...labelS, display: "block" }}>Carregar imagem da logo</label>
+            <input
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp"
+              onChange={e => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                if (file.size > 2 * 1024 * 1024) {
+                  alert("Imagem muito grande. O tamanho máximo é 2 MB. Reduza a imagem e tente novamente.");
+                  e.target.value = "";
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => set("logoBase64", reader.result);
+                reader.onerror = () => alert("Não foi possível ler a imagem. Tente outro arquivo.");
+                reader.readAsDataURL(file);
+              }}
+              style={{ ...inputS, padding: 8 }}
+            />
           </div>
 
           <Btn label="💾 SALVAR" color={GREEN} onClick={() => { onSave(form); setSalvo(true); setTimeout(() => setSalvo(false), 2500); }} style={{ marginTop: 16 }} />
@@ -14621,7 +14895,12 @@ export default function App() {
     if (usuario.perfil === "gestor") return "gestor";
     return "home";
   };
-  const logout = () => { setUsuario(null); store.set("usuarioLogado", null); setTela("login"); };
+  const logout = async () => {
+    try { await logoutFirebase(); } catch (e) {}
+    setUsuario(null);
+    store.set("usuarioLogado", null);
+    setTela("login");
+  };
   const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
 
   const todoEstado = { obras, trabalhadores, equips, pedidos, historico, usuarios, mensagens, diario, ativos, abastecimentos, ferias, rdosEmitidos, empresa, produtividade, recebimentos, movimentacoes, ferramentas, links, adiantamentos, manutencoes, folhasSalvas, cronogramas, movEquip, despesasAvulsas, fotosObras, fornecedores };
