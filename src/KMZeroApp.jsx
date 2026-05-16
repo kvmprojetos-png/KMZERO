@@ -3318,7 +3318,13 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
   };
 
   const entrarComPIN = (u) => {
-    // Login direto pelo card "Continuar como" — sem PIN
+    // Se for gestor, manda para a tela de senha (autenticação Firebase obrigatória)
+    if (u.perfil === "gestor") {
+      setEmailGestor(u.email || "");
+      setTelaInterna("gestor");
+      return;
+    }
+    // Encarregado entra direto pelo card "Continuar como"
     onLogin({ ...u, ultimoLogin: Date.now() });
   };
 
@@ -3518,17 +3524,8 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
               <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.15)" }} />
             </div>
 
-            {/* Botão: Sou gestor */}
-            <button onClick={() => {
-              const gestor = usuarios.find(u => u.perfil === "gestor") || {
-                id: 1,
-                nome: "Kleber Vieira Martins",
-                email: "kleber@km.com",
-                senha: "123",
-                perfil: "gestor",
-              };
-              onLogin({ ...gestor, ultimoLogin: Date.now() });
-            }} className="km-btn-glow" style={{
+            {/* Botão: Sou gestor — abre a tela de email/senha (Firebase) */}
+            <button onClick={() => setTelaInterna("gestor")} className="km-btn-glow" style={{
               width: "100%",
               padding: "16px 18px",
               borderRadius: 14,
