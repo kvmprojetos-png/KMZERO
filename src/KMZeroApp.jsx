@@ -3405,6 +3405,26 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes kmBrilhoLogo {
+          0%, 100% { text-shadow: 0 4px 20px rgba(245,166,35,0.4), 0 0 30px rgba(245,166,35,0.2); }
+          50% { text-shadow: 0 4px 30px rgba(245,166,35,0.7), 0 0 50px rgba(245,166,35,0.4); }
+        }
+        @keyframes kmRaioLuz {
+          0% { transform: translateX(-150%) skewX(-20deg); opacity: 0; }
+          40%, 60% { opacity: 1; }
+          100% { transform: translateX(250%) skewX(-20deg); opacity: 0; }
+        }
+        @keyframes kmParticula {
+          0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+          10% { opacity: 0.8; }
+          90% { opacity: 0.3; }
+          100% { transform: translateY(-10vh) translateX(20px); opacity: 0; }
+        }
+        @keyframes kmLinhaBrilho {
+          0% { box-shadow: 0 0 8px rgba(245,166,35,0.4); transform: scaleX(0.8); }
+          50% { box-shadow: 0 0 18px rgba(245,166,35,0.9); transform: scaleX(1.1); }
+          100% { box-shadow: 0 0 8px rgba(245,166,35,0.4); transform: scaleX(0.8); }
+        }
         .km-bg-anim {
           background: linear-gradient(125deg, #0f2151 0%, #1e3a8a 25%, #0f2151 50%, #2a1a4e 75%, #0f2151 100%);
           background-size: 300% 300%;
@@ -3459,6 +3479,89 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
         .km-btn-danger:active:not([disabled]) {
           transform: scale(0.97);
         }
+        /* ONDA 2 — Efeitos sofisticados da tela de boas-vindas */
+        .km-logo-zero {
+          animation: kmBrilhoLogo 4s ease-in-out infinite;
+        }
+        .km-linha-dourada {
+          animation: kmLinhaBrilho 3s ease-in-out infinite;
+          transform-origin: center;
+        }
+        .km-raio-container {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+          z-index: 0;
+        }
+        .km-raio {
+          position: absolute;
+          top: 0; left: 0;
+          width: 200px; height: 100%;
+          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 40%, rgba(245,166,35,0.08) 50%, rgba(255,255,255,0.04) 60%, transparent 100%);
+          animation: kmRaioLuz 12s ease-in-out infinite;
+        }
+        .km-raio-2 {
+          animation-delay: 6s;
+          animation-duration: 16s;
+          opacity: 0.6;
+        }
+        .km-particula {
+          position: absolute;
+          width: 3px; height: 3px;
+          background: rgba(245,166,35,0.6);
+          border-radius: 50%;
+          pointer-events: none;
+          filter: blur(0.5px);
+        }
+        .km-particula-1 { left: 10%; animation: kmParticula 14s linear infinite; }
+        .km-particula-2 { left: 25%; animation: kmParticula 18s linear infinite 3s; }
+        .km-particula-3 { left: 45%; animation: kmParticula 12s linear infinite 7s; }
+        .km-particula-4 { left: 65%; animation: kmParticula 16s linear infinite 1s; }
+        .km-particula-5 { left: 80%; animation: kmParticula 20s linear infinite 5s; }
+        .km-particula-6 { left: 92%; animation: kmParticula 15s linear infinite 9s; }
+        /* Cartão de continuar como — efeito de glassmorphism elevado */
+        .km-card-glass {
+          background: rgba(255,255,255,0.08);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border: 1px solid rgba(255,255,255,0.18);
+          transition: all 0.3s ease;
+        }
+        .km-card-glass:hover {
+          background: rgba(255,255,255,0.12);
+          border-color: rgba(245,166,35,0.5);
+          box-shadow: 0 6px 30px rgba(245,166,35,0.15);
+          transform: translateY(-2px);
+        }
+        .km-card-glass:active { transform: translateY(0); }
+        /* Botão Sou Gestor com aura dourada animada */
+        .km-btn-gestor {
+          position: relative;
+          overflow: hidden;
+        }
+        .km-btn-gestor::before {
+          content: "";
+          position: absolute;
+          inset: -2px;
+          border-radius: inherit;
+          padding: 2px;
+          background: linear-gradient(135deg, rgba(245,166,35,0.8), rgba(255,200,80,0.4), rgba(245,166,35,0.8));
+          background-size: 200% 200%;
+          animation: kmGradiente 6s ease infinite;
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+          opacity: 0.7;
+        }
+        /* Respeita preferência de redução de movimento */
+        @media (prefers-reduced-motion: reduce) {
+          .km-bg-anim, .km-orb, .km-logo-zero, .km-linha-dourada,
+          .km-raio, .km-particula, .km-btn-gestor::before {
+            animation: none !important;
+          }
+        }
       `}</style>
 
       {/* Background animado */}
@@ -3466,6 +3569,22 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
       <div className="km-orb km-orb-1" />
       <div className="km-orb km-orb-2" />
       <div className="km-orb km-orb-3" />
+
+      {/* ONDA 2 — Raios de luz cruzando o fundo (sutis) */}
+      <div className="km-raio-container">
+        <div className="km-raio" />
+        <div className="km-raio km-raio-2" />
+      </div>
+
+      {/* ONDA 2 — Partículas douradas subindo (efeito canteiro de obra) */}
+      <div className="km-raio-container">
+        <div className="km-particula km-particula-1" />
+        <div className="km-particula km-particula-2" />
+        <div className="km-particula km-particula-3" />
+        <div className="km-particula km-particula-4" />
+        <div className="km-particula km-particula-5" />
+        <div className="km-particula km-particula-6" />
+      </div>
 
       {/* Conteúdo */}
       <div style={{ position: "relative", zIndex: 1 }}>
@@ -3477,9 +3596,9 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
           </div>
           <div>
             <span style={{ fontWeight: 900, fontSize: 56, color: "#fff", letterSpacing: -2, textShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>KM</span>
-            <span style={{ fontWeight: 900, fontSize: 56, color: GOLD, letterSpacing: -2, textShadow: "0 4px 20px rgba(245,166,35,0.4)" }}>ZERO</span>
+            <span className="km-logo-zero" style={{ fontWeight: 900, fontSize: 56, color: GOLD, letterSpacing: -2, display: "inline-block" }}>ZERO</span>
           </div>
-          <div style={{ height: 2, width: 60, background: GOLD, margin: "10px auto", borderRadius: 2, boxShadow: "0 0 12px rgba(245,166,35,0.6)" }} />
+          <div className="km-linha-dourada" style={{ height: 2, width: 60, background: GOLD, margin: "10px auto", borderRadius: 2 }} />
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontStyle: "italic" }}>
             KM Consultoria · Engenharia Civil
           </div>
@@ -3491,10 +3610,7 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
 
             {/* Se tem último usuário logado, mostra acesso direto */}
             {ultimoUsuario && (
-              <div onClick={() => entrarComPIN(ultimoUsuario)} style={{
-                background: "rgba(255,255,255,0.08)",
-                backdropFilter: "blur(10px)",
-                border: "1px solid rgba(245,166,35,0.4)",
+              <div onClick={() => entrarComPIN(ultimoUsuario)} className="km-card-glass" style={{
                 borderRadius: 16,
                 padding: "16px 18px",
                 marginBottom: 14,
@@ -3504,7 +3620,7 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
                 gap: 14,
                 boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
               }}>
-                <div style={{ width: 50, height: 50, borderRadius: 25, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>
+                <div style={{ width: 50, height: 50, borderRadius: 25, background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, boxShadow: "0 4px 14px rgba(245,166,35,0.5)" }}>
                   {ultimoUsuario.perfil === "gestor" ? "🏢" : "👷"}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
