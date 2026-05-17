@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "./firebase.js";
+import { salvarEmpresa, carregarEmpresa, observarEmpresa, temInternet, observarConexao } from "./firestore.js";
 
 /* ── HELPERS DATA ── */
 const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
@@ -2605,6 +2606,7 @@ const EMPRESA_PADRAO = {
   uf: "ES",
   cep: "29.500-000",
   endereco: "R Pastor da Silva Colares, 148 - Guararema, Alegre - ES, 29.500-000",
+  instagram: "km_engenharias",
   // Alimentação (valores configuráveis)
   valorCafeManha: 13,
   valorCafeTarde: 0,
@@ -2636,7 +2638,7 @@ const VALOR_HORA_CARGO = {
 
 /* ── SHARED STYLES ── */
 const labelS = { fontSize: 12, color: "#666", marginBottom: 4, display: "block" };
-const inputS = { width: "100%", boxSizing: "border-box", border: "1.5px solid #dde2ef", borderRadius: 10, padding: "11px 13px", fontSize: 14, outline: "none", marginBottom: 12, background: "#f9fafb", fontFamily: "inherit" };
+const inputS = { width: "100%", boxSizing: "border-box", border: "1.5px solid #dde2ef", borderRadius: 10, padding: "12px 13px", fontSize: 14, outline: "none", marginBottom: 12, background: "#f9fafb", fontFamily: "inherit", minHeight: 44 };
 const selS   = { ...inputS, appearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 13px center" };
 const bigBtn = (color) => ({ background: color, color: "#fff", border: "none", borderRadius: 10, padding: "13px 0", fontSize: 15, fontWeight: 800, cursor: "pointer", width: "100%", letterSpacing: 0.8, boxShadow: `0 3px 10px ${color}55` });
 const css = (...objs) => Object.assign({}, ...objs);
@@ -2646,8 +2648,27 @@ const Badge = ({ label, color, small }) => (
   <span style={{ background: color, color: "#fff", borderRadius: 20, padding: small ? "3px 9px" : "5px 13px", fontSize: small ? 11 : 13, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>
 );
 
-const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx }) => (
-  <button onClick={onClick} disabled={disabled} style={css({ background: disabled ? "#ccc" : color, color: text, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: disabled ? "default" : "pointer", width: "100%", letterSpacing: 0.8, textTransform: "uppercase", boxShadow: disabled ? "none" : `0 3px 10px ${color}55` }, sx || {})}>{label}</button>
+const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx, danger }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    style={css({
+      background: disabled ? "#ccc" : color,
+      color: text,
+      border: danger ? "2px solid " + RED : "none",
+      borderRadius: 10,
+      padding: "14px 0",
+      fontSize: 15,
+      fontWeight: 800,
+      cursor: disabled ? "default" : "pointer",
+      width: "100%",
+      minHeight: 48,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      boxShadow: disabled ? "none" : `0 3px 10px ${color}55`,
+      touchAction: "manipulation",
+    }, sx || {})}
+  >{label}</button>
 );
 
 function KMHeader({ title, sub, onBack, right }) {
@@ -2704,6 +2725,27 @@ function KMFooter() {
       <span style={{ fontWeight: 900, fontSize: 16, color: "#fff", letterSpacing: -0.5 }}>KM</span>
       <span style={{ fontWeight: 900, fontSize: 16, color: GOLD, letterSpacing: -0.5 }}>ZERO</span>
       <div style={{ fontSize: 8, color: "rgba(255,255,255,0.45)", letterSpacing: 2, marginTop: -1 }}>GESTÃO DE OBRAS</div>
+      <a
+        href="https://instagram.com/km_engenharias"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 10,
+          color: "rgba(255,255,255,0.55)",
+          textDecoration: "none",
+          marginTop: 4,
+          padding: "2px 8px",
+          borderRadius: 10,
+          minHeight: 20,
+        }}
+        title="Siga a KM no Instagram"
+      >
+        <span style={{ fontSize: 11 }}>📷</span>
+        <span style={{ fontWeight: 600 }}>@km_engenharias</span>
+      </a>
     </div>
   );
 }
@@ -3402,6 +3444,22 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
           transform: scale(0.97);
           box-shadow: 0 2px 10px rgba(245,166,35,0.6);
         }
+        /* Acessibilidade mobile: melhor toque e área mínima em campos */
+        button { touch-action: manipulation; }
+        input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+        select, textarea { min-height: 44px; box-sizing: border-box; }
+        /* Botão destrutivo: borda vermelha discreta + animação no hover */
+        .km-btn-danger {
+          border: 2px solid rgba(220,38,38,0.6) !important;
+          transition: all 0.15s ease;
+        }
+        .km-btn-danger:hover:not([disabled]) {
+          border-color: rgba(220,38,38,1) !important;
+          box-shadow: 0 0 0 3px rgba(220,38,38,0.15) !important;
+        }
+        .km-btn-danger:active:not([disabled]) {
+          transform: scale(0.97);
+        }
       `}</style>
 
       {/* Background animado */}
@@ -3692,7 +3750,7 @@ function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, onNa
   const novasMsgs = (mensagens || []).filter(m => m.para === usuario?.id && !m.lida).length;
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "10px 14px 12px", flexShrink: 0 }}>
+      <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "10px 14px 12px", paddingTop: "max(10px, env(safe-area-inset-top, 10px))", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <div>
             <div><span style={{ fontWeight: 900, fontSize: 20, color: "#fff", letterSpacing: -1 }}>KM</span><span style={{ fontWeight: 900, fontSize: 20, color: GOLD, letterSpacing: -1 }}>ZERO</span></div>
@@ -5772,7 +5830,7 @@ function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
 /* ════════════════════════════════════
    PAINEL GESTOR
 ════════════════════════════════════ */
-function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, onNav, onLogout, onAprovar, onNegar }) {
+function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, empresaSyncStatus, online, onNav, onLogout, onAprovar, onNegar }) {
   const pendentes = pedidos.filter(p => p.status === "Aguardando").length;
   const movPendentes = (movimentacoes || []).filter(m => m.status === "Aguardando").length;
   const movEquipPendentes = (movEquip || []).filter(m => m.status === "Aguardando").length;
@@ -5898,7 +5956,41 @@ function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, me
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader right={
-        <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {usuario?.firebaseUid && (
+            <div
+              title={
+                !online ? "Sem internet — alterações serão sincronizadas quando voltar"
+                : empresaSyncStatus === "salvando" ? "Salvando na nuvem..."
+                : empresaSyncStatus === "sincronizado" ? "Sincronizado com a nuvem"
+                : empresaSyncStatus === "erro" ? "Erro ao sincronizar"
+                : "Conectado"
+              }
+              style={{
+                background: !online ? "rgba(220,38,38,0.25)"
+                  : empresaSyncStatus === "salvando" ? "rgba(234,179,8,0.25)"
+                  : empresaSyncStatus === "sincronizado" ? "rgba(34,197,94,0.25)"
+                  : empresaSyncStatus === "erro" ? "rgba(220,38,38,0.25)"
+                  : "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: 14,
+                padding: "4px 8px",
+                fontSize: 11,
+                color: "#fff",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              {!online ? "📴" : empresaSyncStatus === "salvando" ? "🔄" : empresaSyncStatus === "sincronizado" ? "☁️" : empresaSyncStatus === "erro" ? "⚠️" : "☁️"}
+              <span style={{ fontSize: 10 }}>
+                {!online ? "Offline" : empresaSyncStatus === "salvando" ? "Salvando" : empresaSyncStatus === "sincronizado" ? "Nuvem" : empresaSyncStatus === "erro" ? "Erro" : "Nuvem"}
+              </span>
+            </div>
+          )}
+          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button>
+        </div>
       } />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
         {/* Saudação */}
@@ -11818,6 +11910,35 @@ function TelaConfigEmpresa({ empresa, onSave, onBack }) {
           <input value={form.email} onChange={e => set("email", e.target.value)} style={inputS} />
           <label style={labelS}>Telefone</label>
           <input value={form.telefone} onChange={e => set("telefone", e.target.value)} style={inputS} />
+          <label style={labelS}>📍 Endereço</label>
+          <input value={form.endereco || ""} onChange={e => set("endereco", e.target.value)} placeholder="Rua, número, bairro, cidade-UF" style={inputS} />
+          <label style={labelS}>📷 Instagram</label>
+          <input
+            value={form.instagram || ""}
+            onChange={e => set("instagram", e.target.value.replace(/^@/, ""))}
+            placeholder="km_engenharias (sem o @)"
+            style={inputS}
+          />
+          {form.instagram && (
+            <a
+              href={`https://instagram.com/${form.instagram}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                color: BLUE,
+                textDecoration: "none",
+                marginTop: -8,
+                marginBottom: 8,
+                fontWeight: 600,
+              }}
+            >
+              📷 Ver @{form.instagram} no Instagram ›
+            </a>
+          )}
 
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: "2px solid #f3f4f6" }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 4 }}>🏢 Logomarca da Empresa</div>
@@ -14821,6 +14942,59 @@ export default function App() {
   useEffect(() => { if (!carregando) store.set("ferias", ferias); }, [ferias, carregando]);
   useEffect(() => { if (!carregando) store.set("rdos", rdosEmitidos); }, [rdosEmitidos, carregando]);
   useEffect(() => { if (!carregando) store.set("empresa", empresa); }, [empresa, carregando]);
+
+  // ═══ FASE 2A: Sincronização da empresa com Firestore ═══
+  // Ativa só quando o gestor estiver logado pelo Firebase.
+  // Observa mudanças remotas e atualiza o estado local automaticamente.
+  // Salva no Firestore sempre que o estado local mudar (com debounce).
+  const [empresaSyncStatus, setEmpresaSyncStatus] = useState("desconhecido");
+  // Status possíveis: "desconhecido", "sincronizado", "salvando", "offline", "erro"
+
+  useEffect(() => {
+    // Só sincroniza se o usuário for gestor logado pelo Firebase
+    if (!usuario || usuario.perfil !== "gestor" || !usuario.firebaseUid) {
+      return;
+    }
+
+    // Observa mudanças em tempo real na nuvem
+    const cancelarObservacao = observarEmpresa((dadosCloud, status) => {
+      if (status.ok && dadosCloud) {
+        // Mescla com o que está local, preservando campos não-sincronizados
+        setEmpresa(prev => ({ ...prev, ...dadosCloud }));
+        setEmpresaSyncStatus("sincronizado");
+      } else if (status.ok && !dadosCloud) {
+        // Primeira vez na nuvem: envia o estado local atual
+        salvarEmpresa(empresa).then(r => {
+          if (r.ok) setEmpresaSyncStatus("sincronizado");
+        });
+      } else if (!status.ok) {
+        setEmpresaSyncStatus("erro");
+      }
+    });
+
+    return () => cancelarObservacao();
+  }, [usuario && usuario.firebaseUid]);
+
+  // Salva no Firestore com debounce de 1.5s quando empresa mudar localmente
+  useEffect(() => {
+    if (!usuario || usuario.perfil !== "gestor" || !usuario.firebaseUid) return;
+    if (carregando) return;
+
+    const t = setTimeout(() => {
+      setEmpresaSyncStatus("salvando");
+      salvarEmpresa(empresa).then(r => {
+        setEmpresaSyncStatus(r.ok ? "sincronizado" : "erro");
+      });
+    }, 1500);
+
+    return () => clearTimeout(t);
+  }, [empresa, usuario && usuario.firebaseUid, carregando]);
+
+  // Monitora status de conexão para informar o usuário
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    return observarConexao(setOnline);
+  }, []);
   useEffect(() => { if (!carregando) store.set("produtividade", produtividade); }, [produtividade, carregando]);
   useEffect(() => { if (!carregando) store.set("recebimentos", recebimentos); }, [recebimentos, carregando]);
   useEffect(() => { if (!carregando) store.set("movimentacoes", movimentacoes); }, [movimentacoes, carregando]);
@@ -15015,7 +15189,7 @@ export default function App() {
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
       case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={f => setFotosObras(fs => [f, ...fs])} />;
-      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} />;
+      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} empresaSyncStatus={empresaSyncStatus} online={online} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} />;
       case "obras":      return <TelaObras obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
