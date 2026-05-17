@@ -6118,7 +6118,30 @@ function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, me
         <TabelaResumoEquipe obras={obras} trabalhadores={trabalhadores} historico={historico} onNav={onNav} />
 
         {/* Categorias agrupadas */}
-        <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>📂 Todas as Funções</div>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          margin: "18px 0 10px",
+          padding: "0 4px",
+        }}>
+          <div style={{ fontSize: 18 }}>📂</div>
+          <div style={{
+            fontSize: 12,
+            color: NAVY,
+            textTransform: "uppercase",
+            letterSpacing: 1.5,
+            fontWeight: 800,
+          }}>Todas as Funções</div>
+          <div style={{
+            flex: 1,
+            height: 1,
+            background: "linear-gradient(90deg, rgba(15,33,81,0.15) 0%, transparent 100%)",
+          }} />
+          <div style={{ fontSize: 10, color: "#888", fontWeight: 600 }}>
+            {categorias.length} categorias
+          </div>
+        </div>
         {categorias.map((cat, idx) => (
           <CategoriaCard key={idx} categoria={cat} onNav={onNav} />
         ))}
@@ -6226,35 +6249,135 @@ function CategoriaCard({ categoria, onNav }) {
   const [aberto, setAberto] = useState(false);
   const totalBadges = categoria.itens.reduce((s, i) => s + (i.badge || 0), 0);
 
+  // Separa emoji do título para destacar visualmente
+  const tituloPartes = categoria.titulo.match(/^(\S+)\s+(.+)$/);
+  const emoji = tituloPartes ? tituloPartes[1] : "";
+  const nomeCategoria = tituloPartes ? tituloPartes[2] : categoria.titulo;
+
+  // Converte hex para rgba (para gradiente sutil de fundo)
+  const corRGBA = (hex, a) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  };
+
   return (
-    <div style={{ background: "#fff", borderRadius: 14, marginBottom: 10, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+    <div style={{
+      background: "#fff",
+      borderRadius: 14,
+      marginBottom: 10,
+      overflow: "hidden",
+      boxShadow: aberto ? `0 4px 20px ${corRGBA(categoria.cor, 0.18)}` : "0 2px 8px rgba(0,0,0,0.06)",
+      transition: "all 0.25s ease",
+      border: aberto ? `1.5px solid ${corRGBA(categoria.cor, 0.3)}` : "1.5px solid transparent",
+    }}>
       <button onClick={() => setAberto(!aberto)} style={{
-        width: "100%", padding: "14px 16px", border: "none",
-        background: aberto ? "#f5f8fc" : "#fff", cursor: "pointer",
-        display: "flex", alignItems: "center", textAlign: "left", borderBottom: aberto ? `1px solid #e5e7eb` : "none",
+        width: "100%",
+        padding: "14px 16px",
+        border: "none",
+        background: aberto
+          ? `linear-gradient(90deg, ${corRGBA(categoria.cor, 0.08)} 0%, transparent 100%)`
+          : "#fff",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        textAlign: "left",
+        borderBottom: aberto ? `1px solid ${corRGBA(categoria.cor, 0.15)}` : "none",
+        transition: "background 0.25s ease",
       }}>
-        <div style={{ width: 4, height: 36, background: categoria.cor, borderRadius: 2, marginRight: 12 }}></div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 800, color: NAVY, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}>
-            {categoria.titulo}
-            {totalBadges > 0 && <span style={{ background: RED, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{totalBadges}</span>}
-          </div>
-          <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{categoria.desc} • {categoria.itens.length} opções</div>
+        {/* Ícone grande com fundo colorido */}
+        <div style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: `linear-gradient(135deg, ${categoria.cor} 0%, ${corRGBA(categoria.cor, 0.7)} 100%)`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 22,
+          marginRight: 12,
+          flexShrink: 0,
+          boxShadow: `0 3px 10px ${corRGBA(categoria.cor, 0.35)}`,
+        }}>
+          {emoji}
         </div>
-        <span style={{ color: "#aaa", fontSize: 18, transition: "transform 0.2s", transform: aberto ? "rotate(90deg)" : "rotate(0)" }}>›</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, color: NAVY, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+            {nomeCategoria}
+            {totalBadges > 0 && (
+              <span style={{
+                background: RED,
+                color: "#fff",
+                borderRadius: 10,
+                padding: "2px 8px",
+                fontSize: 10,
+                fontWeight: 800,
+                boxShadow: `0 2px 6px ${RED}50`,
+              }}>{totalBadges}</span>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+            {categoria.desc} <span style={{ color: categoria.cor, fontWeight: 700 }}>• {categoria.itens.length} opções</span>
+          </div>
+        </div>
+        <span style={{
+          color: categoria.cor,
+          fontSize: 22,
+          fontWeight: 700,
+          transition: "transform 0.25s ease",
+          transform: aberto ? "rotate(90deg)" : "rotate(0)",
+          marginLeft: 4,
+        }}>›</span>
       </button>
       {aberto && (
-        <div style={{ padding: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div style={{
+          padding: 12,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 8,
+          background: corRGBA(categoria.cor, 0.03),
+        }}>
           {categoria.itens.map(b => (
-            <button key={b.nav} onClick={() => onNav(b.nav)} style={{
-              background: b.c, color: "#fff", border: "none", borderRadius: 10,
-              padding: "12px 8px", cursor: "pointer", textAlign: "center",
-              boxShadow: `0 2px 8px ${b.c}33`, position: "relative",
-              gridColumn: b.destaque ? "span 2" : "span 1",
-            }}>
-              <div style={{ fontSize: b.destaque ? 28 : 22 }}>{b.icon}</div>
+            <button
+              key={b.nav}
+              onClick={() => onNav(b.nav)}
+              style={{
+                background: b.c,
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                padding: "14px 8px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: `0 3px 10px ${b.c}40`,
+                position: "relative",
+                gridColumn: b.destaque ? "span 2" : "span 1",
+                transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                minHeight: 76,
+              }}
+              onMouseDown={e => e.currentTarget.style.transform = "scale(0.97)"}
+              onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+              onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+              onTouchStart={e => e.currentTarget.style.transform = "scale(0.97)"}
+              onTouchEnd={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <div style={{ fontSize: b.destaque ? 30 : 24 }}>{b.icon}</div>
               <div style={{ fontSize: b.destaque ? 13 : 12, fontWeight: 700, marginTop: 4 }}>{b.l}</div>
-              {b.badge > 0 && <div style={{ position: "absolute", top: 4, right: 6, background: "#fff", color: RED, borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 800 }}>{b.badge}</div>}
+              {b.badge > 0 && (
+                <div style={{
+                  position: "absolute",
+                  top: 6,
+                  right: 8,
+                  background: "#fff",
+                  color: RED,
+                  borderRadius: 10,
+                  padding: "2px 7px",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                }}>{b.badge}</div>
+              )}
             </button>
           ))}
         </div>
