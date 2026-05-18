@@ -6054,13 +6054,18 @@ function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, me
       cor: "#475569",
       desc: "Configurações e segurança",
       itens: [
-        { icon: "🔧", l: "Diagnóstico",  nav: "diagnostico", c: "#dc2626" },
+        { icon: "👤", l: "Minha Conta",   nav: "minha_conta", c: "#0891b2" },
+        { icon: "🆘", l: "Ajuda & Suporte", nav: "ajuda", c: "#16a34a" },
         { icon: "🔗", l: "Links Úteis",   nav: "links",   c: "#0284c7" },
-        { icon: "🔑", l: "Acessos do App", nav: "acessos", c: "#0891b2" },
+        { icon: "🔑", l: "Usuários e Permissões", nav: "acessos", c: "#0891b2" },
         { icon: "🏢", l: "Empresa",       nav: "empresa", c: "#334155" },
-        { icon: "💾", l: "Backup",        nav: "backup",  c: "#6b7280" },
-        { icon: "🎬", l: "Gerar 30 dias",  nav: "gerar_simulacao", c: "#7c3aed" },
-        { icon: "🧹", l: "Zerar Tudo",    nav: "zerar_tudo", c: "#dc2626" },
+        { icon: "💾", l: "Exportar Dados",        nav: "backup",  c: "#6b7280" },
+        // Itens abaixo só aparecem para o desenvolvedor (Kleber)
+        ...(usuario?.email === "kvmprojetos@gmail.com" ? [
+          { icon: "🔧", l: "Painel Técnico",  nav: "diagnostico", c: "#dc2626" },
+          { icon: "🎬", l: "Popular Demo",  nav: "gerar_simulacao", c: "#7c3aed" },
+          { icon: "🧹", l: "Limpar Banco",    nav: "zerar_tudo", c: "#dc2626" },
+        ] : []),
       ],
     },
   ];
@@ -12092,6 +12097,775 @@ function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover })
   );
 }
 
+/* ════════════════════════════════════
+   MINHA CONTA — Segurança e Privacidade
+   Permite ao gestor trocar senha, recuperar acesso,
+   sair de todas as sessões e ver informações de segurança.
+════════════════════════════════════ */
+function TelaMinhaConta({ usuario, empresa, onBack, onLogout }) {
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [senhaNova, setSenhaNova] = useState("");
+  const [senhaConfirma, setSenhaConfirma] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
+  const [modalSair, setModalSair] = useState(false);
+
+  const isFirebase = !!usuario?.firebaseUid;
+
+  const trocarSenha = async () => {
+    setErro(""); setSucesso("");
+    if (!senhaNova || senhaNova.length < 6) {
+      return setErro("A nova senha deve ter pelo menos 6 caracteres.");
+    }
+    if (senhaNova !== senhaConfirma) {
+      return setErro("A confirmação de senha não confere com a nova senha.");
+    }
+    if (!isFirebase) {
+      return setErro("A troca de senha pelo aplicativo só funciona para contas autenticadas pelo Firebase.");
+    }
+    setCarregando(true);
+    // Reautentica antes de trocar (boa prática Firebase)
+    const r1 = await loginFirebase(usuario.email, senhaAtual);
+    if (!r1.ok) {
+      setCarregando(false);
+      return setErro("Senha atual incorreta. Tente novamente.");
+    }
+    const r2 = await atualizarSenha(senhaNova);
+    setCarregando(false);
+    if (r2.ok) {
+      setSucesso("Senha alterada com sucesso! Use a nova senha no próximo login.");
+      setSenhaAtual(""); setSenhaNova(""); setSenhaConfirma("");
+      setTimeout(() => setSucesso(""), 6000);
+    } else {
+      setErro(r2.erro || "Não foi possível alterar a senha. Tente novamente.");
+    }
+  };
+
+  const enviarRecuperacao = async () => {
+    setErro(""); setSucesso("");
+    if (!usuario?.email) return setErro("E-mail da conta não encontrado.");
+    setCarregando(true);
+    const r = await recuperarSenha(usuario.email);
+    setCarregando(false);
+    if (r.ok) {
+      setSucesso(`Link de recuperação enviado para ${usuario.email}. Verifique sua caixa de entrada e a pasta de spam.`);
+      setTimeout(() => setSucesso(""), 8000);
+    } else {
+      setErro(r.erro || "Não foi possível enviar o link de recuperação.");
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      <KMHeader title="Minha Conta" sub="Segurança e privacidade" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+
+        {/* CARD: Informações da conta */}
+        <div style={{
+          background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a8a 100%)`,
+          color: "#fff",
+          borderRadius: 14,
+          padding: 16,
+          marginBottom: 14,
+          boxShadow: "0 4px 16px rgba(15,33,81,0.25)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <div style={{
+              width: 54,
+              height: 54,
+              borderRadius: 27,
+              background: GOLD,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 26,
+              boxShadow: "0 4px 14px rgba(245,166,35,0.5)",
+            }}>👤</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {usuario?.nome || "Gestor"}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {usuario?.email || "—"}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{
+              background: isFirebase ? "rgba(34,197,94,0.25)" : "rgba(234,179,8,0.25)",
+              border: `1px solid ${isFirebase ? "rgba(34,197,94,0.5)" : "rgba(234,179,8,0.5)"}`,
+              borderRadius: 14,
+              padding: "4px 10px",
+              fontSize: 11,
+              fontWeight: 700,
+            }}>
+              {isFirebase ? "🔒 Autenticado pelo Firebase" : "⚠️ Login local (sem nuvem)"}
+            </div>
+            <div style={{
+              background: "rgba(255,255,255,0.15)",
+              border: "1px solid rgba(255,255,255,0.25)",
+              borderRadius: 14,
+              padding: "4px 10px",
+              fontSize: 11,
+              fontWeight: 700,
+            }}>
+              {usuario?.perfil === "gestor" ? "👔 Gestor" : "👷 Encarregado"}
+            </div>
+          </div>
+        </div>
+
+        {/* CARD: Trocar Senha (apenas Firebase) */}
+        {isFirebase ? (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              🔑 Trocar Senha
+            </div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 12, lineHeight: 1.5 }}>
+              Para sua segurança, informe a senha atual antes de definir uma nova. A nova senha precisa ter no mínimo 6 caracteres.
+            </div>
+
+            <label style={labelS}>🔐 Senha atual</label>
+            <input
+              type="password"
+              value={senhaAtual}
+              onChange={e => setSenhaAtual(e.target.value)}
+              placeholder="Sua senha atual"
+              style={inputS}
+              autoComplete="current-password"
+            />
+
+            <label style={labelS}>✨ Nova senha (mínimo 6 caracteres)</label>
+            <input
+              type="password"
+              value={senhaNova}
+              onChange={e => setSenhaNova(e.target.value)}
+              placeholder="Nova senha"
+              style={inputS}
+              autoComplete="new-password"
+            />
+
+            <label style={labelS}>🔁 Confirme a nova senha</label>
+            <input
+              type="password"
+              value={senhaConfirma}
+              onChange={e => setSenhaConfirma(e.target.value)}
+              placeholder="Repita a nova senha"
+              style={inputS}
+              autoComplete="new-password"
+            />
+
+            {erro && (
+              <div style={{ background: "#fef2f2", color: RED, border: `1px solid ${RED}33`, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10, fontWeight: 600 }}>
+                ⚠️ {erro}
+              </div>
+            )}
+            {sucesso && (
+              <div style={{ background: "#f0fdf4", color: GREEN, border: `1px solid ${GREEN}33`, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10, fontWeight: 600 }}>
+                ✅ {sucesso}
+              </div>
+            )}
+
+            <Btn
+              label={carregando ? "PROCESSANDO..." : "💾 ALTERAR SENHA"}
+              color={GREEN}
+              onClick={trocarSenha}
+              disabled={carregando || !senhaAtual || !senhaNova || !senhaConfirma}
+            />
+          </div>
+        ) : (
+          <div style={{ background: "#fef9e7", borderRadius: 14, padding: 14, marginBottom: 14, border: "1px solid rgba(234,179,8,0.4)" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#8b6f00", marginBottom: 6 }}>
+              ⚠️ Conta não está autenticada pelo Firebase
+            </div>
+            <div style={{ fontSize: 11, color: "#8b6f00", lineHeight: 1.5 }}>
+              Você entrou com um login local antigo. A troca de senha pelo aplicativo só funciona para contas autenticadas pelo Firebase. Saia e entre novamente usando seu email e senha cadastrados.
+            </div>
+          </div>
+        )}
+
+        {/* CARD: Recuperação de senha */}
+        {isFirebase && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              📧 Enviar link de recuperação
+            </div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 10, lineHeight: 1.5 }}>
+              Caso você precise redefinir a senha sem lembrar da atual, enviamos um link de recuperação para o seu e-mail cadastrado: <b>{usuario.email}</b>.
+            </div>
+            <button
+              onClick={enviarRecuperacao}
+              disabled={carregando}
+              style={{
+                width: "100%",
+                padding: 12,
+                background: "#fff",
+                color: BLUE,
+                border: `2px solid ${BLUE}`,
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: carregando ? "default" : "pointer",
+              }}
+            >
+              {carregando ? "Enviando..." : "✉️ Enviar link para meu e-mail"}
+            </button>
+          </div>
+        )}
+
+        {/* CARD: Sessões */}
+        {isFirebase && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              🚪 Sair desta sessão
+            </div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 10, lineHeight: 1.5 }}>
+              Encerra a sessão atual deste aparelho. Você pode entrar novamente quando quiser.
+            </div>
+            <button
+              onClick={() => setModalSair(true)}
+              className="km-btn-danger"
+              style={{
+                width: "100%",
+                padding: 12,
+                background: "#fff",
+                color: RED,
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              🚪 Sair da conta
+            </button>
+          </div>
+        )}
+
+        {/* CARD: Informações da empresa (compacto) */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+            🏢 Empresa vinculada
+          </div>
+          <div style={{ fontSize: 12, color: "#444", lineHeight: 1.6 }}>
+            <div><b>Razão Social:</b> {empresa?.razaoSocial || "—"}</div>
+            {empresa?.nomeFantasia && <div><b>Nome fantasia:</b> {empresa.nomeFantasia}</div>}
+            <div><b>CNPJ:</b> {empresa?.cnpj || "—"}</div>
+            {empresa?.registro && <div><b>Registro:</b> {empresa.registro}</div>}
+            {empresa?.endereco && <div style={{ marginTop: 4 }}><b>📍</b> {empresa.endereco}</div>}
+          </div>
+        </div>
+
+        {/* Dica de segurança */}
+        <div style={{
+          background: "#f0f9ff",
+          border: "1px solid #bae6fd",
+          borderRadius: 10,
+          padding: 12,
+          fontSize: 11,
+          color: "#075985",
+          lineHeight: 1.5,
+        }}>
+          💡 <b>Dica de segurança:</b> Use senhas com no mínimo 8 caracteres, misturando letras, números e símbolos. Não compartilhe sua senha com ninguém. Em caso de suspeita de acesso indevido, troque sua senha imediatamente.
+        </div>
+      </div>
+      <KMFooter />
+
+      {/* Modal: Confirmar Sair */}
+      <Modal show={modalSair} title="🚪 Sair da conta?" onClose={() => setModalSair(false)}>
+        <div style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 14 }}>
+          Você vai precisar entrar com email e senha novamente neste aparelho. Confirma?
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setModalSair(false)}
+            style={{ flex: 1, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          >Cancelar</button>
+          <button
+            onClick={() => { setModalSair(false); onLogout && onLogout(); }}
+            className="km-btn-danger"
+            style={{ flex: 1, padding: 12, background: RED, color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: "pointer" }}
+          >🚪 Sair</button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════
+   AJUDA & SUPORTE — FAQ, Termos, LGPD, Contato
+════════════════════════════════════ */
+function TelaAjuda({ empresa, onBack }) {
+  const [abertos, setAbertos] = useState({});
+  const [aba, setAba] = useState("sobre"); // "sobre" | "faq" | "termos" | "lgpd"
+
+  const toggleFaq = (id) => setAbertos(o => ({ ...o, [id]: !o[id] }));
+
+  const faqs = [
+    {
+      id: "como_inicio",
+      pergunta: "Como começo a usar o KMZERO?",
+      resposta: "O KMZERO já vem com dados de exemplo. Como gestor, você acessa o Painel do Gestor pela tela inicial. Pelo menu Sistema → Empresa, configura os dados da sua empresa. Pelo menu Recursos Humanos → Equipe, cadastra trabalhadores e encarregados. Pelo menu Obras & Recursos → Obras, cadastra as obras em andamento. Os encarregados acessam pelo seu próprio cadastro (criado em Sistema → Acessos do App).",
+    },
+    {
+      id: "como_rdo",
+      pergunta: "Como faço um RDO (Relatório Diário de Obra)?",
+      resposta: "No Painel do Gestor, toque em RDO ABNT (botão dourado em Acesso Rápido). Escolha a obra, depois confirme a presença dos trabalhadores marcando quem trabalhou. Em seguida o aplicativo registra serviços executados, equipamentos usados e fotos da obra. Ao finalizar, gera um relatório no padrão ABNT pronto para imprimir ou enviar.",
+    },
+    {
+      id: "como_pedidos",
+      pergunta: "Como aprovo um pedido de compra?",
+      resposta: "Quando um encarregado faz um pedido pelo aplicativo, ele aparece no Painel do Gestor com etiqueta laranja \"Aguardando Aprovação\". Toque no pedido para ver os itens. Para aprovar, escolha a forma de pagamento, o prazo e o fornecedor. O aplicativo gera uma Solicitação de Pedido de Compra em PDF que você pode enviar diretamente ao fornecedor.",
+    },
+    {
+      id: "como_folha",
+      pergunta: "Como gero a folha quinzenal de pagamento?",
+      resposta: "Em Recursos Humanos → Folha Quinzenal, selecione o período. O aplicativo calcula automaticamente os dias trabalhados, horas extras, descontos de adiantamentos e o valor líquido a pagar. Você pode exportar a folha em PDF para arquivo ou envio aos trabalhadores.",
+    },
+    {
+      id: "esqueci_senha",
+      pergunta: "Esqueci minha senha. O que fazer?",
+      resposta: "Na tela de login do gestor, toque em \"Esqueci minha senha\" abaixo do botão ENTRAR. Digite seu email cadastrado. Você vai receber um link de recuperação no email para definir uma nova senha. Verifique a caixa de entrada e a pasta de spam. O email pode demorar até 3 minutos.",
+    },
+    {
+      id: "trocar_senha",
+      pergunta: "Como troco minha senha sem precisar do email?",
+      resposta: "Acesse o menu Sistema → Minha Conta. Lá você encontra a opção de trocar senha. Informe a senha atual e defina uma nova. A troca acontece imediatamente, sem precisar do email.",
+    },
+    {
+      id: "encarregado_acessar",
+      pergunta: "Como os encarregados acessam o aplicativo?",
+      resposta: "O gestor cadastra cada encarregado em Sistema → Acessos do App, definindo um email e uma senha simples. Esses dados são compartilhados com o encarregado, que entra na tela inicial selecionando o próprio perfil. Os encarregados só veem a obra à qual estão vinculados.",
+    },
+    {
+      id: "offline",
+      pergunta: "O aplicativo funciona sem internet?",
+      resposta: "Sim. O KMZERO foi projetado para funcionar offline. Os dados ficam salvos localmente no aparelho e podem ser usados sem internet. Quando a conexão voltar, os dados serão sincronizados com a nuvem automaticamente.",
+    },
+    {
+      id: "fotos",
+      pergunta: "Onde ficam guardadas as fotos das obras?",
+      resposta: "Todas as fotos tiradas pelo aplicativo (fotos do RDO, fotos de equipamentos, fotos de fichas de trabalhadores) ficam guardadas no próprio aplicativo e podem ser vistas em Operação Diária → Galeria Fotos, agrupadas por obra e data.",
+    },
+    {
+      id: "backup",
+      pergunta: "Como faço backup dos dados?",
+      resposta: "Em Sistema → Backup, você pode exportar todos os dados em arquivo único para guardar no seu computador. Recomendamos fazer backup pelo menos uma vez por mês. Em breve, com a sincronização na nuvem ativa, o backup será automático.",
+    },
+    {
+      id: "suporte",
+      pergunta: "Como entro em contato com o suporte?",
+      resposta: "Para falar com o suporte técnico do KMZERO, use o WhatsApp (28) 99925-8172, envie email para kvmprojetos@gmail.com, ou siga @km_engenharias no Instagram. O atendimento é de segunda a sexta, das 8h às 18h.",
+    },
+  ];
+
+  const wppUrl = "https://wa.me/5528999258172?text=" + encodeURIComponent("Olá! Preciso de ajuda com o KMZERO.");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      <KMHeader title="Ajuda & Suporte" sub="FAQ, Termos e Contato" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+
+        {/* CARD CONTATO RÁPIDO */}
+        <div style={{
+          background: `linear-gradient(135deg, ${GREEN} 0%, #15803d 100%)`,
+          color: "#fff",
+          borderRadius: 14,
+          padding: 16,
+          marginBottom: 14,
+          boxShadow: "0 4px 16px rgba(22,163,74,0.25)",
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>💬 Precisa de ajuda agora?</div>
+          <div style={{ fontSize: 11, opacity: 0.95, marginBottom: 12, lineHeight: 1.5 }}>
+            Entre em contato pelos canais oficiais da KM Consultoria. Atendimento de segunda a sexta, das 8h às 18h.
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <a href={wppUrl} target="_blank" rel="noopener noreferrer" style={{
+              flex: "1 1 130px",
+              background: "rgba(255,255,255,0.18)",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.3)",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: "none",
+              textAlign: "center",
+              backdropFilter: "blur(6px)",
+            }}>💬 WhatsApp</a>
+            <a href="mailto:kvmprojetos@gmail.com?subject=Suporte%20KMZERO" style={{
+              flex: "1 1 130px",
+              background: "rgba(255,255,255,0.18)",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.3)",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: "none",
+              textAlign: "center",
+              backdropFilter: "blur(6px)",
+            }}>✉️ E-mail</a>
+            <a href="https://instagram.com/km_engenharias" target="_blank" rel="noopener noreferrer" style={{
+              flex: "1 1 130px",
+              background: "rgba(255,255,255,0.18)",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.3)",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: "none",
+              textAlign: "center",
+              backdropFilter: "blur(6px)",
+            }}>📷 Instagram</a>
+          </div>
+          <div style={{ fontSize: 10, opacity: 0.85, marginTop: 10, textAlign: "center" }}>
+            📞 (28) 99925-8172 · ✉️ kvmprojetos@gmail.com
+          </div>
+        </div>
+
+        {/* ABAS */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+          {[
+            { k: "sobre", l: "ℹ️ Sobre", c: "#0F2151" },
+            { k: "faq", l: "🆘 Perguntas", c: "#16a34a" },
+            { k: "termos", l: "📄 Termos", c: "#0891b2" },
+            { k: "lgpd", l: "🔒 LGPD", c: "#7c3aed" },
+          ].map(t => (
+            <button
+              key={t.k}
+              onClick={() => setAba(t.k)}
+              style={{
+                flex: "1 1 90px",
+                padding: "10px 6px",
+                background: aba === t.k ? t.c : "#fff",
+                color: aba === t.k ? "#fff" : "#666",
+                border: aba === t.k ? "none" : "1px solid #e5e7eb",
+                borderRadius: 10,
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: "pointer",
+                boxShadow: aba === t.k ? `0 3px 10px ${t.c}40` : "none",
+              }}
+            >{t.l}</button>
+          ))}
+        </div>
+
+        {/* CONTEÚDO SOBRE */}
+        {aba === "sobre" && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 0, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {/* Header navy com logo */}
+            <div style={{
+              background: "linear-gradient(135deg, #0F2151 0%, #1e3a8a 100%)",
+              padding: "24px 20px",
+              textAlign: "center",
+              color: "#fff",
+            }}>
+              <div style={{ fontSize: 11, opacity: 0.7, letterSpacing: 3, fontWeight: 700, marginBottom: 6 }}>
+                🏗️ GESTÃO DE OBRAS
+              </div>
+              <div style={{ fontSize: 42, fontWeight: 900, letterSpacing: -1.5 }}>
+                <span style={{ color: "#fff" }}>KM</span>
+                <span style={{ color: "#F5A623" }}>ZERO</span>
+              </div>
+              <div style={{ height: 2, width: 50, background: "#F5A623", margin: "10px auto", borderRadius: 2 }} />
+              <div style={{ fontSize: 13, fontStyle: "italic", opacity: 0.9 }}>
+                KM Consultoria · Engenharia Civil
+              </div>
+            </div>
+
+            {/* Quem desenvolveu */}
+            <div style={{ padding: "20px 18px" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                👨‍💼 Quem desenvolve
+              </div>
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 14 }}>
+                <div style={{
+                  width: 60, height: 60, borderRadius: 30,
+                  background: "linear-gradient(135deg, #F5A623, #FFC857)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 28, flexShrink: 0,
+                  boxShadow: "0 4px 14px rgba(245,166,35,0.4)",
+                }}>👷</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151" }}>
+                    Kleber Vieira Martins
+                  </div>
+                  <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
+                    Engenheiro Civil · CREA-ES
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, lineHeight: 1.5 }}>
+                    Fundador da KM Consultoria, em Alegre-ES. Atua há mais de 10 anos em obras civis no sul capixaba.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                background: "#FFF7E6",
+                borderLeft: "4px solid #F5A623",
+                padding: "10px 14px",
+                fontSize: 12,
+                color: "#444",
+                lineHeight: 1.6,
+                borderRadius: "0 8px 8px 0",
+                marginBottom: 16,
+              }}>
+                "O KMZERO nasceu de uma frustração real: gerir obras no papel, em planilhas e por WhatsApp não dava conta. Construí o que eu mesmo gostaria de ter em campo, com a linguagem e os processos de quem está no canteiro todo dia."
+              </div>
+            </div>
+
+            {/* O que é */}
+            <div style={{ padding: "0 18px 16px", borderTop: "1px solid #f3f4f6", paddingTop: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                🎯 O que é o KMZERO
+              </div>
+              <div style={{ fontSize: 12, color: "#444", lineHeight: 1.7 }}>
+                O KMZERO é um aplicativo profissional de gestão de obras, desenvolvido em Engenharia Civil pela KM Consultoria. Centraliza em uma plataforma única o controle de equipes, materiais, custos, relatórios técnicos e comunicação entre canteiro e escritório.
+              </div>
+            </div>
+
+            {/* Tecnologia */}
+            <div style={{ padding: "0 18px 16px", borderTop: "1px solid #f3f4f6", paddingTop: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                ⚡ Tecnologia
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11 }}>
+                {[
+                  ["🔒 Firebase Auth", "Google Cloud"],
+                  ["☁️ Firestore", "Banco em São Paulo"],
+                  ["📱 React + Vite", "Frontend moderno"],
+                  ["🌐 Vercel", "CDN global"],
+                  ["📄 jsPDF", "Relatórios ABNT"],
+                  ["🔐 LGPD", "Conformidade legal"],
+                ].map(([k, v], i) => (
+                  <div key={i} style={{
+                    background: "#f9fafb",
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    borderLeft: "3px solid #0F2151",
+                  }}>
+                    <div style={{ fontWeight: 700, color: "#0F2151" }}>{k}</div>
+                    <div style={{ color: "#64748b", fontSize: 10 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Contato direto */}
+            <div style={{ padding: "16px 18px", borderTop: "1px solid #f3f4f6" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                💬 Fale com a KM
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
+                <a href="https://wa.me/5528999258172?text=Olá! Vim do app KMZERO." target="_blank" rel="noopener noreferrer" style={{ color: "#16a34a", textDecoration: "none", fontWeight: 700 }}>
+                  💬 WhatsApp (28) 99925-8172
+                </a>
+                <a href="mailto:kvmprojetos@gmail.com?subject=Contato KMZERO" style={{ color: "#0891b2", textDecoration: "none", fontWeight: 700 }}>
+                  ✉️ kvmprojetos@gmail.com
+                </a>
+                <a href="https://instagram.com/km_engenharias" target="_blank" rel="noopener noreferrer" style={{ color: "#E4405F", textDecoration: "none", fontWeight: 700 }}>
+                  📷 @km_engenharias
+                </a>
+              </div>
+            </div>
+
+            {/* Footer da seção Sobre */}
+            <div style={{
+              background: "#f9fafb",
+              padding: "12px 18px",
+              textAlign: "center",
+              fontSize: 10,
+              color: "#94a3b8",
+              borderTop: "1px solid #f3f4f6",
+            }}>
+              <div style={{ fontWeight: 700, color: "#475569", letterSpacing: 1 }}>KMZERO · Versão 1.0 · Maio/2026</div>
+              <div style={{ marginTop: 4 }}>© 2026 KM Consultoria · CNPJ 60.368.233/0001-73</div>
+              <div style={{ marginTop: 4 }}>Alegre · ES · Brasil</div>
+            </div>
+          </div>
+        )}
+
+        {/* CONTEÚDO FAQ */}
+        {aba === "faq" && (
+          <div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 10, lineHeight: 1.5, padding: "0 4px" }}>
+              Toque em uma pergunta para ver a resposta. Se não encontrar o que precisa, fale com o suporte pelos canais acima.
+            </div>
+            {faqs.map(f => (
+              <div key={f.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 8, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                <button
+                  onClick={() => toggleFaq(f.id)}
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    background: abertos[f.id] ? "#f0fdf4" : "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    transition: "background 0.2s ease",
+                  }}
+                >
+                  <div style={{ fontSize: 16, color: GREEN }}>{abertos[f.id] ? "❓" : "❔"}</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: NAVY }}>{f.pergunta}</div>
+                  <div style={{
+                    fontSize: 18,
+                    color: GREEN,
+                    transition: "transform 0.2s ease",
+                    transform: abertos[f.id] ? "rotate(45deg)" : "rotate(0)",
+                  }}>+</div>
+                </button>
+                {abertos[f.id] && (
+                  <div style={{
+                    padding: "0 14px 14px 38px",
+                    fontSize: 12,
+                    color: "#444",
+                    lineHeight: 1.7,
+                    background: "#f9fafb",
+                    borderTop: "1px solid #e5e7eb",
+                    paddingTop: 12,
+                  }}>
+                    {f.resposta}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* CONTEÚDO TERMOS */}
+        {aba === "termos" && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>📄 Termos de Uso</div>
+            <div style={{ fontSize: 10, color: "#888", marginBottom: 14 }}>Última atualização: maio de 2026</div>
+
+            <div style={{ fontSize: 12, color: "#333", lineHeight: 1.7 }}>
+              <p style={{ marginTop: 0 }}>
+                <b>1. Aceitação dos termos</b><br/>
+                Ao usar o KMZERO, você concorda com estes termos. Se não concordar, por favor não utilize o aplicativo.
+              </p>
+
+              <p>
+                <b>2. Sobre o aplicativo</b><br/>
+                O KMZERO é um aplicativo de gestão de obras desenvolvido pela KM Consultoria (CNPJ 60.368.233/0001-73), destinado ao controle interno de canteiros, equipes, materiais, custos e relatórios. O aplicativo é fornecido "no estado em que se encontra", sem garantia de operação ininterrupta.
+              </p>
+
+              <p>
+                <b>3. Conta e segurança</b><br/>
+                Você é responsável por manter sigilo sobre sua senha e por todas as atividades realizadas com sua conta. Em caso de uso indevido suspeito, troque sua senha e informe o suporte imediatamente.
+              </p>
+
+              <p>
+                <b>4. Uso permitido</b><br/>
+                O KMZERO é destinado exclusivamente para gestão de obras civis. É proibido usar o aplicativo para qualquer finalidade ilícita, para fraudar registros oficiais, ou para qualquer atividade que viole a legislação brasileira.
+              </p>
+
+              <p>
+                <b>5. Conteúdo do usuário</b><br/>
+                Você é proprietário dos dados que insere no aplicativo (cadastros, fotos, relatórios, etc.). A KM Consultoria não reivindica nenhuma propriedade sobre esses dados. Você pode exportar ou apagar seus dados a qualquer momento.
+              </p>
+
+              <p>
+                <b>6. Responsabilidades</b><br/>
+                A KM Consultoria não se responsabiliza por perdas de dados decorrentes de falha do aparelho do usuário, exclusão acidental, ou problemas de conexão. Recomendamos backup periódico em Sistema → Backup.
+              </p>
+
+              <p>
+                <b>7. Atualizações</b><br/>
+                Estes termos podem ser atualizados a qualquer momento. A versão vigente sempre estará disponível dentro do aplicativo, em Sistema → Ajuda & Suporte → Termos de Uso.
+              </p>
+
+              <p>
+                <b>8. Foro</b><br/>
+                Fica eleito o foro da comarca de Alegre-ES para dirimir quaisquer questões relacionadas a estes termos, com renúncia expressa a qualquer outro.
+              </p>
+
+              <p style={{ marginBottom: 0 }}>
+                <b>9. Contato</b><br/>
+                Em caso de dúvidas, escreva para kvmprojetos@gmail.com ou WhatsApp (28) 99925-8172.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* CONTEÚDO LGPD */}
+        {aba === "lgpd" && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>🔒 Política de Privacidade (LGPD)</div>
+            <div style={{ fontSize: 10, color: "#888", marginBottom: 14 }}>
+              Conforme Lei nº 13.709/2018 — Lei Geral de Proteção de Dados Pessoais
+            </div>
+
+            <div style={{ fontSize: 12, color: "#333", lineHeight: 1.7 }}>
+              <p style={{ marginTop: 0 }}>
+                <b>Controlador dos dados</b><br/>
+                KM CONSULTORIA, ASSESSORIA E SERVIÇOS DE ENGENHARIA LTDA · CNPJ 60.368.233/0001-73 · R. Pastor da Silva Colares, 148 — Guararema, Alegre-ES.
+              </p>
+
+              <p>
+                <b>Quais dados coletamos</b><br/>
+                Para funcionamento do aplicativo, coletamos: nome, e-mail e senha de gestor e encarregados; dados de trabalhadores cadastrados pelo gestor (nome, CPF, função, salário, fotos); dados das obras (localização, fotos, RDOs); dados de pedidos e fornecedores. Não coletamos dados sensíveis (saúde, biometria, opinião política) sem consentimento expresso.
+              </p>
+
+              <p>
+                <b>Para que usamos seus dados</b><br/>
+                Os dados são usados exclusivamente para o funcionamento do aplicativo: autenticação, exibição de informações, geração de relatórios, controle de obras. Não vendemos dados a terceiros. Não usamos para marketing.
+              </p>
+
+              <p>
+                <b>Onde os dados ficam</b><br/>
+                Os dados ficam armazenados localmente no aparelho do usuário e, quando autenticado pelo Firebase, em servidores do Google Cloud (data center em São Paulo, Brasil). As senhas ficam criptografadas, ninguém da KM Consultoria pode vê-las.
+              </p>
+
+              <p>
+                <b>Compartilhamento com terceiros</b><br/>
+                Compartilhamos dados apenas com o Google (Firebase) para autenticação e armazenamento em nuvem. O Google segue rigorosos padrões de segurança e LGPD. Não há outros compartilhamentos.
+              </p>
+
+              <p>
+                <b>Seus direitos como titular</b><br/>
+                Você pode, a qualquer momento: solicitar confirmação dos dados que temos sobre você; pedir acesso aos seus dados; corrigir dados incompletos ou incorretos; solicitar exclusão de seus dados; revogar consentimento. Para exercer qualquer direito, escreva para kvmprojetos@gmail.com.
+              </p>
+
+              <p>
+                <b>Tempo de armazenamento</b><br/>
+                Mantemos seus dados enquanto sua conta estiver ativa. Após a exclusão da conta, os dados são removidos em até 30 dias, exceto quando houver obrigação legal de retenção (por exemplo, registros trabalhistas e fiscais conforme legislação aplicável).
+              </p>
+
+              <p>
+                <b>Segurança</b><br/>
+                Utilizamos criptografia, autenticação segura e controle de acesso para proteger seus dados. Mesmo assim, nenhum sistema é 100% seguro. Em caso de incidente, comunicamos os titulares afetados conforme exige a LGPD.
+              </p>
+
+              <p>
+                <b>Cookies e rastreamento</b><br/>
+                O KMZERO não usa cookies de rastreamento publicitário. Usamos apenas armazenamento local técnico necessário ao funcionamento do aplicativo.
+              </p>
+
+              <p style={{ marginBottom: 0 }}>
+                <b>Encarregado de dados (DPO)</b><br/>
+                Kleber Vieira Martins · CREA-ES · E-mail kvmprojetos@gmail.com · Tel (28) 99925-8172.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Versão do app */}
+        <div style={{ marginTop: 18, textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: "#999", lineHeight: 1.6 }}>
+            <div><b>KMZERO</b> · Versão 1.0.0 · Atualizado em maio/2026</div>
+            <div style={{ marginTop: 2 }}>© 2026 KM Consultoria · Engenharia Civil</div>
+            <div style={{ marginTop: 2 }}>Alegre-ES · CNPJ 60.368.233/0001-73</div>
+          </div>
+        </div>
+      </div>
+      <KMFooter />
+    </div>
+  );
+}
+
 function TelaConfigEmpresa({ empresa, onSave, onBack }) {
   const [form, setForm] = useState(empresa);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -14993,6 +15767,12 @@ function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
 }
 
 export default function App() {
+  const [splashAtivo, setSplashAtivo] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setSplashAtivo(false), 1800);
+    return () => clearTimeout(t);
+  }, []);
+
   const [tela, setTelaRaw]        = useState("login");
   const [historicoTelas, setHistoricoTelas] = useState([]); // pilha de navegação
   const [usuario, setUsuario]     = useState(null);
@@ -15300,7 +16080,7 @@ export default function App() {
     "ativos", "frota", "manutencoes", "equipamentos_gestao", "ferramentas_gestao",
     "custos", "folha", "folha_mensal", "historico", "adiantamentos", "movimentacoes",
     "dashboard", "diagnostico", "consolidado", "mapa", "calendario", "alertas",
-    "fornecedores", "empresa", "acessos", "backup", "gerar_simulacao", "zerar_tudo",
+    "fornecedores", "empresa", "minha_conta", "ajuda", "acessos", "backup", "gerar_simulacao", "zerar_tudo",
     "aso_aniversarios", "ferias", "contatos_emergencia", "links", "produtividade_gestor",
     "pedidos", "pedido_detalhe", "despesas_avulsas", "mov_pess_detalhe",
     "recebimentos_gestor", "comissionamento"
@@ -15400,6 +16180,8 @@ export default function App() {
       case "ferias":     return <TelaFerias obras={obras} trabalhadores={trabalhadores} ferias={ferias} onBack={voltar} onAdd={f => setFerias(fs => [...fs, f])} onRemove={id => setFerias(fs => fs.filter(f => f.id !== id))} />;
       case "rdo":        return <TelaRDO obras={obras} trabalhadores={trabalhadores} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} historico={historico} diario={diario} usuario={usuario} empresa={empresa} rdosEmitidos={rdosEmitidos} recebimentos={recebimentos} fotosObras={fotosObras} despesasAvulsas={despesasAvulsas} movimentacoes={movimentacoes} movEquip={movEquip} produtividade={produtividade} cronogramas={cronogramas} onBack={voltar} onEmitirRDO={r => setRdos(rs => [r, ...rs])} onUpdateRDO={r => setRdos(rs => rs.map(x => x.id === r.id ? r : x))} onRemoveRDO={id => setRdos(rs => rs.filter(x => x.id !== id))} />;
       case "empresa":    return <TelaConfigEmpresa empresa={empresa} onSave={setEmpresa} onBack={voltar} />;
+      case "minha_conta": return <TelaMinhaConta usuario={usuario} empresa={empresa} onBack={voltar} onLogout={logout} />;
+      case "ajuda":      return <TelaAjuda empresa={empresa} onBack={voltar} />;
       case "acessos":    return <TelaAcessosApp usuarios={usuarios} obras={obras} onBack={voltar} onAdd={u => setUsuarios(us => [...us, u])} onEditar={u => setUsuarios(us => us.map(x => x.id === u.id ? u : x))} onRemover={id => setUsuarios(us => us.filter(u => u.id !== id))} />;
       case "perfil_pin": return <TelaPerfilPIN usuario={usuario} onAtualizar={atualizarUsuario} onBack={voltar} />;
       case "produtividade": return <TelaProdutividade obras={obras} usuario={usuario} produtividade={produtividade} onBack={voltar} onAdd={p => setProd(ps => [p, ...ps])} onRemove={id => setProd(ps => ps.filter(p => p.id !== id))} />;
@@ -15482,6 +16264,95 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "'Segoe UI',sans-serif", backgroundColor: "#0a1535", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
+      {/* SPLASH SCREEN */}
+      {splashAtivo && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "linear-gradient(135deg, #0a1535 0%, #0F2151 50%, #1e3a8a 100%)",
+          zIndex: 99999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          animation: "kmSplashFade 0.4s ease-out",
+        }}>
+          <style>{`
+            @keyframes kmSplashFade { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes kmSplashPulse {
+              0%, 100% { transform: scale(1); text-shadow: 0 0 20px rgba(245,166,35,0.4); }
+              50% { transform: scale(1.04); text-shadow: 0 0 50px rgba(245,166,35,0.8); }
+            }
+            @keyframes kmSplashLine {
+              0% { width: 0; opacity: 0; }
+              50% { opacity: 1; }
+              100% { width: 80px; opacity: 1; }
+            }
+            @keyframes kmSplashTagline {
+              0% { opacity: 0; transform: translateY(10px); }
+              60% { opacity: 0; }
+              100% { opacity: 1; transform: translateY(0); }
+            }
+            @keyframes kmSplashOrb {
+              0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.4; }
+              50% { transform: scale(1.2) translate(20px, -20px); opacity: 0.7; }
+            }
+          `}</style>
+
+          {/* Orbs decorativos */}
+          <div style={{
+            position: "absolute", top: "-100px", right: "-100px",
+            width: 350, height: 350, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(245,166,35,0.35), transparent 70%)",
+            filter: "blur(40px)",
+            animation: "kmSplashOrb 4s ease-in-out infinite",
+          }} />
+          <div style={{
+            position: "absolute", bottom: "-100px", left: "-100px",
+            width: 300, height: 300, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(124,58,237,0.3), transparent 70%)",
+            filter: "blur(40px)",
+            animation: "kmSplashOrb 5s ease-in-out infinite reverse",
+          }} />
+
+          {/* Logo central */}
+          <div style={{ textAlign: "center", zIndex: 1 }}>
+            <div style={{
+              fontSize: 12, color: "rgba(255,255,255,0.5)",
+              letterSpacing: 5, fontWeight: 600, marginBottom: 14,
+              textTransform: "uppercase",
+            }}>
+              🏗️ Gestão de Obras
+            </div>
+            <div style={{ animation: "kmSplashPulse 2.5s ease-in-out infinite" }}>
+              <span style={{ fontWeight: 900, fontSize: 64, color: "#fff", letterSpacing: -2 }}>KM</span>
+              <span style={{ fontWeight: 900, fontSize: 64, color: "#F5A623", letterSpacing: -2 }}>ZERO</span>
+            </div>
+            <div style={{
+              height: 3, background: "#F5A623", margin: "14px auto", borderRadius: 2,
+              animation: "kmSplashLine 1s ease-out forwards",
+              boxShadow: "0 0 12px rgba(245,166,35,0.6)",
+            }} />
+            <div style={{
+              fontSize: 13, color: "rgba(255,255,255,0.65)", fontStyle: "italic",
+              animation: "kmSplashTagline 1.8s ease-out forwards",
+              opacity: 0,
+            }}>
+              KM Consultoria · Engenharia Civil
+            </div>
+          </div>
+
+          {/* Footer da splash */}
+          <div style={{
+            position: "absolute", bottom: 30, left: 0, right: 0,
+            textAlign: "center",
+            fontSize: 10, color: "rgba(255,255,255,0.35)",
+            letterSpacing: 3, fontWeight: 600,
+          }}>
+            CARREGANDO...
+          </div>
+        </div>
+      )}
       <style>{`
         /* Responsividade adaptável */
         @media (min-width: 768px) {
