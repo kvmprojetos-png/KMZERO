@@ -2670,6 +2670,60 @@ const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx,
   >{label}</button>
 );
 
+// ════ EmptyState — componente reutilizável para listas vazias ════
+function EmptyState({ icon = "📦", titulo, subtitulo, botaoLabel, onBotao, cor = NAVY }) {
+  return (
+    <div className="km-card-anim" style={{
+      background: "#fff",
+      borderRadius: 16,
+      padding: "28px 20px",
+      textAlign: "center",
+      boxShadow: "0 2px 10px rgba(15,33,81,0.06)",
+      border: "1px dashed #e5e7eb",
+      margin: "8px 0",
+    }}>
+      <div style={{
+        fontSize: 48,
+        marginBottom: 8,
+        opacity: 0.5,
+      }}>{icon}</div>
+      <div style={{
+        fontSize: 15,
+        fontWeight: 800,
+        color: cor,
+        marginBottom: 4,
+      }}>{titulo}</div>
+      {subtitulo && (
+        <div style={{
+          fontSize: 12,
+          color: "#94a3b8",
+          marginBottom: botaoLabel ? 14 : 0,
+          lineHeight: 1.5,
+          maxWidth: 280,
+          marginLeft: "auto",
+          marginRight: "auto",
+        }}>{subtitulo}</div>
+      )}
+      {botaoLabel && onBotao && (
+        <button onClick={onBotao} style={{
+          background: cor,
+          color: "#fff",
+          border: "none",
+          borderRadius: 10,
+          padding: "10px 18px",
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: "pointer",
+          marginTop: 6,
+          boxShadow: `0 3px 10px ${cor}40`,
+        }}>
+          {botaoLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function KMHeader({ title, sub, onBack, right }) {
   return (
     <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "0 14px", flexShrink: 0, paddingTop: "env(safe-area-inset-top, 0px)" }}>
@@ -3863,6 +3917,12 @@ function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, onNa
   const faltas    = Object.values(presencasHoje).filter(v => v === "Falta").length;
   const atestados = Object.values(presencasHoje).filter(v => v === "Atestado").length;
   const novasMsgs = (mensagens || []).filter(m => m.para === usuario?.id && !m.lida).length;
+  // Saudação inteligente por horário
+  const h = new Date().getHours();
+  const saudacao = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+  const emojiSaudacao = h < 6 ? "🌙" : h < 12 ? "☀️" : h < 18 ? "🌤️" : "🌆";
+  const totalPresencas = presentes + faltas + atestados;
+  const equipeTotal = (trabalhadores || []).length;
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "10px 14px 12px", paddingTop: "max(10px, env(safe-area-inset-top, 10px))", flexShrink: 0 }}>
@@ -3882,9 +3942,61 @@ function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, onNa
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>Obra: {obra?.nome}</div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>Olá, {usuario?.nome?.split(" ")[0] || "Marcos"}!</div>
+        <div style={{ marginBottom: 14 }} className="km-card-anim">
+          <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>
+            {emojiSaudacao} {saudacao}, {usuario?.nome?.split(" ")[0] || "Marcos"}!
+          </div>
           <div style={{ fontSize: 13, color: "#888" }}>Encarregado • {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</div>
+          {/* Card resumo do dia */}
+          {totalPresencas > 0 && (
+            <div style={{
+              marginTop: 10,
+              background: "linear-gradient(135deg, #0f2151 0%, #1a3370 100%)",
+              borderRadius: 12,
+              padding: "12px 14px",
+              color: "#fff",
+              boxShadow: "0 4px 14px rgba(15,33,81,0.2)",
+            }}>
+              <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 600, letterSpacing: 2, marginBottom: 6 }}>📊 RESUMO DO DIA</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: GREEN }}>{presentes}</div>
+                    <div style={{ fontSize: 10, opacity: 0.75 }}>Presentes</div>
+                  </div>
+                  {faltas > 0 && (
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: RED }}>{faltas}</div>
+                      <div style={{ fontSize: 10, opacity: 0.75 }}>Faltas</div>
+                    </div>
+                  )}
+                  {atestados > 0 && (
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: ORANGE }}>{atestados}</div>
+                      <div style={{ fontSize: 10, opacity: 0.75 }}>Atestados</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, opacity: 0.7 }}>de {equipeTotal} {equipeTotal === 1 ? "pessoa" : "pessoas"}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          {totalPresencas === 0 && equipeTotal > 0 && (
+            <div onClick={() => onNav("fluxo")} style={{
+              marginTop: 10,
+              background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+              borderRadius: 12,
+              padding: "12px 14px",
+              color: "#fff",
+              cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(245,158,11,0.3)",
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 800 }}>⏰ Hora de registrar presença!</div>
+              <div style={{ fontSize: 11, opacity: 0.95, marginTop: 2 }}>Toque para começar o registro da equipe</div>
+            </div>
+          )}
         </div>
         {novasMsgs > 0 && (
           <div onClick={() => onNav("mensagens")} style={{ background: `linear-gradient(135deg,#db2777,#9d174d)`, color: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 14, cursor: "pointer", boxShadow: "0 3px 10px #db277744" }}>
@@ -4100,7 +4212,14 @@ function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos,
             </div>
           );
         })}
-        {trabalhadores.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 30 }}>Nenhum trabalhador cadastrado nesta obra.</div>}
+        {trabalhadores.length === 0 && (
+          <EmptyState
+            icon="👷"
+            titulo="Nenhum trabalhador nesta obra"
+            subtitulo="Cadastre trabalhadores em Recursos Humanos → Equipe e vincule-os a esta obra."
+            cor={NAVY}
+          />
+        )}
 
         {/* ALIMENTAÇÃO */}
         {trabalhadores.filter(t => presencas[t.id] === "Presente").length > 0 && (
@@ -4999,10 +5118,14 @@ function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, onRemove
         </div>
 
         {filtrados.length === 0 ? (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 30, textAlign: "center", color: "#aaa" }}>
-            🏪 {fornecedores.length === 0 ? "Nenhum fornecedor cadastrado ainda." : "Nenhum fornecedor encontrado neste filtro."}
-            <button onClick={abrirNovo} style={{ display: "block", margin: "12px auto 0", background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>+ Cadastrar primeiro</button>
-          </div>
+          <EmptyState
+            icon="🏪"
+            titulo={fornecedores.length === 0 ? "Nenhum fornecedor cadastrado" : "Nenhum fornecedor neste filtro"}
+            subtitulo={fornecedores.length === 0 ? "Cadastre seus fornecedores com CNPJ, contatos e condições de pagamento. Eles ficarão disponíveis ao criar pedidos de compra." : "Tente outro filtro ou limpe a busca."}
+            botaoLabel={fornecedores.length === 0 ? "+ Cadastrar primeiro" : null}
+            onBotao={fornecedores.length === 0 ? abrirNovo : null}
+            cor={BLUE}
+          />
         ) : (
           filtrados.map(f => (
             <div key={f.id} onClick={() => abrirEdit(f)} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}`, cursor: "pointer" }}>
@@ -5518,10 +5641,12 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
 
         {/* Lista de etapas */}
         {etapas.length === 0 ? (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 30, textAlign: "center", color: "#aaa" }}>
-            📋 Nenhuma etapa cadastrada.<br/>
-            <span style={{ fontSize: 11 }}>Use um modelo pronto acima ou adicione manualmente.</span>
-          </div>
+          <EmptyState
+            icon="📋"
+            titulo="Nenhuma etapa cadastrada"
+            subtitulo="Use um modelo pronto (Casa, Sobrado, Prédio) ou adicione manualmente. Cada etapa terá controle de progresso e prazo."
+            cor={ORANGE}
+          />
         ) : etapas.map((e, i) => {
           const cor = e.progresso === 100 ? GREEN : e.progresso > 0 ? ORANGE : "#aaa";
           const concluida = e.progresso === 100;
@@ -7699,7 +7824,12 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
         }}>📋 Ver todos ({total})</button>
 
         {filtrados.length === 0 ? (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 30, textAlign: "center", color: "#aaa" }}>📦 Nenhum pedido neste filtro.</div>
+          <EmptyState
+            icon="📦"
+            titulo="Nenhum pedido neste filtro"
+            subtitulo="Quando houver pedidos de compra criados pelos encarregados ou pelo gestor, eles aparecerão aqui."
+            cor={ORANGE}
+          />
         ) : filtrados.sort((a, b) => b.id - a.id).map(p => {
           const itens = p.itens || [{ material: p.material, qtd: p.qtd }];
           const cor = p.status === "Aprovado" ? GREEN : p.status === "Negado" ? RED : ORANGE;
@@ -10033,7 +10163,14 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
             </div>
           );
         })}
-        {lista.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 20 }}>Nenhum ativo cadastrado.</div>}
+        {lista.length === 0 && (
+          <EmptyState
+            icon="🚜"
+            titulo="Nenhum ativo cadastrado"
+            subtitulo="Cadastre máquinas, veículos e equipamentos motorizados. Você poderá controlar combustível, manutenções e movimentação entre obras."
+            cor={ORANGE}
+          />
+        )}
         <Btn label="➕ Cadastrar Ativo" color={NAVY} onClick={abrirNovo} style={{ marginTop: 8 }} />
       </div>
       <KMFooter />
@@ -11828,7 +11965,12 @@ function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar, onRemo
 
         {/* LISTA */}
         {funcEscritorio.length === 0 ? (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 20, textAlign: "center", color: "#aaa" }}>📐 Nenhum funcionário cadastrado.</div>
+          <EmptyState
+            icon="📐"
+            titulo="Nenhum funcionário do escritório"
+            subtitulo="Cadastre engenheiros, mestres de obra, encarregados administrativos. Custos são rateados entre as obras ativas."
+            cor="#7c3aed"
+          />
         ) : funcEscritorio.map(f => (
           <div key={f.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${f.ativo ? "#7c3aed" : "#ccc"}`, opacity: f.ativo ? 1 : 0.6 }}>
             <div style={{ display: "flex", alignItems: "center" }}>
@@ -16378,9 +16520,22 @@ export default function App() {
         @media (min-width: 768px) {
           input, select, textarea { font-size: 14px !important; }
         }
+        /* Transição suave entre telas */
+        @keyframes kmTelaEntra {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .km-tela-transicao {
+          animation: kmTelaEntra 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .km-tela-transicao { animation: none; }
+        }
       `}</style>
       <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#fff", position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
-        {render()}
+        <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          {render()}
+        </div>
       </div>
     </div>
   );
