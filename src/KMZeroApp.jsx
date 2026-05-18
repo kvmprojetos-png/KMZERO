@@ -15769,7 +15769,7 @@ function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
 export default function App() {
   const [splashAtivo, setSplashAtivo] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => setSplashAtivo(false), 1800);
+    const t = setTimeout(() => setSplashAtivo(false), 4000);
     return () => clearTimeout(t);
   }, []);
 
