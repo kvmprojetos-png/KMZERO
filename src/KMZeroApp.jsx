@@ -13801,9 +13801,20 @@ function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack, onAdd 
 ════════════════════════════════════ */
 function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, abastecimentos = [], ativos = [], empresa, onBack, onSalvarFolha }) {
   const hoje = new Date();
+  // ════ ESCOLHA DO REGIME DA FOLHA (definida pelo gestor) ════
+  const [tipoRegime, setTipoRegime] = useState("quinzenal"); // diaria | semanal | quinzenal | mensal
   const [mes, setMes] = useState(hoje.getMonth());
   const [ano, setAno] = useState(hoje.getFullYear());
   const [quinzena, setQuinzena] = useState(hoje.getDate() <= 15 ? 1 : 2);
+  // ════ NOVOS: datas de pagamento definidas pelo gestor ════
+  const [dataPagamento, setDataPagamento] = useState(""); // data específica que o gestor escolhe pagar
+  const [diaPagDiario, setDiaPagDiario] = useState(hoje.toISOString().slice(0, 10)); // diária: dia específico
+  const [diaPagSemanal, setDiaPagSemanal] = useState(hoje.toISOString().slice(0, 10)); // semanal: dia que paga
+  const [semanaSelecionada, setSemanaSelecionada] = useState(1); // 1-5 (qual semana do mês)
+  const [diaPagQuinzenal1, setDiaPagQuinzenal1] = useState(""); // 1ª quinzena: data de pagamento
+  const [diaPagQuinzenal2, setDiaPagQuinzenal2] = useState(""); // 2ª quinzena: data de pagamento
+  const [diaPagMensal, setDiaPagMensal] = useState(""); // mensal: data de pagamento
+  // ════ obra ════
   const [obraId, setObraId] = useState("todas");
   const [salvoAviso, setSalvoAviso] = useState(false);
 
@@ -13812,59 +13823,65 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
   const dia1 = quinzena === 1 ? 1 : 16;
   const dia2 = quinzena === 1 ? 15 : ultimoDia;
 
+  // ════ Calcula início/fim do período conforme regime ════
+  const calcularPeriodo = () => {
+    if (tipoRegime === "diaria") {
+      // 1 dia específico
+      const data = new Date(diaPagDiario + "T12:00:00");
+      return {
+        diaInicio: data.getDate(),
+        diaFim: data.getDate(),
+        mesInicio: data.getMonth(),
+        mesFim: data.getMonth(),
+        anoInicio: data.getFullYear(),
+        anoFim: data.getFullYear(),
+        descricao: "Diária",
+      };
+    } else if (tipoRegime === "semanal") {
+      // 7 dias terminando no diaPagSemanal
+      const fim = new Date(diaPagSemanal + "T12:00:00");
+      const inicio = new Date(fim);
+      inicio.setDate(inicio.getDate() - 6);
+      return {
+        diaInicio: inicio.getDate(),
+        diaFim: fim.getDate(),
+        mesInicio: inicio.getMonth(),
+        mesFim: fim.getMonth(),
+        anoInicio: inicio.getFullYear(),
+        anoFim: fim.getFullYear(),
+        descricao: "Semanal",
+      };
+    } else if (tipoRegime === "mensal") {
+      // Mês completo
+      return {
+        diaInicio: 1,
+        diaFim: ultimoDia,
+        mesInicio: mes,
+        mesFim: mes,
+        anoInicio: ano,
+        anoFim: ano,
+        descricao: "Mensal",
+      };
+    } else {
+      // QUINZENAL (padrão)
+      return {
+        diaInicio: dia1,
+        diaFim: dia2,
+        mesInicio: mes,
+        mesFim: mes,
+        anoInicio: ano,
+        anoFim: ano,
+        descricao: "Quinzenal",
+      };
+    }
+  };
+
   const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
 
   const calcular = (t) => {
-    // Determina tipo de folha do trabalhador (padrão: quinzenal antigo)
-    const tipoFolha = t.tipoFolha || "quinzenal";
+    // ════ NOVO: usa o tipo GLOBAL escolhido pelo gestor no topo da tela ════
+    const periodo = calcularPeriodo();
     const formaCalculo = t.formaCalculo || "diaria";
-
-    // ────── DETERMINAR PERÍODO BASEADO NO TIPO ──────
-    let diaInicio, diaFim, mesInicio = mes, mesFim = mes, anoInicio = ano, anoFim = ano;
-    let descricaoPeriodo = "";
-
-    if (tipoFolha === "semanal") {
-      // SEMANAL: 7 dias até o dia selecionado da quinzena (referência)
-      // Para simplificar, usamos o dia15 ou dia30 como referência da semana
-      const diaRef = quinzena === 1 ? 7 : 21;
-      diaFim = diaRef;
-      diaInicio = diaRef - 6;
-      if (diaInicio < 1) {
-        // Volta para mês anterior
-        const mesAnt = new Date(ano, mes - 1, 0);
-        diaInicio = mesAnt.getDate() + diaInicio;
-        mesInicio = mes - 1;
-        if (mesInicio < 0) { mesInicio = 11; anoInicio = ano - 1; }
-      }
-      descricaoPeriodo = "Semanal";
-    } else if (tipoFolha === "mensal") {
-      // MENSAL: mês completo (ignora quinzena)
-      diaInicio = 1;
-      diaFim = ultimoDia;
-      descricaoPeriodo = "Mensal";
-    } else if (tipoFolha === "personalizado") {
-      // PERSONALIZADO: por enquanto, usa quinzena selecionada (próxima onda implementa picker)
-      diaInicio = dia1;
-      diaFim = dia2;
-      descricaoPeriodo = "Personalizado (quinzena padrão)";
-    } else {
-      // QUINZENAL: respeita diaFechamento se configurado
-      const diaFechamento = t.diaFechamento || "1_15";
-      if (diaFechamento === "1_15") {
-        diaInicio = dia1; diaFim = dia2;
-      } else if (diaFechamento === "3_17") {
-        diaInicio = quinzena === 1 ? 3 : 18;
-        diaFim = quinzena === 1 ? 17 : 2;
-        if (quinzena === 2) { mesFim = mes + 1; if (mesFim > 11) { mesFim = 0; anoFim = ano + 1; } }
-      } else if (diaFechamento === "5_20") {
-        diaInicio = quinzena === 1 ? 5 : 21;
-        diaFim = quinzena === 1 ? 20 : 4;
-        if (quinzena === 2) { mesFim = mes + 1; if (mesFim > 11) { mesFim = 0; anoFim = ano + 1; } }
-      } else {
-        diaInicio = dia1; diaFim = dia2;
-      }
-      descricaoPeriodo = "Quinzenal";
-    }
 
     // ────── CONTAR PRESENÇAS NO PERÍODO ──────
     let presentes = 0, faltas = 0, atestados = 0;
@@ -13878,14 +13895,12 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
       else if (s === "Atestado") atestados++;
     };
 
-    if (mesInicio === mesFim && anoInicio === anoFim) {
-      // Período num único mês
-      for (let d = diaInicio; d <= diaFim; d++) contarDia(d, mesInicio, anoInicio);
+    if (periodo.mesInicio === periodo.mesFim && periodo.anoInicio === periodo.anoFim) {
+      for (let d = periodo.diaInicio; d <= periodo.diaFim; d++) contarDia(d, periodo.mesInicio, periodo.anoInicio);
     } else {
-      // Período atravessa dois meses (ex: dia 18 a dia 2 do mês seguinte)
-      const ultDiaPrimeiroMes = new Date(anoInicio, mesInicio + 1, 0).getDate();
-      for (let d = diaInicio; d <= ultDiaPrimeiroMes; d++) contarDia(d, mesInicio, anoInicio);
-      for (let d = 1; d <= diaFim; d++) contarDia(d, mesFim, anoFim);
+      const ultDiaPrimeiroMes = new Date(periodo.anoInicio, periodo.mesInicio + 1, 0).getDate();
+      for (let d = periodo.diaInicio; d <= ultDiaPrimeiroMes; d++) contarDia(d, periodo.mesInicio, periodo.anoInicio);
+      for (let d = 1; d <= periodo.diaFim; d++) contarDia(d, periodo.mesFim, periodo.anoFim);
     }
 
     // ────── CÁLCULO DO VALOR BRUTO ──────
@@ -13895,14 +13910,11 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     let bruto = 0;
 
     if (formaCalculo === "mensal_fixo" && salarioFixo > 0) {
-      // SALÁRIO MENSAL FIXO: paga proporcional ao número de dias trabalhados / dias úteis do período
-      if (tipoFolha === "mensal") {
-        // Folha mensal cheia: paga salário inteiro se trabalhou (descontando faltas proporcional)
+      if (tipoRegime === "mensal") {
         const diaUtilMes = ultimoDia;
         if (faltas === 0) bruto = salarioFixo;
         else bruto = salarioFixo - (salarioFixo / diaUtilMes) * faltas;
       } else {
-        // Outras periodicidades com mensal_fixo: divide o salário pelos dias do período
         const proporcao = diasTotaisPeriodo / 30;
         const salarioPeriodo = salarioFixo * proporcao;
         if (faltas === 0) bruto = salarioPeriodo;
@@ -13910,17 +13922,17 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
       }
       if (bruto < 0) bruto = 0;
     } else {
-      // CÁLCULO POR DIÁRIA (padrão): valor diária × dias pagos
+      // CÁLCULO POR DIÁRIA (padrão)
       bruto = diaria * diasPagos;
     }
 
     // ────── ADIANTAMENTOS DO MÊS ──────
-    // Desconta na 2ª quinzena (quinzenal/semanal) ou no fechamento (mensal)
+    // Desconta na 2ª quinzena (quinzenal) ou no fechamento (mensal/semanal/diária)
     let adiantDesconto = 0;
-    const aplicarDesconto = (tipoFolha === "quinzenal" && quinzena === 2) ||
-                            (tipoFolha === "mensal") ||
-                            (tipoFolha === "semanal" && quinzena === 2) ||
-                            (tipoFolha === "personalizado" && quinzena === 2);
+    const aplicarDesconto = (tipoRegime === "quinzenal" && quinzena === 2) ||
+                            (tipoRegime === "mensal") ||
+                            (tipoRegime === "semanal") ||
+                            (tipoRegime === "diaria");
     if (aplicarDesconto && adiantamentos) {
       adiantDesconto = adiantamentos
         .filter(a => a.trabId === t.id)
@@ -13937,8 +13949,10 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     return {
       presentes, faltas, atestados, diaria, salarioFixo,
       diasPagos, diasTotaisPeriodo, bruto, adiantDesconto, liquido,
-      tipoFolha, descricaoPeriodo, formaCalculo,
-      diaInicio, diaFim, mesInicio, mesFim, anoInicio, anoFim,
+      tipoFolha: tipoRegime, descricaoPeriodo: periodo.descricao, formaCalculo,
+      diaInicio: periodo.diaInicio, diaFim: periodo.diaFim,
+      mesInicio: periodo.mesInicio, mesFim: periodo.mesFim,
+      anoInicio: periodo.anoInicio, anoFim: periodo.anoFim,
     };
   };
 
@@ -14074,8 +14088,43 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title="Folha de Pagamento" sub={`${quinzena}ª quinzena — ${meses[mes]}/${ano} · Multi-regime`} onBack={onBack} />
+      <KMHeader title="Folha de Pagamento" sub={`${meses[mes]}/${ano} · ${tipoRegime.charAt(0).toUpperCase() + tipoRegime.slice(1)}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+
+        {/* ════ 4 BOTÕES DE TIPO DE FOLHA (escolha simples) ════ */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: 12, marginBottom: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: NAVY, letterSpacing: 2, marginBottom: 8 }}>📋 TIPO DA FOLHA</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              { k: "diaria", l: "📅 Diária", c: "#0891b2", d: "1 dia específico" },
+              { k: "semanal", l: "📆 Semanal", c: "#16a34a", d: "7 dias corridos" },
+              { k: "quinzenal", l: "🗓️ Quinzenal", c: GOLD, d: "15 dias" },
+              { k: "mensal", l: "📊 Mensal", c: "#7c3aed", d: "Mês completo" },
+            ].map(opt => (
+              <button
+                key={opt.k}
+                onClick={() => setTipoRegime(opt.k)}
+                style={{
+                  padding: "10px 8px",
+                  borderRadius: 10,
+                  border: tipoRegime === opt.k ? `2px solid ${opt.c}` : "1px solid #e5e7eb",
+                  background: tipoRegime === opt.k ? `${opt.c}15` : "#fff",
+                  color: tipoRegime === opt.k ? opt.c : NAVY,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  boxShadow: tipoRegime === opt.k ? `0 3px 10px ${opt.c}30` : "none",
+                  transition: "all 0.2s",
+                }}
+              >
+                <div style={{ fontSize: 13 }}>{opt.l}</div>
+                <div style={{ fontSize: 9, opacity: 0.7, fontWeight: 500, marginTop: 2 }}>{opt.d}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ════ MÊS / ANO ════ */}
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <select value={mes} onChange={e => setMes(parseInt(e.target.value))} style={{ ...selS, flex: 2, marginBottom: 0 }}>
             {meses.map((m, i) => <option key={i} value={i}>{m}</option>)}
@@ -14085,13 +14134,75 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          {[1, 2].map(q => (
-            <button key={q} onClick={() => setQuinzena(q)} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "none", cursor: "pointer", background: quinzena === q ? NAVY : "#fff", color: quinzena === q ? "#fff" : NAVY, fontWeight: 700, fontSize: 13, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-              {q}ª Quinzena<br/><span style={{ fontSize: 10, opacity: 0.8 }}>{q === 1 ? "01-15" : `16-${ultimoDia}`}</span>
-            </button>
-          ))}
-        </div>
+        {/* ════ CAMPOS DE DATA DE PAGAMENTO (variam conforme tipo escolhido) ════ */}
+        {tipoRegime === "diaria" && (
+          <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 10, border: "1px solid #0891b215" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#0891b2", letterSpacing: 1, marginBottom: 6 }}>📅 DIA DA FOLHA DIÁRIA</div>
+            <input
+              type="date"
+              value={diaPagDiario}
+              onChange={e => setDiaPagDiario(e.target.value)}
+              style={{ ...inputS, marginBottom: 6 }}
+            />
+            <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
+              💡 Folha calculada apenas para esse dia específico. Use para pagar diária avulsa.
+            </div>
+          </div>
+        )}
+
+        {tipoRegime === "semanal" && (
+          <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 10, border: "1px solid #16a34a15" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: GREEN, letterSpacing: 1, marginBottom: 6 }}>📆 ÚLTIMO DIA DA SEMANA (DATA DE PAGAMENTO)</div>
+            <input
+              type="date"
+              value={diaPagSemanal}
+              onChange={e => setDiaPagSemanal(e.target.value)}
+              style={{ ...inputS, marginBottom: 6 }}
+            />
+            <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
+              💡 Calcula os 7 dias anteriores (inclusive) ao dia escolhido. Ex: pagamento toda sexta-feira.
+            </div>
+          </div>
+        )}
+
+        {tipoRegime === "quinzenal" && (
+          <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              {[1, 2].map(q => (
+                <button key={q} onClick={() => setQuinzena(q)} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "none", cursor: "pointer", background: quinzena === q ? NAVY : "#fff", color: quinzena === q ? "#fff" : NAVY, fontWeight: 700, fontSize: 13, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+                  {q}ª Quinzena<br/><span style={{ fontSize: 10, opacity: 0.8 }}>{q === 1 ? "01-15" : `16-${ultimoDia}`}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 10, border: `1px solid ${GOLD}15` }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#b8801a", letterSpacing: 1, marginBottom: 6 }}>🗓️ DATA DE PAGAMENTO DA {quinzena}ª QUINZENA</div>
+              <input
+                type="date"
+                value={quinzena === 1 ? diaPagQuinzenal1 : diaPagQuinzenal2}
+                onChange={e => quinzena === 1 ? setDiaPagQuinzenal1(e.target.value) : setDiaPagQuinzenal2(e.target.value)}
+                style={{ ...inputS, marginBottom: 6 }}
+              />
+              <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
+                💡 Período calculado: {quinzena === 1 ? "dia 01 ao 15" : `dia 16 ao ${ultimoDia}`}. Data informada será exibida na folha.
+              </div>
+            </div>
+          </>
+        )}
+
+        {tipoRegime === "mensal" && (
+          <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 10, border: "1px solid #7c3aed15" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#7c3aed", letterSpacing: 1, marginBottom: 6 }}>📊 DATA DE PAGAMENTO DO MÊS</div>
+            <input
+              type="date"
+              value={diaPagMensal}
+              onChange={e => setDiaPagMensal(e.target.value)}
+              style={{ ...inputS, marginBottom: 6 }}
+            />
+            <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
+              💡 Período calculado: mês inteiro ({meses[mes]}/{ano}, dia 1 ao {ultimoDia}). Data informada será exibida na folha.
+            </div>
+          </div>
+        )}
 
         <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
@@ -14099,9 +14210,13 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         </select>
 
         <div style={{ background: `linear-gradient(135deg,${GREEN},#1a8540)`, borderRadius: 14, padding: 16, marginBottom: 12, color: "#fff", boxShadow: "0 4px 14px #2aa84f44" }}>
-          <div style={{ fontSize: 11, opacity: 0.9 }}>Total da quinzena (líquido)</div>
+          <div style={{ fontSize: 11, opacity: 0.9 }}>Total da folha {tipoRegime} (líquido)</div>
           <div style={{ fontSize: 30, fontWeight: 900 }}>R$ {totalFolha.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
-          <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{trabFiltro.length} trabalhador(es) • {dia2 - dia1 + 1} dias</div>
+          <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{trabFiltro.length} trabalhador(es) • {(() => {
+            const p = calcularPeriodo();
+            if (p.mesInicio === p.mesFim) return `${p.diaFim - p.diaInicio + 1} dias`;
+            return `${p.diaInicio}/${p.mesInicio + 1} a ${p.diaFim}/${p.mesFim + 1}`;
+          })()}</div>
           {totalAdiantQuinzena > 0 && (
             <div style={{ fontSize: 11, opacity: 0.95, marginTop: 6, background: "rgba(0,0,0,0.15)", padding: "4px 8px", borderRadius: 6, display: "inline-block" }}>
               💸 Adiantamentos descontados: R$ {totalAdiantQuinzena.toFixed(2)}
@@ -14117,19 +14232,11 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           {trabComMov.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "#aaa", fontSize: 13 }}>Sem dias trabalhados nesta quinzena.</div>}
           {trabComMov.map(t => {
             const c = calcular(t);
-            // Badge de tipo de folha
-            const badgeCores = { semanal: "#0891b2", quinzenal: "#16a34a", mensal: "#7c3aed", personalizado: "#e87722" };
-            const badgeLabels = { semanal: "SEM", quinzenal: "QUI", mensal: "MEN", personalizado: "PER" };
-            const badgeCor = badgeCores[c.tipoFolha] || "#16a34a";
-            const badgeLabel = badgeLabels[c.tipoFolha] || "QUI";
             return (
               <div key={t.id} style={{ padding: "8px 12px", borderBottom: "1px solid #f0f0f0", display: "grid", gridTemplateColumns: "1fr 40px 70px 80px", gap: 6, alignItems: "center", fontSize: 12 }}>
                 <div>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ background: badgeCor, color: "#fff", fontSize: 8, fontWeight: 900, padding: "2px 5px", borderRadius: 3, letterSpacing: 0.5 }} title={c.tipoFolha}>{badgeLabel}</span>
-                    <span>{t.nome}</span>
-                  </div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{t.cargo}{c.adiantDesconto > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> • Vale R$ {c.adiantDesconto.toFixed(2)}</span>}{c.formaCalculo === "mensal_fixo" && <span style={{ color: "#7c3aed", fontWeight: 700 }}> • Mensal fixo</span>}</div>
+                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 12 }}>{t.nome}</div>
+                  <div style={{ fontSize: 10, color: "#888" }}>{t.cargo}{c.adiantDesconto > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> • Vale R$ {c.adiantDesconto.toFixed(2)}</span>}{c.formaCalculo === "mensal_fixo" && <span style={{ color: "#7c3aed", fontWeight: 700 }}> • Salário fixo</span>}</div>
                 </div>
                 <div style={{ textAlign: "center", fontWeight: 800, color: NAVY }}>{c.diasPagos}</div>
                 <div style={{ textAlign: "right", color: "#666", fontSize: 11 }}>R$ {c.formaCalculo === "mensal_fixo" ? (c.salarioFixo / 30).toFixed(2) : c.diaria.toFixed(2)}</div>
@@ -14140,7 +14247,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         </div>
 
         <div style={{ background: "#f0f7ff", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#0c4a6e", marginBottom: 8 }}>
-          💡 <b>Cálculo flexível:</b> agora cada trabalhador é calculado conforme seu tipo de folha (semanal, quinzenal, mensal ou personalizado). Os badges <span style={{ background: "#0891b2", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>SEM</span> <span style={{ background: "#16a34a", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>QUI</span> <span style={{ background: "#7c3aed", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>MEN</span> <span style={{ background: "#e87722", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>PER</span> mostram o regime de cada um.
+          💡 <b>Regime atual:</b> {tipoRegime === "diaria" ? "Diária (1 dia específico)" : tipoRegime === "semanal" ? "Semanal (7 dias)" : tipoRegime === "quinzenal" ? `${quinzena}ª Quinzena (${dia1}-${dia2}/${mes + 1})` : "Mensal (mês completo)"}. Faltas não pagam. Atestados pagam. Adiantamentos descontados no fechamento.
         </div>
 
         <Btn label="📄 EXPORTAR FOLHA EM PDF" color={GOLD} onClick={exportarPDF} />
