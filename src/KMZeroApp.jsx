@@ -24,6 +24,67 @@ const ORANGE= "#e87722";
 const BLUE  = "#1e6bbf";
 const LIGHT = "#f2f4f8";
 
+/* ── FERIADOS NACIONAIS BRASILEIROS ── */
+// Calcula a data da Páscoa pelo algoritmo de Gauss (mais preciso)
+function dataPascoa(ano) {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(ano, mes - 1, dia);
+}
+
+function feriadosDoAno(ano) {
+  const pascoa = dataPascoa(ano);
+  // Carnaval = 47 dias antes da Páscoa
+  const carnavalSeg = new Date(pascoa); carnavalSeg.setDate(carnavalSeg.getDate() - 48);
+  const carnavalTer = new Date(pascoa); carnavalTer.setDate(carnavalTer.getDate() - 47);
+  // Sexta-feira Santa = 2 dias antes da Páscoa
+  const sextaSanta = new Date(pascoa); sextaSanta.setDate(sextaSanta.getDate() - 2);
+  // Corpus Christi = 60 dias após Páscoa
+  const corpusChristi = new Date(pascoa); corpusChristi.setDate(corpusChristi.getDate() + 60);
+
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  return {
+    [`${ano}-01-01`]: { nome: "Confraternização Universal", tipo: "nacional", emoji: "🎉" },
+    [iso(carnavalSeg)]: { nome: "Carnaval (Segunda)", tipo: "facultativo", emoji: "🎭" },
+    [iso(carnavalTer)]: { nome: "Carnaval (Terça)", tipo: "facultativo", emoji: "🎭" },
+    [iso(sextaSanta)]: { nome: "Sexta-feira Santa", tipo: "nacional", emoji: "✝️" },
+    [iso(pascoa)]: { nome: "Páscoa", tipo: "nacional", emoji: "🥚" },
+    [`${ano}-04-21`]: { nome: "Tiradentes", tipo: "nacional", emoji: "⚒️" },
+    [`${ano}-05-01`]: { nome: "Dia do Trabalho", tipo: "nacional", emoji: "👷" },
+    [iso(corpusChristi)]: { nome: "Corpus Christi", tipo: "facultativo", emoji: "🍞" },
+    [`${ano}-09-07`]: { nome: "Independência do Brasil", tipo: "nacional", emoji: "🇧🇷" },
+    [`${ano}-10-12`]: { nome: "Nossa Senhora Aparecida", tipo: "nacional", emoji: "🙏" },
+    [`${ano}-11-02`]: { nome: "Finados", tipo: "nacional", emoji: "🕯️" },
+    [`${ano}-11-15`]: { nome: "Proclamação da República", tipo: "nacional", emoji: "🇧🇷" },
+    [`${ano}-11-20`]: { nome: "Consciência Negra", tipo: "nacional", emoji: "✊🏿" },
+    [`${ano}-12-25`]: { nome: "Natal", tipo: "nacional", emoji: "🎄" },
+  };
+}
+
+// Cache de feriados por ano para evitar recalcular
+const _cacheFeriados = {};
+function feriadoEm(dataISO) {
+  // dataISO: "YYYY-MM-DD"
+  if (!dataISO || !dataISO.includes("-")) return null;
+  const ano = parseInt(dataISO.split("-")[0]);
+  if (isNaN(ano)) return null;
+  if (!_cacheFeriados[ano]) _cacheFeriados[ano] = feriadosDoAno(ano);
+  return _cacheFeriados[ano][dataISO] || null;
+}
+
 /* ── STORAGE ── */
 const store = {
   async get(key) {
@@ -13884,15 +13945,23 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     const formaCalculo = t.formaCalculo || "diaria";
 
     // ────── CONTAR PRESENÇAS NO PERÍODO ──────
-    let presentes = 0, faltas = 0, atestados = 0;
+    let presentes = 0, faltas = 0, atestados = 0, feriados = 0;
     let diasTotaisPeriodo = 0;
     const contarDia = (d, mAtual, aAtual) => {
       const iso = `${aAtual}-${String(mAtual + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const s = (historico[iso] || {})[t.id];
+      const feriado = feriadoEm(iso);
       diasTotaisPeriodo++;
+      // FERIADO NACIONAL: conta como pago (Lei brasileira)
+      // Só conta como feriado se o registro for vazio OU "Feriado" OU "Falta" (faltas em feriado nacional viram feriado pago)
+      if (feriado && feriado.tipo === "nacional" && (s === undefined || s === "" || s === "Feriado" || s === "Falta")) {
+        feriados++;
+        return;
+      }
       if (s === "Presente") presentes++;
       else if (s === "Falta") faltas++;
       else if (s === "Atestado") atestados++;
+      else if (s === "Feriado") feriados++;
     };
 
     if (periodo.mesInicio === periodo.mesFim && periodo.anoInicio === periodo.anoFim) {
@@ -13906,7 +13975,8 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     // ────── CÁLCULO DO VALOR BRUTO ──────
     const diaria = parseFloat(t.diaria) || 0;
     const salarioFixo = parseFloat(t.salarioFixo) || 0;
-    const diasPagos = presentes + atestados;
+    // FERIADO NACIONAL conta como dia pago (Lei brasileira)
+    const diasPagos = presentes + atestados + feriados;
     let bruto = 0;
 
     if (formaCalculo === "mensal_fixo" && salarioFixo > 0) {
@@ -13947,7 +14017,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
 
     const liquido = bruto - adiantDesconto;
     return {
-      presentes, faltas, atestados, diaria, salarioFixo,
+      presentes, faltas, atestados, feriados, diaria, salarioFixo,
       diasPagos, diasTotaisPeriodo, bruto, adiantDesconto, liquido,
       tipoFolha: tipoRegime, descricaoPeriodo: periodo.descricao, formaCalculo,
       diaInicio: periodo.diaInicio, diaFim: periodo.diaFim,
@@ -14204,6 +14274,44 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           </div>
         )}
 
+        {/* ════ BANNER DE FERIADOS NO PERÍODO ════ */}
+        {(() => {
+          const p = calcularPeriodo();
+          const feriadosNoPeriodo = [];
+          const adicionarSe = (dia, m, a) => {
+            const iso = `${a}-${String(m + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+            const f = feriadoEm(iso);
+            if (f) feriadosNoPeriodo.push({ data: iso, ...f });
+          };
+          if (p.mesInicio === p.mesFim && p.anoInicio === p.anoFim) {
+            for (let d = p.diaInicio; d <= p.diaFim; d++) adicionarSe(d, p.mesInicio, p.anoInicio);
+          } else {
+            const ult = new Date(p.anoInicio, p.mesInicio + 1, 0).getDate();
+            for (let d = p.diaInicio; d <= ult; d++) adicionarSe(d, p.mesInicio, p.anoInicio);
+            for (let d = 1; d <= p.diaFim; d++) adicionarSe(d, p.mesFim, p.anoFim);
+          }
+          if (feriadosNoPeriodo.length === 0) return null;
+          return (
+            <div style={{ background: "#fff7e6", borderRadius: 12, padding: 12, marginBottom: 10, border: `1px solid ${GOLD}30` }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#8a6d1a", letterSpacing: 1, marginBottom: 6 }}>🎉 FERIADO(S) NESTE PERÍODO</div>
+              {feriadosNoPeriodo.map(f => {
+                const [a, m, d] = f.data.split("-");
+                return (
+                  <div key={f.data} style={{ fontSize: 12, color: "#5c5210", marginBottom: 3, display: "flex", justifyContent: "space-between" }}>
+                    <span>{f.emoji} <b>{f.nome}</b></span>
+                    <span style={{ color: f.tipo === "nacional" ? "#16a34a" : "#888", fontSize: 10, fontWeight: 700, alignSelf: "center" }}>
+                      {d}/{m} • {f.tipo === "nacional" ? "PAGO" : "FACULTATIVO"}
+                    </span>
+                  </div>
+                );
+              })}
+              <div style={{ fontSize: 10, color: "#7c6f3a", marginTop: 6, lineHeight: 1.4 }}>
+                ℹ️ Feriados nacionais são contados como dia pago automaticamente (Lei 605/49). Facultativos seguem o registro de presença.
+              </div>
+            </div>
+          );
+        })()}
+
         <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
@@ -14236,7 +14344,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               <div key={t.id} style={{ padding: "8px 12px", borderBottom: "1px solid #f0f0f0", display: "grid", gridTemplateColumns: "1fr 40px 70px 80px", gap: 6, alignItems: "center", fontSize: 12 }}>
                 <div>
                   <div style={{ fontWeight: 700, color: NAVY, fontSize: 12 }}>{t.nome}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{t.cargo}{c.adiantDesconto > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> • Vale R$ {c.adiantDesconto.toFixed(2)}</span>}{c.formaCalculo === "mensal_fixo" && <span style={{ color: "#7c3aed", fontWeight: 700 }}> • Salário fixo</span>}</div>
+                  <div style={{ fontSize: 10, color: "#888" }}>{t.cargo}{c.feriados > 0 && <span style={{ color: GOLD, fontWeight: 700 }}> • 🎉 {c.feriados} feriado{c.feriados > 1 ? "s" : ""}</span>}{c.adiantDesconto > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> • Vale R$ {c.adiantDesconto.toFixed(2)}</span>}{c.formaCalculo === "mensal_fixo" && <span style={{ color: "#7c3aed", fontWeight: 700 }}> • Salário fixo</span>}</div>
                 </div>
                 <div style={{ textAlign: "center", fontWeight: 800, color: NAVY }}>{c.diasPagos}</div>
                 <div style={{ textAlign: "right", color: "#666", fontSize: 11 }}>R$ {c.formaCalculo === "mensal_fixo" ? (c.salarioFixo / 30).toFixed(2) : c.diaria.toFixed(2)}</div>
