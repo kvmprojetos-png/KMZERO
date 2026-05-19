@@ -13875,6 +13875,10 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
   const [diaPagQuinzenal1, setDiaPagQuinzenal1] = useState(""); // 1ª quinzena: data de pagamento
   const [diaPagQuinzenal2, setDiaPagQuinzenal2] = useState(""); // 2ª quinzena: data de pagamento
   const [diaPagMensal, setDiaPagMensal] = useState(""); // mensal: data de pagamento
+  // ════ PERSONALIZADO: período totalmente livre ════
+  const [persInicio, setPersInicio] = useState(""); // data inicial (YYYY-MM-DD)
+  const [persFim, setPersFim] = useState("");        // data final (YYYY-MM-DD)
+  const [persPagamento, setPersPagamento] = useState(""); // data de pagamento
   // ════ obra ════
   const [obraId, setObraId] = useState("todas");
   const [salvoAviso, setSalvoAviso] = useState(false);
@@ -13922,6 +13926,31 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         anoInicio: ano,
         anoFim: ano,
         descricao: "Mensal",
+      };
+    } else if (tipoRegime === "personalizado") {
+      // PERSONALIZADO: período totalmente livre (data inicial e final escolhidas)
+      if (!persInicio || !persFim) {
+        // Se faltar data, usa o mês corrente como fallback seguro
+        return {
+          diaInicio: 1,
+          diaFim: ultimoDia,
+          mesInicio: mes,
+          mesFim: mes,
+          anoInicio: ano,
+          anoFim: ano,
+          descricao: "Personalizado (defina as datas)",
+        };
+      }
+      const ini = new Date(persInicio + "T12:00:00");
+      const fim = new Date(persFim + "T12:00:00");
+      return {
+        diaInicio: ini.getDate(),
+        diaFim: fim.getDate(),
+        mesInicio: ini.getMonth(),
+        mesFim: fim.getMonth(),
+        anoInicio: ini.getFullYear(),
+        anoFim: fim.getFullYear(),
+        descricao: "Personalizado",
       };
     } else {
       // QUINZENAL (padrão)
@@ -14170,6 +14199,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               { k: "semanal", l: "📆 Semanal", c: "#16a34a", d: "7 dias corridos" },
               { k: "quinzenal", l: "🗓️ Quinzenal", c: GOLD, d: "15 dias" },
               { k: "mensal", l: "📊 Mensal", c: "#7c3aed", d: "Mês completo" },
+              { k: "personalizado", l: "⚙️ Personalizado", c: "#e87722", d: "Você escolhe o período" },
             ].map(opt => (
               <button
                 key={opt.k}
@@ -14274,6 +14304,54 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           </div>
         )}
 
+        {tipoRegime === "personalizado" && (
+          <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 10, border: "1px solid #e8772230" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#e87722", letterSpacing: 1, marginBottom: 6 }}>⚙️ PERÍODO PERSONALIZADO</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA INICIAL</label>
+                <input
+                  type="date"
+                  value={persInicio}
+                  onChange={e => setPersInicio(e.target.value)}
+                  style={{ ...inputS, marginBottom: 0 }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA FINAL</label>
+                <input
+                  type="date"
+                  value={persFim}
+                  onChange={e => setPersFim(e.target.value)}
+                  style={{ ...inputS, marginBottom: 0 }}
+                />
+              </div>
+            </div>
+            <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA DE PAGAMENTO</label>
+            <input
+              type="date"
+              value={persPagamento}
+              onChange={e => setPersPagamento(e.target.value)}
+              style={{ ...inputS, marginBottom: 6 }}
+            />
+            {persInicio && persFim ? (
+              <div style={{ background: "#fff5e6", borderRadius: 6, padding: "6px 8px", fontSize: 11, color: "#9a5a1a", lineHeight: 1.4 }}>
+                ✓ Período: <b>{new Date(persInicio + "T12:00:00").toLocaleDateString("pt-BR")}</b> até <b>{new Date(persFim + "T12:00:00").toLocaleDateString("pt-BR")}</b>
+                {(() => {
+                  const ini = new Date(persInicio + "T12:00:00");
+                  const fim = new Date(persFim + "T12:00:00");
+                  const dias = Math.round((fim - ini) / (1000 * 60 * 60 * 24)) + 1;
+                  return dias > 0 ? <span> · <b>{dias} dia{dias > 1 ? "s" : ""}</b></span> : <span style={{ color: RED }}> · ⚠️ Data final deve ser depois da inicial</span>;
+                })()}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
+                💡 Use para quinzenas atípicas (ex: dia 18 ao 29), períodos de empreitada ou qualquer intervalo livre.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ════ BANNER DE FERIADOS NO PERÍODO ════ */}
         {(() => {
           const p = calcularPeriodo();
@@ -14355,7 +14433,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         </div>
 
         <div style={{ background: "#f0f7ff", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#0c4a6e", marginBottom: 8 }}>
-          💡 <b>Regime atual:</b> {tipoRegime === "diaria" ? "Diária (1 dia específico)" : tipoRegime === "semanal" ? "Semanal (7 dias)" : tipoRegime === "quinzenal" ? `${quinzena}ª Quinzena (${dia1}-${dia2}/${mes + 1})` : "Mensal (mês completo)"}. Faltas não pagam. Atestados pagam. Adiantamentos descontados no fechamento.
+          💡 <b>Regime atual:</b> {tipoRegime === "diaria" ? "Diária (1 dia específico)" : tipoRegime === "semanal" ? "Semanal (7 dias)" : tipoRegime === "quinzenal" ? `${quinzena}ª Quinzena (${dia1}-${dia2}/${mes + 1})` : tipoRegime === "mensal" ? "Mensal (mês completo)" : (persInicio && persFim ? `Personalizado (${new Date(persInicio + "T12:00:00").toLocaleDateString("pt-BR")} - ${new Date(persFim + "T12:00:00").toLocaleDateString("pt-BR")})` : "Personalizado (defina as datas acima)")}. Faltas não pagam. Atestados pagam. Adiantamentos descontados no fechamento.
         </div>
 
         <Btn label="📄 EXPORTAR FOLHA EM PDF" color={GOLD} onClick={exportarPDF} />
