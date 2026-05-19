@@ -435,6 +435,7 @@ async function abrirOuBaixarHTML(html, filename = "documento") {
       background: #0f2151 !important;
       color: #fff !important;
       padding: 10px !important;
+      padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
       display: flex !important;
       gap: 6px !important;
       flex-wrap: wrap !important;
@@ -459,12 +460,18 @@ async function abrirOuBaixarHTML(html, filename = "documento") {
     btnZoomOut.textContent = "🔍−";
     btnZoomOut.style.cssText = "background:#475569; color:#fff; border:none; border-radius:8px; padding:10px 10px; font-weight:800; cursor:pointer; font-size:12px;";
 
+    const btnImprimir = document.createElement("button");
+    btnImprimir.innerHTML = "🖨️ IMPRIMIR";
+    btnImprimir.title = "Imprimir relatório";
+    btnImprimir.style.cssText = "background:#0891b2; color:#fff; border:none; border-radius:8px; padding:10px 12px; font-weight:800; cursor:pointer; font-size:13px; flex:1; min-width:100px;";
+
     const btnFechar = document.createElement("button");
     btnFechar.textContent = "✕";
     btnFechar.style.cssText = "background:#6b7280; color:#fff; border:none; border-radius:8px; padding:10px 10px; font-weight:800; cursor:pointer; font-size:12px;";
 
     barra.appendChild(btnBaixar);
     barra.appendChild(btnCompartilhar);
+    barra.appendChild(btnImprimir);
     barra.appendChild(btnZoomIn);
     barra.appendChild(btnZoomOut);
     barra.appendChild(btnFechar);
@@ -475,6 +482,7 @@ async function abrirOuBaixarHTML(html, filename = "documento") {
       flex: 1;
       overflow: auto;
       padding: 12px;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
       -webkit-overflow-scrolling: touch;
       touch-action: pan-x pan-y pinch-zoom;
     `;
@@ -599,6 +607,47 @@ async function abrirOuBaixarHTML(html, filename = "documento") {
     };
     btnZoomIn.onclick = () => ajustarZoom(0.15);
     btnZoomOut.onclick = () => ajustarZoom(-0.15);
+
+    // 🖨️ IMPRIMIR — abre janela de impressão do navegador
+    btnImprimir.onclick = () => {
+      try {
+        // Salva o zoom atual e reseta para impressão
+        const zoomAnterior = zoomNivel;
+        pagina.style.transform = "scale(1)";
+
+        // Cria janela de impressão com o HTML original
+        const janelaImpressao = window.open("", "_blank", "width=900,height=700");
+        if (!janelaImpressao) {
+          alert("⚠️ Popup bloqueado.\n\nLibere popups deste site nas configurações do navegador para usar a impressão.\n\nAlternativa: toque em 📥 BAIXAR e abra o PDF no aplicativo do celular para imprimir de lá.");
+          // Restaura zoom
+          setTimeout(() => { pagina.style.transform = `scale(${zoomAnterior})`; }, 100);
+          return;
+        }
+
+        // Monta documento limpo para impressão
+        janelaImpressao.document.open();
+        janelaImpressao.document.write(html);
+        janelaImpressao.document.close();
+
+        // Aguarda carregamento e abre o diálogo de impressão
+        janelaImpressao.onload = () => {
+          setTimeout(() => {
+            try {
+              janelaImpressao.focus();
+              janelaImpressao.print();
+            } catch (e) {
+              console.error("Erro ao imprimir:", e);
+            }
+          }, 300);
+        };
+
+        // Restaura zoom da tela original
+        setTimeout(() => { pagina.style.transform = `scale(${zoomAnterior})`; }, 200);
+      } catch (e) {
+        console.error("Erro ao imprimir:", e);
+        alert("⚠️ Não foi possível abrir o diálogo de impressão neste navegador.\n\nUse o botão 📥 BAIXAR para salvar o PDF e imprimir pelo aplicativo de PDF do seu aparelho.");
+      }
+    };
 
     btnFechar.onclick = () => container.remove();
 
@@ -8150,198 +8199,529 @@ function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
    FICHA CADASTRAL IMPRIMÍVEL — A4 oficial pra arquivo físico
 ════════════════════════════════════ */
 function gerarFichaCadastralPDF(t, obra, empresa) {
-  const fmtCPF = (cpf) => cpf ? cpf.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "";
-  const fmtTel = (tel) => tel || "";
+  const fmtCPF = (cpf) => cpf ? cpf.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "—";
+  const fmtTel = (tel) => tel || "—";
   const fmtData = (d) => {
-    if (!d) return "";
+    if (!d) return "—";
     if (d.includes("/")) return d;
     try { return new Date(d).toLocaleDateString("pt-BR"); } catch { return d; }
   };
-  const linha = (label, valor, larg = "100%") => `
-    <div style="display:inline-block;width:${larg};padding-right:6px;vertical-align:top;margin-bottom:4px;">
-      <div style="font-size:7pt;color:#666;text-transform:uppercase;letter-spacing:0.3px;font-weight:700;line-height:1.1;">${label}</div>
-      <div style="border-bottom:1px solid #888;padding:1px 3px;min-height:14px;font-size:10pt;color:#000;font-weight:500;line-height:1.1;">${valor || "&nbsp;"}</div>
-    </div>
-  `;
+  const v = (val) => val && String(val).trim() ? val : "—";
+
+  // Tipo de folha (badge)
+  const tiposFolha = { semanal: "Semanal (7 dias)", quinzenal: "Quinzenal (15 dias)", mensal: "Mensal (30 dias)", personalizado: "Personalizado" };
+  const tipoFolhaLabel = tiposFolha[t.tipoFolha] || "Quinzenal";
+
+  // Formas de cálculo
+  const formasCalculo = { diaria: "Por diária", mensal_fixo: "Salário mensal fixo", hora: "Por hora", producao: "Por produção" };
+  const formaCalcLabel = formasCalculo[t.formaCalculo] || "Por diária";
+
+  // Remuneração
+  let remuneracao = "—";
+  if (t.formaCalculo === "mensal_fixo" && t.salarioFixo) {
+    remuneracao = `R$ ${parseFloat(t.salarioFixo).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/mês (fixo)`;
+  } else if (t.diaria) {
+    remuneracao = `R$ ${parseFloat(t.diaria).toFixed(2).replace(".", ",")}/dia`;
+  } else if (t.salarioMensal) {
+    remuneracao = `R$ ${parseFloat(t.salarioMensal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/mês`;
+  }
+
+  // Detectar se é direto (obra) ou indireto (escritório)
+  const ehIndireto = !t.obraId && !obra;
+  const tipoVinculo = ehIndireto ? "Funcionário Indireto / Escritório" : "Funcionário Direto / Obra";
+
+  // Data de emissão
+  const dataEmissao = new Date().toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const idTrab = String(t.id).padStart(5, "0");
 
   const html = `<html>
     <head>
       <title>Ficha Cadastral - ${t.nome}</title>
       <style>
         ${KM_PDF_PAGE_CSS}
-        @page { size: A4 portrait; margin: 12mm 10mm; }
-        @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-        body { font-family: Arial, sans-serif; color: #000; font-size: 10pt; line-height: 1.25; margin: 0 auto; max-width: 190mm; padding: 4mm; box-sizing: border-box; }
-        h1, h2, h3 { page-break-after: avoid; break-after: avoid; }
-        table { page-break-inside: auto; break-inside: auto; }
-        tr { page-break-inside: avoid; break-inside: avoid; }
-        thead { display: table-header-group; }
-        h1 { color: #0f2151; font-size: 14pt; margin: 0 0 4px 0; padding: 0; }
-        h2 { background: #0f2151; color: #fff; padding: 4px 8px; font-size: 10pt; margin: 8px 0 4px 0; letter-spacing: 0.3px; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #C0A040; padding-bottom: 4px; margin-bottom: 6px; page-break-inside: avoid; }
-        .empresa-info { flex: 1; }
-        .empresa-info .razao { font-size: 9pt; font-weight: 700; color: #0f2151; line-height: 1.2; }
-        .empresa-info .sub { font-size: 7pt; color: #666; line-height: 1.2; }
+        @page { size: A4 portrait; margin: 8mm 10mm; }
+        @media print {
+          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .page-break { page-break-before: always; }
+        }
+        body {
+          font-family: 'Arial', 'Helvetica', sans-serif;
+          color: #1a1a1a;
+          font-size: 9pt;
+          line-height: 1.25;
+          margin: 0;
+          padding: 0;
+        }
+        /* CABEÇALHO INSTITUCIONAL */
+        .cabecalho {
+          display: flex;
+          justify-content: space-between;
+          align-items: stretch;
+          border-bottom: 3px solid #0f2151;
+          padding-bottom: 5px;
+          margin-bottom: 6px;
+        }
+        .cabecalho-empresa { flex: 1; padding-right: 8px; }
+        .cabecalho-logo {
+          font-size: 18pt;
+          font-weight: 900;
+          letter-spacing: -1px;
+          line-height: 1;
+          margin-bottom: 2px;
+        }
+        .cabecalho-logo .km { color: #0f2151; }
+        .cabecalho-logo .zero { color: #F5A623; }
+        .cabecalho-razao { font-size: 8.5pt; color: #1a1a1a; font-weight: 700; line-height: 1.2; }
+        .cabecalho-dados { font-size: 7pt; color: #555; line-height: 1.3; margin-top: 1px; }
+        .cabecalho-tagline { font-size: 6.5pt; color: #888; letter-spacing: 1.5px; font-weight: 600; margin-top: 1px; }
         .foto-3x4 {
-          width: 75px; height: 95px; border: 1.5px solid #888; display: flex;
-          align-items: center; justify-content: center; flex-direction: column;
-          color: #aaa; font-size: 8pt; text-align: center; margin-left: 10px; flex-shrink: 0;
-          background: repeating-linear-gradient(45deg, #f9f9f9, #f9f9f9 5px, #fff 5px, #fff 10px);
+          width: 72px; height: 92px;
+          border: 1.5px solid #0f2151;
+          display: flex; align-items: center; justify-content: center;
+          flex-direction: column;
+          color: #888; font-size: 7pt; text-align: center;
+          background: repeating-linear-gradient(45deg, #fafafa, #fafafa 4px, #fff 4px, #fff 8px);
+          flex-shrink: 0;
         }
-        .titulo-doc { text-align: center; margin: 6px 0 4px 0; }
-        .titulo-doc h1 { font-size: 14pt; color: #0f2151; }
-        .titulo-doc .subtitulo { font-size: 8pt; color: #666; letter-spacing: 0.5px; }
-        .obs-bloco {
-          border: 1px dashed #aaa; min-height: 28px; padding: 4px 8px;
-          font-size: 9pt; color: #444; margin-bottom: 6px;
+        .foto-3x4 .label { font-weight: 700; letter-spacing: 0.5px; }
+
+        /* TÍTULO PRINCIPAL */
+        .titulo-doc {
+          text-align: center;
+          background: #0f2151;
+          color: #fff;
+          padding: 4px 8px;
+          margin: 4px 0;
+          letter-spacing: 1px;
         }
-        .assinatura-area {
-          display: flex; gap: 20px; margin-top: 14px; page-break-inside: avoid;
+        .titulo-doc h1 {
+          font-size: 11pt;
+          font-weight: 900;
+          margin: 0;
+          letter-spacing: 1.5px;
         }
-        .assinatura-area .ass {
-          flex: 1; text-align: center;
+        .titulo-doc .sub { font-size: 7pt; color: #F5A623; margin-top: 1px; letter-spacing: 0.8px; }
+        .ribbon-tipo {
+          display: flex; justify-content: space-between;
+          background: #FFF7E6; border: 1px solid #F5A623;
+          padding: 2px 8px; font-size: 7.5pt;
+          margin-bottom: 4px;
         }
-        .assinatura-area .linha-ass {
-          border-top: 1px solid #000; margin: 0 0 2px 0; padding-top: 2px;
-          font-size: 8pt; color: #444;
+        .ribbon-tipo b { color: #7c6f3a; }
+
+        /* SEÇÕES */
+        .secao-titulo {
+          background: linear-gradient(90deg, #0f2151 0%, #1a3370 100%);
+          color: #fff;
+          padding: 2px 8px;
+          font-size: 8pt;
+          font-weight: 700;
+          letter-spacing: 0.8px;
+          margin: 4px 0 0 0;
         }
-        .footer-doc {
-          margin-top: 10px; padding-top: 4px; border-top: 1px solid #ddd;
-          font-size: 7pt; color: #888; text-align: center;
+        .secao {
+          border: 1px solid #0f2151;
+          border-top: none;
+          padding: 0;
+          margin-bottom: 4px;
         }
-        .selo-aviso {
-          background: #fef9e7; border-left: 2px solid #f5a623; padding: 4px 8px;
-          font-size: 7.5pt; color: #8b6f00; margin: 4px 0;
+        /* TABELA DE CAMPOS */
+        table.dados {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 8.5pt;
+        }
+        table.dados td {
+          border: 1px solid #d0d4dc;
+          padding: 2px 5px;
+          vertical-align: top;
+          line-height: 1.2;
+        }
+        table.dados td.label {
+          background: #f4f6fa;
+          font-size: 6.5pt;
+          color: #555;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+          font-weight: 700;
+          width: 1px;
+          white-space: nowrap;
+          padding-right: 8px;
+        }
+        table.dados td.valor {
+          font-size: 9pt;
+          color: #000;
+          font-weight: 500;
+        }
+        table.dados td.valor.destaque {
+          font-weight: 800;
+          color: #0f2151;
+        }
+
+        /* ASSINATURAS */
+        .assinaturas {
+          display: flex; gap: 16px; margin-top: 8px;
+        }
+        .ass-bloco { flex: 1; text-align: center; }
+        .ass-bloco .linha-ass {
+          border-top: 1px solid #000;
+          margin-top: 22px;
+          padding-top: 2px;
+          font-size: 7.5pt;
+          color: #444;
+          font-weight: 600;
+        }
+        .ass-bloco .nome-ass { font-size: 7pt; color: #888; margin-top: 1px; }
+
+        /* LGPD */
+        .lgpd-alerta {
+          background: #fff8e1; border-left: 3px solid #F5A623;
+          padding: 3px 8px; font-size: 7pt; color: #7c6f3a;
+          margin: 4px 0 2px 0;
+          line-height: 1.3;
+        }
+        .lgpd-alerta b { color: #5c5210; }
+
+        /* RODAPÉ */
+        .rodape-doc {
+          margin-top: 6px;
+          border-top: 1px solid #ccc;
+          padding-top: 3px;
+          font-size: 6.5pt;
+          color: #999;
+          display: flex; justify-content: space-between;
+          letter-spacing: 0.2px;
+        }
+
+        /* ═══ CRACHÁ ═══ */
+        .cracha-page { padding-top: 20mm; }
+        .cracha-grid {
+          display: flex;
+          gap: 10mm;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        .cracha {
+          width: 85mm; height: 54mm;
+          border: 2px solid #0f2151;
+          border-radius: 5px;
+          padding: 0;
+          background: #fff;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .cracha-header {
+          background: linear-gradient(135deg, #0f2151 0%, #1a3370 100%);
+          color: #fff;
+          padding: 3px 6px;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .cracha-logo {
+          font-size: 11pt; font-weight: 900; letter-spacing: -0.5px;
+        }
+        .cracha-logo .zero { color: #F5A623; }
+        .cracha-tagline { font-size: 5pt; letter-spacing: 1.5px; opacity: 0.85; }
+        .cracha-body {
+          flex: 1;
+          display: flex;
+          padding: 4mm;
+          gap: 3mm;
+          background: #fff;
+        }
+        .cracha-foto {
+          width: 22mm; height: 30mm;
+          border: 1px solid #0f2151;
+          background: repeating-linear-gradient(45deg, #f9f9f9, #f9f9f9 3px, #fff 3px, #fff 6px);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 6pt; color: #aaa; text-align: center;
+          flex-shrink: 0;
+        }
+        .cracha-info { flex: 1; font-size: 7pt; line-height: 1.3; }
+        .cracha-nome { font-size: 9pt; font-weight: 900; color: #0f2151; line-height: 1.1; margin-bottom: 1mm; }
+        .cracha-cargo { font-size: 7pt; color: #F5A623; font-weight: 700; margin-bottom: 1mm; letter-spacing: 0.3px; }
+        .cracha-detalhe { font-size: 6pt; color: #444; line-height: 1.4; }
+        .cracha-detalhe b { color: #0f2151; font-weight: 700; }
+        .cracha-footer {
+          background: #F5A623;
+          color: #0f2151;
+          font-size: 5.5pt;
+          font-weight: 700;
+          padding: 1.5mm 6px;
+          letter-spacing: 0.8px;
+          text-align: center;
+          line-height: 1;
+        }
+        .cracha-titulo-pg {
+          text-align: center;
+          background: #0f2151;
+          color: #fff;
+          padding: 5px;
+          margin-bottom: 10mm;
+          letter-spacing: 1px;
+        }
+        .cracha-titulo-pg h1 { font-size: 13pt; margin: 0; font-weight: 900; }
+        .cracha-titulo-pg .sub { font-size: 8pt; color: #F5A623; margin-top: 2px; letter-spacing: 0.6px; }
+        .cracha-instrucoes {
+          margin-top: 8mm;
+          background: #f4f6fa;
+          border-left: 3px solid #0f2151;
+          padding: 4px 10px;
+          font-size: 8pt;
+          color: #555;
+          line-height: 1.5;
         }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="empresa-info">
-          <div class="razao">${empresa.razaoSocial || "KM Consultoria, Assessoria e Serviços de Engenharia Ltda"}</div>
-          <div class="sub">CNPJ: ${empresa.cnpj || "—"} • ${empresa.responsavel || "Kleber Vieira Martins"}</div>
-          <div class="sub">${empresa.email || ""} • ${empresa.telefone || ""}</div>
+
+      <!-- ════════ PÁGINA 1 — FICHA CADASTRAL A4 ════════ -->
+      <div class="cabecalho">
+        <div class="cabecalho-empresa">
+          <div class="cabecalho-logo"><span class="km">KM</span><span class="zero">ZERO</span></div>
+          <div class="cabecalho-tagline">GESTÃO DE OBRAS</div>
+          <div class="cabecalho-razao">${v(empresa.razaoSocial) || "KM Consultoria, Assessoria e Serviços de Engenharia Ltda"}</div>
+          <div class="cabecalho-dados">
+            CNPJ: ${v(empresa.cnpj) || "60.368.233/0001-73"} &nbsp;•&nbsp;
+            ${v(empresa.endereco) || "Alegre/ES"}<br>
+            ${v(empresa.responsavel) || "Eng. Kleber Vieira Martins · CREA-ES"} &nbsp;•&nbsp;
+            ${v(empresa.telefone) || "(28) 99925-8172"} &nbsp;•&nbsp;
+            ${v(empresa.email) || "kvmprojetos@gmail.com"}
+          </div>
         </div>
-        <div class="foto-3x4">FOTO<br>3x4</div>
+        <div class="foto-3x4">
+          <div class="label">FOTO</div>
+          <div style="font-size:6pt;margin-top:1px;">3x4</div>
+        </div>
       </div>
 
       <div class="titulo-doc">
         <h1>FICHA CADASTRAL DE COLABORADOR</h1>
-        <div class="subtitulo">— DOCUMENTO PARA ARQUIVO INTERNO —</div>
+        <div class="sub">DOCUMENTO PARA ARQUIVO INTERNO</div>
       </div>
 
-      <h2>1. IDENTIFICAÇÃO</h2>
-      <div>
-        ${linha("Nome Completo", t.nome, "100%")}
-      </div>
-      <div>
-        ${linha("CPF", fmtCPF(t.cpf), "33%")}
-        ${linha("RG", t.rg, "33%")}
-        ${linha("Data de Nascimento", fmtData(t.nasc), "33%")}
-      </div>
-      <div>
-        ${linha("Estado Civil", t.estadoCivil, "33%")}
-        ${linha("Nacionalidade", t.nacionalidade || "Brasileira", "33%")}
-        ${linha("Naturalidade", t.naturalidade, "33%")}
-      </div>
-      <div>
-        ${linha("Nome do Pai", t.nomePai, "50%")}
-        ${linha("Nome da Mãe", t.nomeMae, "50%")}
+      <div class="ribbon-tipo">
+        <span><b>📁 Vínculo:</b> ${tipoVinculo}</span>
+        <span><b>🆔 Matrícula:</b> #${idTrab}</span>
+        <span><b>📅 Emissão:</b> ${dataEmissao}</span>
       </div>
 
-      <h2>2. CONTATO</h2>
-      <div>
-        ${linha("Telefone Celular", fmtTel(t.tel), "33%")}
-        ${linha("Telefone Recado", fmtTel(t.telRecado), "33%")}
-        ${linha("E-mail", t.email, "33%")}
-      </div>
-      <div>
-        ${linha("Endereço Completo", t.endereco, "100%")}
-      </div>
-      <div>
-        ${linha("Bairro", t.bairro, "33%")}
-        ${linha("Cidade / UF", t.cidade, "33%")}
-        ${linha("CEP", t.cep, "33%")}
-      </div>
-
-      <h2>3. DADOS PROFISSIONAIS</h2>
-      <div>
-        ${linha("Cargo / Função", t.cargo, "50%")}
-        ${linha("Obra Atual", obra?.nome || "—", "50%")}
-      </div>
-      <div>
-        ${linha("Data de Admissão", fmtData(t.admissao), "33%")}
-        ${linha("Diária (R$)", t.diaria ? "R$ " + parseFloat(t.diaria).toFixed(2) : "", "33%")}
-        ${linha("CTPS / PIS", t.ctps || t.pis, "33%")}
-      </div>
-
-      <h2>4. UNIFORMES E EPI</h2>
-      <div>
-        ${linha("Tamanho Camisa", t.tamCamisa, "25%")}
-        ${linha("Tamanho Calça", t.tamCalca, "25%")}
-        ${linha("Tamanho Bota", t.tamBota, "25%")}
-        ${linha("Tamanho Capacete", t.tamCapacete, "25%")}
+      <div class="secao-titulo">1. IDENTIFICAÇÃO PESSOAL</div>
+      <div class="secao">
+        <table class="dados">
+          <tr>
+            <td class="label">Nome Completo</td>
+            <td class="valor destaque" colspan="3">${v(t.nome)}</td>
+          </tr>
+          <tr>
+            <td class="label">CPF</td><td class="valor">${fmtCPF(t.cpf)}</td>
+            <td class="label">RG</td><td class="valor">${v(t.rg)}</td>
+          </tr>
+          <tr>
+            <td class="label">Data Nascimento</td><td class="valor">${fmtData(t.nasc)}</td>
+            <td class="label">Estado Civil</td><td class="valor">${v(t.estadoCivil)}</td>
+          </tr>
+          <tr>
+            <td class="label">Nacionalidade</td><td class="valor">${v(t.nacionalidade) || "Brasileira"}</td>
+            <td class="label">Naturalidade</td><td class="valor">${v(t.naturalidade)}</td>
+          </tr>
+          <tr>
+            <td class="label">Tipo Sanguíneo</td><td class="valor">${v(t.tipoSanguineo)}</td>
+            <td class="label">Escolaridade</td><td class="valor">${v(t.escolaridade)}</td>
+          </tr>
+          <tr>
+            <td class="label">Nome do Pai</td><td class="valor" colspan="3">${v(t.nomePai)}</td>
+          </tr>
+          <tr>
+            <td class="label">Nome da Mãe</td><td class="valor" colspan="3">${v(t.nomeMae)}</td>
+          </tr>
+        </table>
       </div>
 
-      <h2>5. SAÚDE E EXAME OCUPACIONAL (ASO)</h2>
-      <div>
-        ${linha("Data do Último ASO", fmtData(t.asoData), "33%")}
-        ${linha("Validade do ASO", fmtData(t.asoValidade), "33%")}
-        ${linha("Tipo Sanguíneo", t.tipoSanguineo, "33%")}
-      </div>
-      <div>
-        ${linha("Alergias / Condições Médicas", t.condicoesMedicas, "100%")}
-      </div>
-      <div>
-        ${linha("Convênio / Plano de Saúde", t.convenio, "100%")}
-      </div>
-
-      <h2>6. CONTATO DE EMERGÊNCIA</h2>
-      <div>
-        ${linha("Nome", t.emergenciaNome, "50%")}
-        ${linha("Parentesco", t.emergenciaParentesco, "20%")}
-        ${linha("Telefone", fmtTel(t.emergenciaTel), "30%")}
-      </div>
-
-      <h2>7. DADOS BANCÁRIOS</h2>
-      <div>
-        ${linha("Banco", t.banco, "30%")}
-        ${linha("Agência", t.agencia, "20%")}
-        ${linha("Conta", t.conta, "30%")}
-        ${linha("Tipo", t.tipoConta, "20%")}
-      </div>
-      <div>
-        ${linha("Chave PIX", t.pix, "100%")}
+      <div class="secao-titulo">2. ENDEREÇO E CONTATO</div>
+      <div class="secao">
+        <table class="dados">
+          <tr>
+            <td class="label">Endereço</td>
+            <td class="valor" colspan="3">${v(t.endereco)}</td>
+          </tr>
+          <tr>
+            <td class="label">Bairro</td><td class="valor">${v(t.bairro)}</td>
+            <td class="label">Cidade / UF</td><td class="valor">${v(t.cidade)}</td>
+          </tr>
+          <tr>
+            <td class="label">CEP</td><td class="valor">${v(t.cep)}</td>
+            <td class="label">Telefone Cel.</td><td class="valor">${fmtTel(t.tel)}</td>
+          </tr>
+          <tr>
+            <td class="label">Tel. Recado</td><td class="valor">${fmtTel(t.telRecado)}</td>
+            <td class="label">E-mail</td><td class="valor">${v(t.email)}</td>
+          </tr>
+        </table>
       </div>
 
-      <h2>8. OBSERVAÇÕES</h2>
-      <div class="obs-bloco">${t.observacoes || "&nbsp;"}</div>
-
-      <div class="selo-aviso">
-        <b>⚠️ Confidencialidade:</b> Documento de uso interno. Os dados aqui contidos estão protegidos pela LGPD (Lei 13.709/2018) e devem ser tratados com sigilo.
+      <div class="secao-titulo">3. DADOS PROFISSIONAIS E REMUNERAÇÃO</div>
+      <div class="secao">
+        <table class="dados">
+          <tr>
+            <td class="label">Cargo / Função</td><td class="valor destaque">${v(t.cargo)}</td>
+            <td class="label">Obra Atual</td><td class="valor">${ehIndireto ? "Escritório (Indireto)" : (obra?.nome || "—")}</td>
+          </tr>
+          <tr>
+            <td class="label">Data Admissão</td><td class="valor">${fmtData(t.admissao || t.inicio)}</td>
+            <td class="label">CTPS / PIS</td><td class="valor">${v(t.ctps || t.pis)}</td>
+          </tr>
+          <tr>
+            <td class="label">Tipo de Folha</td><td class="valor"><b>${tipoFolhaLabel}</b></td>
+            <td class="label">Forma de Cálculo</td><td class="valor">${formaCalcLabel}</td>
+          </tr>
+          <tr>
+            <td class="label">Remuneração</td><td class="valor destaque" colspan="3">${remuneracao}</td>
+          </tr>
+        </table>
       </div>
 
-      <div class="assinatura-area">
-        <div class="ass">
-          <div style="height:40px;"></div>
+      <div class="secao-titulo">4. SAÚDE E SEGURANÇA — ASO</div>
+      <div class="secao">
+        <table class="dados">
+          <tr>
+            <td class="label">Data do ASO</td><td class="valor">${fmtData(t.asoData)}</td>
+            <td class="label">Validade ASO</td><td class="valor destaque">${fmtData(t.asoValidade)}</td>
+          </tr>
+          <tr>
+            <td class="label">Status</td><td class="valor"><b>${v(t.asoStatus) || "Apto"}</b></td>
+            <td class="label">Convênio Saúde</td><td class="valor">${v(t.convenio)}</td>
+          </tr>
+          <tr>
+            <td class="label">Alergias / Condições</td>
+            <td class="valor" colspan="3">${v(t.condicoesMedicas)}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="secao-titulo">5. UNIFORMES E EPI</div>
+      <div class="secao">
+        <table class="dados">
+          <tr>
+            <td class="label">Camisa</td><td class="valor">${v(t.tamCamisa)}</td>
+            <td class="label">Calça</td><td class="valor">${v(t.tamCalca)}</td>
+            <td class="label">Bota</td><td class="valor">${v(t.tamBota)}</td>
+            <td class="label">Capacete</td><td class="valor">${v(t.tamCapacete)}</td>
+          </tr>
+          <tr>
+            <td class="label">EPI Entregue</td>
+            <td class="valor" colspan="7">${t.epiEntregue ? "✓ Sim — em " + fmtData(t.epiData) : "✗ Não entregue"}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="secao-titulo">6. CONTATO DE EMERGÊNCIA</div>
+      <div class="secao">
+        <table class="dados">
+          <tr>
+            <td class="label">Nome</td><td class="valor">${v(t.emergenciaNome)}</td>
+            <td class="label">Parentesco</td><td class="valor">${v(t.emergenciaParentesco)}</td>
+            <td class="label">Telefone</td><td class="valor">${fmtTel(t.emergenciaTel)}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="secao-titulo">7. DADOS BANCÁRIOS</div>
+      <div class="secao">
+        <table class="dados">
+          <tr>
+            <td class="label">Banco</td><td class="valor">${v(t.banco)}</td>
+            <td class="label">Agência</td><td class="valor">${v(t.agencia)}</td>
+            <td class="label">Conta</td><td class="valor">${v(t.conta)} ${v(t.tipoConta) !== "—" ? "(" + t.tipoConta + ")" : ""}</td>
+          </tr>
+          <tr>
+            <td class="label">Chave PIX</td>
+            <td class="valor" colspan="5">${v(t.pix)}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="lgpd-alerta">
+        <b>⚠️ Confidencialidade — LGPD:</b> Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados (Lei 13.709/2018). Uso restrito à empresa emissora. Não pode ser compartilhado sem autorização do titular.
+      </div>
+
+      <div class="assinaturas">
+        <div class="ass-bloco">
           <div class="linha-ass">Assinatura do Colaborador</div>
-          <div style="font-size:8pt;color:#888;">${t.nome}<br>CPF: ${fmtCPF(t.cpf) || "—"}</div>
+          <div class="nome-ass">${v(t.nome)}<br>CPF: ${fmtCPF(t.cpf)}</div>
         </div>
-        <div class="ass">
-          <div style="height:40px;"></div>
-          <div class="linha-ass">Assinatura do Responsável</div>
-          <div style="font-size:8pt;color:#888;">${empresa.responsavel || "Kleber Vieira Martins"}<br>${empresa.razaoSocial?.split(",")[0] || "KM Consultoria"}</div>
+        <div class="ass-bloco">
+          <div class="linha-ass">Responsável pela Empresa</div>
+          <div class="nome-ass">${v(empresa.responsavel) || "Eng. Kleber Vieira Martins"}<br>CREA-ES</div>
         </div>
       </div>
 
-      <div style="margin-top:14px;text-align:center;font-size:9pt;color:#444;">
-        Local e Data: __________________________________________________ , _____ / _____ / __________
+      <div style="text-align:right;margin-top:6px;font-size:8pt;color:#444;">
+        Local e Data: _______________________________________ , _____ / _____ / _________
       </div>
 
-      <div class="footer-doc">
-        <b>${empresa.razaoSocial || "KM Consultoria"}</b> — Ficha Cadastral gerada pelo Sistema KMZERO em ${new Date().toLocaleString("pt-BR")}<br>
-        ID interno: #${String(t.id).padStart(4, "0")} • Documento para arquivo físico (gaveteiro)
+      <div class="rodape-doc">
+        <span><b>${v(empresa.razaoSocial)?.split(",")[0] || "KM Consultoria"}</b> · Matrícula #${idTrab}</span>
+        <span>Documento emitido pelo KMZERO em ${dataEmissao}</span>
       </div>
+
+      <!-- ════════ PÁGINA 2 — CRACHÁ A4 ════════ -->
+      <div class="page-break cracha-page">
+        <div class="cracha-titulo-pg">
+          <h1>CARTEIRA DE IDENTIFICAÇÃO</h1>
+          <div class="sub">RECORTE E PLASTIFIQUE PARA USO EM OBRA</div>
+        </div>
+
+        <div class="cracha-grid">
+          <!-- 2 crachás iguais para arquivar 1 e usar 1 -->
+          ${[1, 2].map(() => `
+            <div class="cracha">
+              <div class="cracha-header">
+                <div class="cracha-logo">KM<span class="zero">ZERO</span></div>
+                <div class="cracha-tagline">GESTÃO DE OBRAS</div>
+              </div>
+              <div class="cracha-body">
+                <div class="cracha-foto">
+                  <div>FOTO<br>3x4</div>
+                </div>
+                <div class="cracha-info">
+                  <div class="cracha-nome">${v(t.nome).substring(0, 28)}</div>
+                  <div class="cracha-cargo">${v(t.cargo)?.toUpperCase()}</div>
+                  <div class="cracha-detalhe">
+                    <b>CPF:</b> ${fmtCPF(t.cpf)}<br>
+                    <b>Matrícula:</b> #${idTrab}<br>
+                    <b>Admissão:</b> ${fmtData(t.admissao || t.inicio)}<br>
+                    <b>Tipo Sang.:</b> ${v(t.tipoSanguineo)}<br>
+                    <b>Emergência:</b> ${fmtTel(t.emergenciaTel)}
+                  </div>
+                </div>
+              </div>
+              <div class="cracha-footer">
+                ${v(empresa.razaoSocial)?.split(",")[0]?.toUpperCase() || "KM CONSULTORIA"} · ${v(empresa.cnpj) || "60.368.233/0001-73"}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+
+        <div class="cracha-instrucoes">
+          <b>📋 Instruções de uso:</b><br>
+          1. Recorte os crachás na linha externa.<br>
+          2. Cole uma foto 3x4 atual no espaço indicado.<br>
+          3. Plastifique (recomenda-se laminação 125 microns).<br>
+          4. Use cordão / clip da empresa.<br>
+          5. Mantenha sempre visível durante as atividades em obra.<br>
+          6. Em caso de perda, comunique ao responsável imediatamente.
+        </div>
+
+        <div class="rodape-doc" style="margin-top: 8mm;">
+          <span><b>${v(empresa.razaoSocial)?.split(",")[0] || "KM Consultoria"}</b> · Carteira #${idTrab}</span>
+          <span>Emitida em ${dataEmissao}</span>
+        </div>
+      </div>
+
     </body>
   </html>`;
 
@@ -8819,6 +9199,73 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
         <input value={form.diaria || ""} onChange={e => set("diaria", e.target.value)} type="number" placeholder="100" style={inputS} />
         <label style={labelS}>CTPS / PIS</label>
         <input value={form.ctps || ""} onChange={e => set("ctps", e.target.value)} placeholder="Carteira de Trabalho ou PIS" style={inputS} />
+
+        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>💼 Folha de Pagamento</div>
+        <div style={{ background: "#fff7e6", border: `1px solid ${GOLD}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#7c6f3a", lineHeight: 1.5 }}>
+          💡 Defina como esse trabalhador será pago. Cada um pode ter seu próprio regime (semanal, quinzenal ou mensal).
+        </div>
+        <label style={labelS}>Tipo de folha</label>
+        <select value={form.tipoFolha || "quinzenal"} onChange={e => set("tipoFolha", e.target.value)} style={selS}>
+          <option value="semanal">📅 Semanal (7 dias)</option>
+          <option value="quinzenal">📆 Quinzenal (15 dias) — padrão</option>
+          <option value="mensal">🗓️ Mensal (30 dias)</option>
+          <option value="personalizado">⚙️ Personalizado (cliente define)</option>
+        </select>
+        {form.tipoFolha === "semanal" && (
+          <>
+            <label style={labelS}>Dia de pagamento da semana</label>
+            <select value={form.diaPagamento || "Sexta-feira"} onChange={e => set("diaPagamento", e.target.value)} style={selS}>
+              <option>Segunda-feira</option>
+              <option>Terça-feira</option>
+              <option>Quarta-feira</option>
+              <option>Quinta-feira</option>
+              <option>Sexta-feira</option>
+              <option>Sábado</option>
+              <option>Domingo</option>
+            </select>
+          </>
+        )}
+        {form.tipoFolha === "quinzenal" && (
+          <>
+            <label style={labelS}>Dias de fechamento da quinzena</label>
+            <select value={form.diaFechamento || "1_15"} onChange={e => set("diaFechamento", e.target.value)} style={selS}>
+              <option value="1_15">Dia 1 ao 15 | Dia 16 ao último</option>
+              <option value="3_17">Dia 3 ao 17 | Dia 18 ao 2 (mês seguinte)</option>
+              <option value="5_20">Dia 5 ao 20 | Dia 21 ao 4 (mês seguinte)</option>
+              <option value="custom">Personalizado (defino na folha)</option>
+            </select>
+          </>
+        )}
+        {form.tipoFolha === "mensal" && (
+          <>
+            <label style={labelS}>Dia de pagamento do mês</label>
+            <input value={form.diaPagamentoMes || "5"} onChange={e => set("diaPagamentoMes", e.target.value)} type="number" min="1" max="31" placeholder="Ex: 5 (todo dia 5)" style={inputS} />
+            <label style={labelS}>Início do período de cálculo</label>
+            <select value={form.inicioMes || "1"} onChange={e => set("inicioMes", e.target.value)} style={selS}>
+              <option value="1">Dia 1 ao último dia do mês</option>
+              <option value="21_anterior">Dia 21 do mês anterior ao 20 do mês</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </>
+        )}
+        {form.tipoFolha === "personalizado" && (
+          <div style={{ background: "#eff6ff", border: `1px solid ${BLUE}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#1e3a8a", lineHeight: 1.5 }}>
+            ℹ️ O período da folha será definido manualmente cada vez que você gerar a folha desse trabalhador.
+          </div>
+        )}
+        <label style={labelS}>Forma de cálculo do dia</label>
+        <select value={form.formaCalculo || "diaria"} onChange={e => set("formaCalculo", e.target.value)} style={selS}>
+          <option value="diaria">Por diária (R$ × dias trabalhados)</option>
+          <option value="mensal_fixo">Salário mensal fixo (sem variação)</option>
+          <option value="hora">Por hora trabalhada (em breve)</option>
+          <option value="producao">Por produção / empreitada (em breve)</option>
+        </select>
+        {form.formaCalculo === "mensal_fixo" && (
+          <>
+            <label style={labelS}>Salário mensal fixo (R$)</label>
+            <input value={form.salarioFixo || ""} onChange={e => set("salarioFixo", e.target.value)} type="number" placeholder="Ex: 3000" style={inputS} />
+          </>
+        )}
 
         <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🏥 Saúde / ASO</div>
         <label style={labelS}>Data do exame</label>
@@ -13368,22 +13815,113 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
   const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
 
   const calcular = (t) => {
+    // Determina tipo de folha do trabalhador (padrão: quinzenal antigo)
+    const tipoFolha = t.tipoFolha || "quinzenal";
+    const formaCalculo = t.formaCalculo || "diaria";
+
+    // ────── DETERMINAR PERÍODO BASEADO NO TIPO ──────
+    let diaInicio, diaFim, mesInicio = mes, mesFim = mes, anoInicio = ano, anoFim = ano;
+    let descricaoPeriodo = "";
+
+    if (tipoFolha === "semanal") {
+      // SEMANAL: 7 dias até o dia selecionado da quinzena (referência)
+      // Para simplificar, usamos o dia15 ou dia30 como referência da semana
+      const diaRef = quinzena === 1 ? 7 : 21;
+      diaFim = diaRef;
+      diaInicio = diaRef - 6;
+      if (diaInicio < 1) {
+        // Volta para mês anterior
+        const mesAnt = new Date(ano, mes - 1, 0);
+        diaInicio = mesAnt.getDate() + diaInicio;
+        mesInicio = mes - 1;
+        if (mesInicio < 0) { mesInicio = 11; anoInicio = ano - 1; }
+      }
+      descricaoPeriodo = "Semanal";
+    } else if (tipoFolha === "mensal") {
+      // MENSAL: mês completo (ignora quinzena)
+      diaInicio = 1;
+      diaFim = ultimoDia;
+      descricaoPeriodo = "Mensal";
+    } else if (tipoFolha === "personalizado") {
+      // PERSONALIZADO: por enquanto, usa quinzena selecionada (próxima onda implementa picker)
+      diaInicio = dia1;
+      diaFim = dia2;
+      descricaoPeriodo = "Personalizado (quinzena padrão)";
+    } else {
+      // QUINZENAL: respeita diaFechamento se configurado
+      const diaFechamento = t.diaFechamento || "1_15";
+      if (diaFechamento === "1_15") {
+        diaInicio = dia1; diaFim = dia2;
+      } else if (diaFechamento === "3_17") {
+        diaInicio = quinzena === 1 ? 3 : 18;
+        diaFim = quinzena === 1 ? 17 : 2;
+        if (quinzena === 2) { mesFim = mes + 1; if (mesFim > 11) { mesFim = 0; anoFim = ano + 1; } }
+      } else if (diaFechamento === "5_20") {
+        diaInicio = quinzena === 1 ? 5 : 21;
+        diaFim = quinzena === 1 ? 20 : 4;
+        if (quinzena === 2) { mesFim = mes + 1; if (mesFim > 11) { mesFim = 0; anoFim = ano + 1; } }
+      } else {
+        diaInicio = dia1; diaFim = dia2;
+      }
+      descricaoPeriodo = "Quinzenal";
+    }
+
+    // ────── CONTAR PRESENÇAS NO PERÍODO ──────
     let presentes = 0, faltas = 0, atestados = 0;
-    for (let d = dia1; d <= dia2; d++) {
-      const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    let diasTotaisPeriodo = 0;
+    const contarDia = (d, mAtual, aAtual) => {
+      const iso = `${aAtual}-${String(mAtual + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const s = (historico[iso] || {})[t.id];
+      diasTotaisPeriodo++;
       if (s === "Presente") presentes++;
       else if (s === "Falta") faltas++;
       else if (s === "Atestado") atestados++;
-    }
-    // CÁLCULO POR DIÁRIA: valor diária × dias presentes (atestados também pagos)
-    const diaria = parseFloat(t.diaria) || 0;
-    const diasPagos = presentes + atestados; // atestado paga, falta não
-    const bruto = diaria * diasPagos;
+    };
 
-    // Adiantamentos do mês — descontados apenas na 2ª quinzena
+    if (mesInicio === mesFim && anoInicio === anoFim) {
+      // Período num único mês
+      for (let d = diaInicio; d <= diaFim; d++) contarDia(d, mesInicio, anoInicio);
+    } else {
+      // Período atravessa dois meses (ex: dia 18 a dia 2 do mês seguinte)
+      const ultDiaPrimeiroMes = new Date(anoInicio, mesInicio + 1, 0).getDate();
+      for (let d = diaInicio; d <= ultDiaPrimeiroMes; d++) contarDia(d, mesInicio, anoInicio);
+      for (let d = 1; d <= diaFim; d++) contarDia(d, mesFim, anoFim);
+    }
+
+    // ────── CÁLCULO DO VALOR BRUTO ──────
+    const diaria = parseFloat(t.diaria) || 0;
+    const salarioFixo = parseFloat(t.salarioFixo) || 0;
+    const diasPagos = presentes + atestados;
+    let bruto = 0;
+
+    if (formaCalculo === "mensal_fixo" && salarioFixo > 0) {
+      // SALÁRIO MENSAL FIXO: paga proporcional ao número de dias trabalhados / dias úteis do período
+      if (tipoFolha === "mensal") {
+        // Folha mensal cheia: paga salário inteiro se trabalhou (descontando faltas proporcional)
+        const diaUtilMes = ultimoDia;
+        if (faltas === 0) bruto = salarioFixo;
+        else bruto = salarioFixo - (salarioFixo / diaUtilMes) * faltas;
+      } else {
+        // Outras periodicidades com mensal_fixo: divide o salário pelos dias do período
+        const proporcao = diasTotaisPeriodo / 30;
+        const salarioPeriodo = salarioFixo * proporcao;
+        if (faltas === 0) bruto = salarioPeriodo;
+        else bruto = salarioPeriodo - (salarioPeriodo / diasTotaisPeriodo) * faltas;
+      }
+      if (bruto < 0) bruto = 0;
+    } else {
+      // CÁLCULO POR DIÁRIA (padrão): valor diária × dias pagos
+      bruto = diaria * diasPagos;
+    }
+
+    // ────── ADIANTAMENTOS DO MÊS ──────
+    // Desconta na 2ª quinzena (quinzenal/semanal) ou no fechamento (mensal)
     let adiantDesconto = 0;
-    if (quinzena === 2 && adiantamentos) {
+    const aplicarDesconto = (tipoFolha === "quinzenal" && quinzena === 2) ||
+                            (tipoFolha === "mensal") ||
+                            (tipoFolha === "semanal" && quinzena === 2) ||
+                            (tipoFolha === "personalizado" && quinzena === 2);
+    if (aplicarDesconto && adiantamentos) {
       adiantDesconto = adiantamentos
         .filter(a => a.trabId === t.id)
         .filter(a => {
@@ -13396,7 +13934,12 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     }
 
     const liquido = bruto - adiantDesconto;
-    return { presentes, faltas, atestados, diaria, diasPagos, bruto, adiantDesconto, liquido };
+    return {
+      presentes, faltas, atestados, diaria, salarioFixo,
+      diasPagos, diasTotaisPeriodo, bruto, adiantDesconto, liquido,
+      tipoFolha, descricaoPeriodo, formaCalculo,
+      diaInicio, diaFim, mesInicio, mesFim, anoInicio, anoFim,
+    };
   };
 
   const totalFolha = trabFiltro.reduce((s, t) => s + calcular(t).liquido, 0);
@@ -13531,7 +14074,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title="Folha Quinzenal" sub={`${quinzena}ª quinzena — ${meses[mes]}/${ano}`} onBack={onBack} />
+      <KMHeader title="Folha de Pagamento" sub={`${quinzena}ª quinzena — ${meses[mes]}/${ano} · Multi-regime`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <select value={mes} onChange={e => setMes(parseInt(e.target.value))} style={{ ...selS, flex: 2, marginBottom: 0 }}>
@@ -13574,14 +14117,22 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           {trabComMov.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "#aaa", fontSize: 13 }}>Sem dias trabalhados nesta quinzena.</div>}
           {trabComMov.map(t => {
             const c = calcular(t);
+            // Badge de tipo de folha
+            const badgeCores = { semanal: "#0891b2", quinzenal: "#16a34a", mensal: "#7c3aed", personalizado: "#e87722" };
+            const badgeLabels = { semanal: "SEM", quinzenal: "QUI", mensal: "MEN", personalizado: "PER" };
+            const badgeCor = badgeCores[c.tipoFolha] || "#16a34a";
+            const badgeLabel = badgeLabels[c.tipoFolha] || "QUI";
             return (
               <div key={t.id} style={{ padding: "8px 12px", borderBottom: "1px solid #f0f0f0", display: "grid", gridTemplateColumns: "1fr 40px 70px 80px", gap: 6, alignItems: "center", fontSize: 12 }}>
                 <div>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 12 }}>{t.nome}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{t.cargo}{c.adiantDesconto > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> • Vale R$ {c.adiantDesconto.toFixed(2)}</span>}</div>
+                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ background: badgeCor, color: "#fff", fontSize: 8, fontWeight: 900, padding: "2px 5px", borderRadius: 3, letterSpacing: 0.5 }} title={c.tipoFolha}>{badgeLabel}</span>
+                    <span>{t.nome}</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#888" }}>{t.cargo}{c.adiantDesconto > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> • Vale R$ {c.adiantDesconto.toFixed(2)}</span>}{c.formaCalculo === "mensal_fixo" && <span style={{ color: "#7c3aed", fontWeight: 700 }}> • Mensal fixo</span>}</div>
                 </div>
                 <div style={{ textAlign: "center", fontWeight: 800, color: NAVY }}>{c.diasPagos}</div>
-                <div style={{ textAlign: "right", color: "#666", fontSize: 11 }}>R$ {c.diaria.toFixed(2)}</div>
+                <div style={{ textAlign: "right", color: "#666", fontSize: 11 }}>R$ {c.formaCalculo === "mensal_fixo" ? (c.salarioFixo / 30).toFixed(2) : c.diaria.toFixed(2)}</div>
                 <div style={{ textAlign: "right", fontWeight: 800, color: GREEN, fontSize: 13 }}>R$ {c.liquido.toFixed(2)}</div>
               </div>
             );
@@ -13589,7 +14140,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         </div>
 
         <div style={{ background: "#f0f7ff", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#0c4a6e", marginBottom: 8 }}>
-          💡 <b>Cálculo:</b> Diária × Dias Pagos (presenças + atestados). Faltas não pagam. Adiantamentos são descontados na 2ª quinzena.
+          💡 <b>Cálculo flexível:</b> agora cada trabalhador é calculado conforme seu tipo de folha (semanal, quinzenal, mensal ou personalizado). Os badges <span style={{ background: "#0891b2", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>SEM</span> <span style={{ background: "#16a34a", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>QUI</span> <span style={{ background: "#7c3aed", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>MEN</span> <span style={{ background: "#e87722", color: "#fff", padding: "1px 4px", borderRadius: 2, fontSize: 9, fontWeight: 800 }}>PER</span> mostram o regime de cada um.
         </div>
 
         <Btn label="📄 EXPORTAR FOLHA EM PDF" color={GOLD} onClick={exportarPDF} />
