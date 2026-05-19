@@ -6242,7 +6242,7 @@ function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, me
       cor: BLUE,
       desc: "Equipe, folha e gestão de pessoas",
       itens: [
-        { icon: "💰", l: "Folha Quinzenal", nav: "folha_quinzenal", c: "#15803d" },
+        { icon: "💰", l: "Folha de Pagamento", nav: "folha_quinzenal", c: "#15803d" },
         { icon: "📋", l: "Histórico Folhas", nav: "hist_folha",      c: "#059669" },
         { icon: "💸", l: "Adiantamentos",   nav: "adiantamentos",   c: "#ea580c" },
         { icon: "🔄", l: "Movimentações",   nav: "aprovar_mov",     c: movPendentes > 0 ? RED : "#0e7490", badge: movPendentes },
@@ -6342,7 +6342,7 @@ function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, me
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
           {[
             { icon: "📄", l: "RDO ABNT",       nav: "rdo",           c: GOLD },
-            { icon: "💰", l: "Folha Quinzenal", nav: "folha_quinzenal", c: "#15803d" },
+            { icon: "💰", l: "Folha de Pagamento", nav: "folha_quinzenal", c: "#15803d" },
             { icon: "📋", l: "Cadastrar Ficha", nav: "ficha",         c: ORANGE },
             { icon: "🚨", l: "Alertas",         nav: "alertas",       c: totalAlertas > 0 ? RED : "#9ca3af", badge: totalAlertas },
           ].map(b => (
@@ -13069,7 +13069,7 @@ function TelaAjuda({ empresa, onBack }) {
     {
       id: "como_folha",
       pergunta: "Como gero a folha quinzenal de pagamento?",
-      resposta: "Em Recursos Humanos → Folha Quinzenal, selecione o período. O aplicativo calcula automaticamente os dias trabalhados, horas extras, descontos de adiantamentos e o valor líquido a pagar. Você pode exportar a folha em PDF para arquivo ou envio aos trabalhadores.",
+      resposta: "Em Recursos Humanos → Folha de Pagamento, selecione o período. O aplicativo calcula automaticamente os dias trabalhados, horas extras, descontos de adiantamentos e o valor líquido a pagar. Você pode exportar a folha em PDF para arquivo ou envio aos trabalhadores.",
     },
     {
       id: "esqueci_senha",
@@ -14033,7 +14033,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
 
   const exportarPDF = () => {
     const periodo = `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
-    const html = `<html><head><title>Folha Quinzenal — ${meses[mes]}/${ano} (${quinzena}ª)</title>
+    const html = `<html><head><title>Folha de Pagamento — ${meses[mes]}/${ano} (${quinzena}ª)</title>
       <style>
         ${KM_PDF_PAGE_CSS}
         @page { size: A4 landscape; margin: 10mm; }
@@ -15859,7 +15859,7 @@ function TelaHistFolha({ obras, trabalhadores, folhasSalvas, onBack, onRemover }
         {lista.length === 0 && (
           <div style={{ background: "#fff", borderRadius: 12, padding: 30, textAlign: "center", color: "#aaa" }}>
             📋 Nenhuma folha salva ainda.<br/>
-            <span style={{ fontSize: 11 }}>Use o botão "Salvar Folha" na tela de Folha Quinzenal.</span>
+            <span style={{ fontSize: 11 }}>Use o botão "Salvar Folha" na tela de Folha de Pagamento.</span>
           </div>
         )}
 
@@ -15908,7 +15908,7 @@ function TelaDiagnostico({ onNav, onBack }) {
       { nav: "alertas", l: "Alertas" },
     ]},
     { grupo: "👥 Recursos Humanos", itens: [
-      { nav: "folha_quinzenal", l: "Folha Quinzenal" },
+      { nav: "folha_quinzenal", l: "Folha de Pagamento" },
       { nav: "hist_folha", l: "Histórico de Folhas" },
       { nav: "adiantamentos", l: "Adiantamentos" },
       { nav: "aprovar_mov", l: "Movimentações" },
