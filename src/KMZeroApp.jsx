@@ -6746,6 +6746,82 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
           <option>Edificação</option><option>Pavimentação</option><option>Drenagem</option><option>Reforma</option><option>Outra</option>
         </select>
 
+        {/* ════ CONTRATO DA OBRA ════ */}
+        <div style={{ background: "#fff7e6", border: `1px solid ${GOLD}30`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "#8a6d1a", letterSpacing: 1, marginBottom: 8 }}>📋 CONTRATO DA OBRA</div>
+
+          <label style={labelS}>Cliente / Contratante</label>
+          <input
+            value={form.cliente || ""}
+            onChange={e => set("cliente", e.target.value)}
+            placeholder="Nome do cliente ou empresa contratante"
+            style={inputS}
+          />
+
+          <label style={labelS}>CNPJ / CPF do contratante (opcional)</label>
+          <input
+            value={form.clienteDoc || ""}
+            onChange={e => set("clienteDoc", e.target.value)}
+            placeholder="00.000.000/0000-00 ou 000.000.000-00"
+            style={inputS}
+          />
+
+          <label style={labelS}>💰 Valor do Contrato (R$)</label>
+          <input
+            value={form.valorContrato || ""}
+            onChange={e => set("valorContrato", e.target.value)}
+            type="number"
+            step="0.01"
+            placeholder="Ex: 250000.00"
+            style={inputS}
+          />
+          {form.valorContrato && parseFloat(form.valorContrato) > 0 && (
+            <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 700, marginTop: -8, marginBottom: 12 }}>
+              ✓ R$ {parseFloat(form.valorContrato).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <label style={labelS}>📅 Data início</label>
+              <input
+                type="date"
+                value={form.dataInicioContrato || ""}
+                onChange={e => set("dataInicioContrato", e.target.value)}
+                style={inputS}
+              />
+            </div>
+            <div>
+              <label style={labelS}>📅 Prazo final</label>
+              <input
+                type="date"
+                value={form.dataFimContrato || ""}
+                onChange={e => set("dataFimContrato", e.target.value)}
+                style={inputS}
+              />
+            </div>
+          </div>
+
+          <label style={labelS}>Forma de Pagamento</label>
+          <select value={form.formaPagContrato || "À vista"} onChange={e => set("formaPagContrato", e.target.value)} style={selS}>
+            <option>À vista</option>
+            <option>Parcelado em medições</option>
+            <option>Empreitada total</option>
+            <option>Por etapas</option>
+            <option>Mensal</option>
+            <option>Outra</option>
+          </select>
+
+          <label style={labelS}>Observações do contrato (opcional)</label>
+          <textarea
+            value={form.obsContrato || ""}
+            onChange={e => set("obsContrato", e.target.value)}
+            rows={2}
+            placeholder="Cláusulas especiais, garantias, multas, retenções..."
+            style={{ ...inputS, fontFamily: "inherit", resize: "none" }}
+          />
+        </div>
+
         <label style={labelS}>Status</label>
         <select value={form.status} onChange={e => set("status", e.target.value)} style={selS}>
           <option>Ativa</option><option>Pausada</option><option>Concluída</option>
@@ -6849,6 +6925,54 @@ function TelaObraDetalhe({ obra, trabalhadores, ativos, equips, ferramentas, ped
             </>
           )}
         </div>
+
+        {/* CARD CONTRATO (só aparece se tem valor cadastrado) */}
+        {obra.valorContrato && parseFloat(obra.valorContrato) > 0 && (
+          <div style={{
+            background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`,
+            borderRadius: 14, padding: 14, marginBottom: 12,
+            color: "#fff", boxShadow: "0 4px 14px rgba(15,33,81,0.3)",
+            border: `2px solid ${GOLD}`,
+          }}>
+            <div style={{ fontSize: 10, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 800, marginBottom: 4 }}>📋 CONTRATO DA OBRA</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", marginBottom: 6 }}>
+              R$ {parseFloat(obra.valorContrato).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </div>
+            {obra.cliente && (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginBottom: 6 }}>
+                👤 <b>{obra.cliente}</b>{obra.clienteDoc && <span style={{ opacity: 0.7 }}> · {obra.clienteDoc}</span>}
+              </div>
+            )}
+            {(obra.dataInicioContrato || obra.dataFimContrato) && (
+              <div style={{ display: "flex", gap: 10, fontSize: 11, color: "rgba(255,255,255,0.85)", marginBottom: 4 }}>
+                {obra.dataInicioContrato && <span>📅 Início: <b>{new Date(obra.dataInicioContrato + "T12:00:00").toLocaleDateString("pt-BR")}</b></span>}
+                {obra.dataFimContrato && <span>🏁 Prazo: <b>{new Date(obra.dataFimContrato + "T12:00:00").toLocaleDateString("pt-BR")}</b></span>}
+              </div>
+            )}
+            {/* Margem estimada (Valor contrato - custo do mês × meses estimados) */}
+            {(() => {
+              const valor = parseFloat(obra.valorContrato);
+              if (custoTotalMes > 0 && obra.dataInicioContrato && obra.dataFimContrato) {
+                const ini = new Date(obra.dataInicioContrato + "T12:00:00");
+                const fim = new Date(obra.dataFimContrato + "T12:00:00");
+                const mesesObra = Math.max(1, Math.round((fim - ini) / (1000 * 60 * 60 * 24 * 30)));
+                const custoTotalProjetado = custoTotalMes * mesesObra;
+                const margem = valor - custoTotalProjetado;
+                const margemPct = (margem / valor) * 100;
+                return (
+                  <div style={{ marginTop: 8, background: "rgba(0,0,0,0.2)", padding: "6px 10px", borderRadius: 8, fontSize: 11 }}>
+                    💼 Margem estimada: <b style={{ color: margem > 0 ? "#10b981" : "#ef4444" }}>R$ {margem.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</b> ({margemPct.toFixed(1)}%)
+                    <div style={{ fontSize: 9, opacity: 0.7, marginTop: 2 }}>Estimativa baseada no custo do mês × {mesesObra} mês(es) de obra</div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            {obra.formaPagContrato && (
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", marginTop: 6 }}>💳 Pagamento: {obra.formaPagContrato}</div>
+            )}
+          </div>
+        )}
 
         {/* RESUMO FINANCEIRO DO MÊS */}
         <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
@@ -7871,11 +7995,60 @@ function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, onNegar,
   );
 }
 
-function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar, onNegar, onRemover }) {
+function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar, onNegar, onRemover, onCriar, usuario, fornecedores = [] }) {
   const [filtro, setFiltro] = useState("todos");
   const [pedidoEdit, setPedidoEdit] = useState(null);
   const [formaPag, setFormaPag] = useState("");
   const [prazo, setPrazo] = useState("");
+
+  // ════ NOVO PEDIDO PELO GESTOR ════
+  const [modalNovo, setModalNovo] = useState(false);
+  const [novoObraId, setNovoObraId] = useState(obras[0]?.id || "");
+  const [novoFornecedorId, setNovoFornecedorId] = useState("");
+  const [novoItens, setNovoItens] = useState([{ material: "", qtd: "1", unidade: "un" }]);
+  const [novoObs, setNovoObs] = useState("");
+  const [novoPrioridade, setNovoPrioridade] = useState("Normal");
+
+  const abrirNovoPedido = () => {
+    setNovoObraId(obras[0]?.id || "");
+    setNovoFornecedorId("");
+    setNovoItens([{ material: "", qtd: "1", unidade: "un" }]);
+    setNovoObs("");
+    setNovoPrioridade("Normal");
+    setModalNovo(true);
+  };
+
+  const addItemNovo = () => setNovoItens([...novoItens, { material: "", qtd: "1", unidade: "un" }]);
+  const removerItemNovo = (i) => setNovoItens(novoItens.filter((_, idx) => idx !== i));
+  const updateItemNovo = (i, campo, valor) => {
+    setNovoItens(novoItens.map((it, idx) => idx === i ? { ...it, [campo]: valor } : it));
+  };
+
+  const salvarNovoPedido = () => {
+    if (!novoObraId) { alert("Selecione uma obra."); return; }
+    const itensValidos = novoItens.filter(i => i.material && i.material.trim());
+    if (itensValidos.length === 0) { alert("Adicione pelo menos um item com nome."); return; }
+    const fornecedor = fornecedores.find(f => f.id === parseInt(novoFornecedorId));
+    const obraSelecionada = obras.find(o => o.id === parseInt(novoObraId));
+    const novoPedido = {
+      id: Date.now(),
+      obraId: parseInt(novoObraId),
+      obraNome: obraSelecionada?.nome || "",
+      itens: itensValidos,
+      material: itensValidos[0].material, // compatibilidade legado
+      qtd: itensValidos[0].qtd,
+      fornecedorId: fornecedor ? fornecedor.id : null,
+      fornecedorNome: fornecedor ? fornecedor.nome : "",
+      observacaoGeral: novoObs,
+      prioridade: novoPrioridade,
+      status: "Aguardando",
+      data: new Date().toLocaleString("pt-BR"),
+      criadoPor: usuario?.nome || "Gestor",
+      criadoPorTipo: "Gestor",
+    };
+    if (onCriar) onCriar(novoPedido);
+    setModalNovo(false);
+  };
 
   const filtrados = filtro === "todos" ? pedidos : pedidos.filter(p => p.status === filtro);
 
@@ -7930,8 +8103,21 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
 
         <button onClick={() => setFiltro("todos")} style={{
           width: "100%", padding: 8, background: filtro === "todos" ? NAVY : "#fff", color: filtro === "todos" ? "#fff" : NAVY,
-          border: `1.5px solid ${NAVY}`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 11, marginBottom: 12
+          border: `1.5px solid ${NAVY}`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 11, marginBottom: 8
         }}>📋 Ver todos ({total})</button>
+
+        {/* BOTÃO NOVO PEDIDO (gestor) */}
+        {onCriar && (
+          <button onClick={abrirNovoPedido} style={{
+            width: "100%", padding: 12, marginBottom: 12,
+            background: `linear-gradient(135deg, ${GOLD}, #d99517)`,
+            color: "#fff", border: "none", borderRadius: 10,
+            fontWeight: 800, fontSize: 13, cursor: "pointer",
+            boxShadow: `0 4px 12px ${GOLD}40`,
+          }}>
+            ➕ NOVO PEDIDO DE COMPRA
+          </button>
+        )}
 
         {filtrados.length === 0 ? (
           <EmptyState
@@ -8045,6 +8231,95 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
             </>
           );
         })()}
+      </Modal>
+
+      {/* MODAL: NOVO PEDIDO PELO GESTOR */}
+      <Modal show={modalNovo} title="➕ Novo Pedido de Compra" onClose={() => setModalNovo(false)}>
+        <div style={{ background: "#fff7e6", borderRadius: 8, padding: "8px 10px", marginBottom: 12, fontSize: 11, color: "#8a6d1a", lineHeight: 1.4 }}>
+          💡 Pedido criado pelo gestor já entra como <b>Aguardando aprovação</b>. Você pode aprovar em seguida na lista.
+        </div>
+
+        <label style={labelS}>🏗️ Obra</label>
+        <select value={novoObraId} onChange={e => setNovoObraId(e.target.value)} style={selS}>
+          <option value="">Selecione a obra...</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+        </select>
+
+        {fornecedores.length > 0 && (
+          <>
+            <label style={labelS}>🏪 Fornecedor (opcional)</label>
+            <select value={novoFornecedorId} onChange={e => setNovoFornecedorId(e.target.value)} style={selS}>
+              <option value="">Não definir fornecedor agora</option>
+              {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+            </select>
+          </>
+        )}
+
+        <label style={labelS}>🚨 Prioridade</label>
+        <select value={novoPrioridade} onChange={e => setNovoPrioridade(e.target.value)} style={selS}>
+          <option>Baixa</option>
+          <option>Normal</option>
+          <option>Alta</option>
+          <option>Urgente</option>
+        </select>
+
+        <label style={labelS}>📦 Itens do Pedido</label>
+        {novoItens.map((item, i) => (
+          <div key={i} style={{ background: "#f9fafb", borderRadius: 8, padding: 8, marginBottom: 6, border: "1px solid #e5e7eb" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>Item {i + 1}</span>
+              {novoItens.length > 1 && (
+                <button onClick={() => removerItemNovo(i)} style={{ background: "none", border: "none", color: RED, cursor: "pointer", fontSize: 14 }}>🗑️</button>
+              )}
+            </div>
+            <input
+              value={item.material}
+              onChange={e => updateItemNovo(i, "material", e.target.value)}
+              placeholder="Ex: Cimento CP-II"
+              style={{ ...inputS, fontSize: 13, marginBottom: 4 }}
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <input
+                value={item.qtd}
+                onChange={e => updateItemNovo(i, "qtd", e.target.value)}
+                type="number"
+                placeholder="Qtd"
+                style={{ ...inputS, fontSize: 13, marginBottom: 0 }}
+              />
+              <select
+                value={item.unidade}
+                onChange={e => updateItemNovo(i, "unidade", e.target.value)}
+                style={{ ...selS, fontSize: 12, marginBottom: 0 }}
+              >
+                <option value="un">un</option>
+                <option value="kg">kg</option>
+                <option value="m">m</option>
+                <option value="m²">m²</option>
+                <option value="m³">m³</option>
+                <option value="L">L</option>
+                <option value="sc">sc (saco)</option>
+                <option value="pç">pç (peça)</option>
+              </select>
+            </div>
+          </div>
+        ))}
+        <button onClick={addItemNovo} style={{ width: "100%", padding: 8, marginBottom: 10, background: "#f0f7ff", color: BLUE, border: `1px dashed ${BLUE}`, borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
+          ➕ Adicionar mais um item
+        </button>
+
+        <label style={labelS}>📝 Observações</label>
+        <textarea
+          value={novoObs}
+          onChange={e => setNovoObs(e.target.value)}
+          placeholder="Detalhes adicionais, urgência específica, local de entrega..."
+          rows={2}
+          style={{ ...inputS, fontFamily: "inherit", resize: "none" }}
+        />
+
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <button onClick={() => setModalNovo(false)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: "#eee", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
+          <button onClick={salvarNovoPedido} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>📦 Criar Pedido</button>
+        </div>
       </Modal>
     </div>
   );
@@ -17151,7 +17426,7 @@ export default function App() {
       case "consolidado":return <TelaRelatorioConsolidado obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} historico={historico} onBack={voltar} />;
       case "dashboard":  return <TelaDashboard obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} historico={historico} onBack={voltar} />;
       case "alertas":    return <TelaAlertas obras={obras} trabalhadores={trabalhadores} equips={equips} pedidos={pedidos} historico={historico} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
-      case "pedidos":    return <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} onRemover={id => setPedidos(ps => ps.filter(p => p.id !== id))} />;
+      case "pedidos":    return <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} usuario={usuario} fornecedores={fornecedores} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} onRemover={id => setPedidos(ps => ps.filter(p => p.id !== id))} onCriar={p => setPedidos(ps => [p, ...ps])} />;
       case "pedido_detalhe": return pedidoSelecionado ? <TelaPedidoDetalhe pedido={pedidos.find(x => x.id === pedidoSelecionado.id) || pedidoSelecionado} obras={obras} empresa={empresa} onBack={voltar} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} onRemover={id => setPedidos(ps => ps.filter(p => p.id !== id))} onEditar={pedidoAtualizado => setPedidos(ps => ps.map(p => p.id === pedidoAtualizado.id ? pedidoAtualizado : p))} /> : <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} onRemover={id => setPedidos(ps => ps.filter(p => p.id !== id))} />;
       case "mapa":       return <TelaMapa obras={obras} trabalhadores={trabalhadores} onBack={voltar} onEditar={() => setTela("obras")} />;
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} onBack={voltar} onEditar={editarTrabalhador} />;
