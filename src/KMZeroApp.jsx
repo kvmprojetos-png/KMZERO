@@ -6661,7 +6661,14 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
       recebimentos={recebimentos}
       rdosEmitidos={rdosEmitidos}
       onBack={() => setObraSelecionada(null)}
-      onEditar={() => abrirEdit(obraSelecionada)}
+      onEditar={() => {
+        // FIX: fechar tela de detalhe ANTES de abrir o modal
+        // Antes: o modal abria mas ficava escondido atrás do detalhe
+        const obraParaEditar = obraSelecionada;
+        setObraSelecionada(null);
+        // Pequeno delay para garantir que o detalhe fechou antes do modal abrir
+        setTimeout(() => abrirEdit(obraParaEditar), 0);
+      }}
       onNav={(destino) => {
         if (destino === "anexos_obra" && onNavAnexos) {
           onNavAnexos(obraSelecionada);
@@ -6781,26 +6788,21 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <div>
-              <label style={labelS}>📅 Data início</label>
-              <input
-                type="date"
-                value={form.dataInicioContrato || ""}
-                onChange={e => set("dataInicioContrato", e.target.value)}
-                style={inputS}
-              />
-            </div>
-            <div>
-              <label style={labelS}>📅 Prazo final</label>
-              <input
-                type="date"
-                value={form.dataFimContrato || ""}
-                onChange={e => set("dataFimContrato", e.target.value)}
-                style={inputS}
-              />
-            </div>
-          </div>
+          <label style={labelS}>📅 Data de início do contrato</label>
+          <input
+            type="date"
+            value={form.dataInicioContrato || ""}
+            onChange={e => set("dataInicioContrato", e.target.value)}
+            style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+          />
+
+          <label style={labelS}>🏁 Prazo final do contrato</label>
+          <input
+            type="date"
+            value={form.dataFimContrato || ""}
+            onChange={e => set("dataFimContrato", e.target.value)}
+            style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+          />
 
           <label style={labelS}>Forma de Pagamento</label>
           <select value={form.formaPagContrato || "À vista"} onChange={e => set("formaPagContrato", e.target.value)} style={selS}>
