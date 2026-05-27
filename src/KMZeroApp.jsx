@@ -14584,32 +14584,29 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         {tipoRegime === "personalizado" && (
           <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 10, border: "1px solid #e8772230" }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: "#e87722", letterSpacing: 1, marginBottom: 6 }}>⚙️ PERÍODO PERSONALIZADO</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <div>
-                <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA INICIAL</label>
-                <input
-                  type="date"
-                  value={persInicio}
-                  onChange={e => setPersInicio(e.target.value)}
-                  style={{ ...inputS, marginBottom: 0 }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA FINAL</label>
-                <input
-                  type="date"
-                  value={persFim}
-                  onChange={e => setPersFim(e.target.value)}
-                  style={{ ...inputS, marginBottom: 0 }}
-                />
-              </div>
-            </div>
+
+            <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA INICIAL</label>
+            <input
+              type="date"
+              value={persInicio}
+              onChange={e => setPersInicio(e.target.value)}
+              style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+            />
+
+            <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA FINAL</label>
+            <input
+              type="date"
+              value={persFim}
+              onChange={e => setPersFim(e.target.value)}
+              style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+            />
+
             <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA DE PAGAMENTO</label>
             <input
               type="date"
               value={persPagamento}
               onChange={e => setPersPagamento(e.target.value)}
-              style={{ ...inputS, marginBottom: 6 }}
+              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
             />
             {persInicio && persFim ? (
               <div style={{ background: "#fff5e6", borderRadius: 6, padding: "6px 8px", fontSize: 11, color: "#9a5a1a", lineHeight: 1.4 }}>
