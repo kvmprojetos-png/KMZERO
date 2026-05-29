@@ -9532,7 +9532,21 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <label style={labelS}>Data de Admissão</label>
-        <input value={form.admissao || form.inicio || ""} onChange={e => set("admissao", e.target.value)} type="date" style={inputS} />
+        <input value={(() => {
+          // Aceita formatos: "YYYY-MM-DD" (já correto), "DD/MM/YYYY" (BR antigo) ou vazio
+          const v = form.admissao || form.inicio || "";
+          if (!v) return "";
+          if (v.includes("-") && v.length === 10) return v; // já está em YYYY-MM-DD
+          if (v.includes("/")) {
+            // Converter DD/MM/YYYY para YYYY-MM-DD
+            const partes = v.split("/");
+            if (partes.length === 3) {
+              const [d, m, a] = partes;
+              return `${a.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+            }
+          }
+          return "";
+        })()} onChange={e => set("admissao", e.target.value)} type="date" style={{ ...inputS, boxSizing: "border-box", width: "100%" }} />
         <label style={labelS}>💰 Valor da Diária (R$/dia)</label>
         <input value={form.diaria || ""} onChange={e => set("diaria", e.target.value)} type="number" placeholder="100" style={inputS} />
         <label style={labelS}>CTPS / PIS</label>
@@ -9607,9 +9621,19 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
 
         <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🏥 Saúde / ASO</div>
         <label style={labelS}>Data do exame</label>
-        <input value={form.asoData || ""} onChange={e => set("asoData", e.target.value)} type="date" style={inputS} />
+        <input value={(() => {
+          const v = form.asoData || ""; if (!v) return "";
+          if (v.includes("-") && v.length === 10) return v;
+          if (v.includes("/")) { const p = v.split("/"); if (p.length === 3) return `${p[2].padStart(4,"0")}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`; }
+          return "";
+        })()} onChange={e => set("asoData", e.target.value)} type="date" style={{ ...inputS, boxSizing: "border-box", width: "100%" }} />
         <label style={labelS}>Validade</label>
-        <input value={form.asoValidade || ""} onChange={e => set("asoValidade", e.target.value)} type="date" style={inputS} />
+        <input value={(() => {
+          const v = form.asoValidade || ""; if (!v) return "";
+          if (v.includes("-") && v.length === 10) return v;
+          if (v.includes("/")) { const p = v.split("/"); if (p.length === 3) return `${p[2].padStart(4,"0")}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`; }
+          return "";
+        })()} onChange={e => set("asoValidade", e.target.value)} type="date" style={{ ...inputS, boxSizing: "border-box", width: "100%" }} />
         <label style={labelS}>Status</label>
         <select value={form.asoStatus || "Apto"} onChange={e => set("asoStatus", e.target.value)} style={selS}>
           <option>Apto</option><option>Apto com restrições</option><option>Inapto</option>
@@ -14519,7 +14543,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={diaPagDiario}
               onChange={e => setDiaPagDiario(e.target.value)}
-              style={{ ...inputS, marginBottom: 6 }}
+              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
             />
             <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
               💡 Folha calculada apenas para esse dia específico. Use para pagar diária avulsa.
@@ -14534,7 +14558,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={diaPagSemanal}
               onChange={e => setDiaPagSemanal(e.target.value)}
-              style={{ ...inputS, marginBottom: 6 }}
+              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
             />
             <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
               💡 Calcula os 7 dias anteriores (inclusive) ao dia escolhido. Ex: pagamento toda sexta-feira.
@@ -14557,7 +14581,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
                 type="date"
                 value={quinzena === 1 ? diaPagQuinzenal1 : diaPagQuinzenal2}
                 onChange={e => quinzena === 1 ? setDiaPagQuinzenal1(e.target.value) : setDiaPagQuinzenal2(e.target.value)}
-                style={{ ...inputS, marginBottom: 6 }}
+                style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
               />
               <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
                 💡 Período calculado: {quinzena === 1 ? "dia 01 ao 15" : `dia 16 ao ${ultimoDia}`}. Data informada será exibida na folha.
@@ -14573,7 +14597,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={diaPagMensal}
               onChange={e => setDiaPagMensal(e.target.value)}
-              style={{ ...inputS, marginBottom: 6 }}
+              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
             />
             <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
               💡 Período calculado: mês inteiro ({meses[mes]}/{ano}, dia 1 ao {ultimoDia}). Data informada será exibida na folha.
