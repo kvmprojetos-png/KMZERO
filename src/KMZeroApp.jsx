@@ -14311,7 +14311,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
 
     if (formaCalculo === "mensal_fixo" && salarioFixo > 0) {
       if (tipoRegime === "mensal") {
-        const diaUtilMes = ultimoDia;
+        const diaUtilMes = 30; // CLT: divisão por 30 avos, independente dos dias do mês
         if (faltas === 0) bruto = salarioFixo;
         else bruto = salarioFixo - (salarioFixo / diaUtilMes) * faltas;
       } else {
@@ -14345,7 +14345,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         .reduce((s, a) => s + a.valor, 0);
     }
 
-    const liquido = bruto - adiantDesconto;
+    const liquido = Math.max(0, bruto - adiantDesconto); // nunca paga negativo
     return {
       presentes, faltas, atestados, feriados, diaria, salarioFixo,
       diasPagos, diasTotaisPeriodo, bruto, adiantDesconto, liquido,
@@ -17457,7 +17457,7 @@ export default function App() {
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} onBack={voltar} onEditar={editarTrabalhador} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={m => setMensagens(ms => [m, ...ms])} onMarcarLida={id => setMensagens(ms => ms.map(m => m.id === id ? { ...m, lida: true } : m))} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
-      case "folha":      return <TelaFolha obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
+      case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} />;
       case "equip_gestao":return <TelaEquipamentosGestao obras={obras} equips={equips} onBack={voltar} onAdd={eq => setEquips(es => [...es, eq])} onEditar={eq => setEquips(es => es.map(x => x.id === eq.id ? eq : x))} onRemover={id => setEquips(es => es.filter(e => e.id !== id))} />;
       case "ativos":     return <TelaAtivos obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onAdd={a => setAtivos(as => [...as, a])} onEditar={a => setAtivos(as => as.map(x => x.id === a.id ? a : x))} onRemover={id => setAtivos(as => as.filter(a => a.id !== id))} onAbastecer={a => setAbast(abs => [a, ...abs])} />;
       case "frota":      return <TelaFrota obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
