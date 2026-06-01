@@ -11908,17 +11908,15 @@ function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, t
     </table>
     ` : ""}
 
-    ${pedidosDia.length > 0 ? `
-      <h2>3. Materiais e Insumos</h2>
-      <table>
-        <tr><th style="width:11%" class="num">Pedido Nº</th><th>Material</th><th style="width:18%">Quantidade</th><th style="width:20%">Solicitante</th><th style="width:14%" class="num">Status</th></tr>
-        ${pedidosDia.map((p, i) => {
-          const cls = p.status === "Aprovado" ? "badge-p" : p.status === "Negado" ? "badge-f" : "badge-a";
-          const numPed = String(p.id).slice(-6);
-          return `<tr><td class="num"><b>${numPed}</b></td><td>${p.material}</td><td>${fmtQtd(p.qtd)}</td><td>${p.enc}</td><td class="num ${cls}">${p.status}</td></tr>`;
-        }).join("")}
-      </table>
-    ` : ""}
+    <h2>3. Materiais e Insumos</h2>
+    <table>
+      <tr><th style="width:11%" class="num">Pedido Nº</th><th>Material</th><th style="width:18%">Quantidade</th><th style="width:20%">Solicitante</th><th style="width:14%" class="num">Status</th></tr>
+      ${pedidosDia.length === 0 ? '<tr><td colspan="5" class="vazio">Sem materiais/insumos registrados neste dia</td></tr>' : pedidosDia.map((p, i) => {
+        const cls = p.status === "Aprovado" ? "badge-p" : p.status === "Negado" ? "badge-f" : "badge-a";
+        const numPed = String(p.id).slice(-6);
+        return `<tr><td class="num"><b>${numPed}</b></td><td>${p.material}</td><td>${fmtQtd(p.qtd)}</td><td>${p.enc}</td><td class="num ${cls}">${p.status}</td></tr>`;
+      }).join("")}
+    </table>
 
     <h2>4. Observações Gerais</h2>
     <div class="obs-bloco">${observacoes ? observacoes.replace(/\n/g, "<br>") : '<span class="vazio">— Sem observações —</span>'}</div>
