@@ -17587,6 +17587,11 @@ export default function App() {
               0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.4; }
               50% { transform: scale(1.2) translate(20px, -20px); opacity: 0.7; }
             }
+            @keyframes kmSplashRise {
+              0% { opacity: 0; transform: translateY(16px) scale(0.96); }
+              100% { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            @keyframes kmSplashSpin { to { transform: rotate(360deg); } }
           `}</style>
 
           {/* Orbs decorativos */}
@@ -17605,8 +17610,16 @@ export default function App() {
             animation: "kmSplashOrb 5s ease-in-out infinite reverse",
           }} />
 
+          {/* Halo dourado girando atrás do logo */}
+          <div style={{
+            position: "absolute", width: 280, height: 280, borderRadius: "50%",
+            background: "conic-gradient(from 0deg, transparent 0%, rgba(245,166,35,0.28) 18%, transparent 36%)",
+            filter: "blur(3px)", zIndex: 0,
+            animation: "kmSplashSpin 6s linear infinite",
+          }} />
+
           {/* Logo central */}
-          <div style={{ textAlign: "center", zIndex: 1 }}>
+          <div style={{ textAlign: "center", zIndex: 1, animation: "kmSplashRise 0.85s cubic-bezier(0.16,1,0.3,1) both" }}>
             <div style={{
               fontSize: 12, color: "rgba(255,255,255,0.5)",
               letterSpacing: 5, fontWeight: 600, marginBottom: 14,
