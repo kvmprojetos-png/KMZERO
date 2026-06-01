@@ -2748,6 +2748,8 @@ const VALOR_HORA_CARGO = {
 /* ── SHARED STYLES ── */
 const labelS = { fontSize: 12, color: "#666", marginBottom: 4, display: "block" };
 const inputS = { width: "100%", boxSizing: "border-box", border: "1.5px solid #dde2ef", borderRadius: 10, padding: "12px 13px", fontSize: 14, outline: "none", marginBottom: 12, background: "#f9fafb", fontFamily: "inherit", minHeight: 44 };
+// Estilo específico para inputs type=date — corrige bug do iOS Safari que ignora width:100% e estoura a margem
+const dateS = { ...inputS, appearance: "none", WebkitAppearance: "none", minWidth: 0, maxWidth: "100%", display: "block" };
 const selS   = { ...inputS, appearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 13px center" };
 const bigBtn = (color) => ({ background: color, color: "#fff", border: "none", borderRadius: 10, padding: "13px 0", fontSize: 15, fontWeight: 800, cursor: "pointer", width: "100%", letterSpacing: 0.8, boxShadow: `0 3px 10px ${color}55` });
 const css = (...objs) => Object.assign({}, ...objs);
@@ -5806,9 +5808,9 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
             <label style={labelS}>Nome da etapa</label>
             <input value={editando.nome || ""} onChange={ev => setEditando(e => ({ ...e, nome: ev.target.value }))} placeholder="Ex: Sondagem e topografia" style={inputS} />
             <label style={labelS}>Data início</label>
-            <input value={editando.inicio || ""} onChange={ev => setEditando(e => ({ ...e, inicio: ev.target.value }))} type="date" style={inputS} />
+            <input value={editando.inicio || ""} onChange={ev => setEditando(e => ({ ...e, inicio: ev.target.value }))} type="date" style={dateS} />
             <label style={labelS}>Data fim prevista</label>
-            <input value={editando.fim || ""} onChange={ev => setEditando(e => ({ ...e, fim: ev.target.value }))} type="date" style={inputS} />
+            <input value={editando.fim || ""} onChange={ev => setEditando(e => ({ ...e, fim: ev.target.value }))} type="date" style={dateS} />
             <label style={labelS}>Progresso (%)</label>
             <select value={editando.progresso || 0} onChange={ev => setEditando(e => ({ ...e, progresso: parseInt(ev.target.value) }))} style={selS}>
               {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(p => <option key={p} value={p}>{p}%</option>)}
@@ -6793,7 +6795,7 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
             type="date"
             value={form.dataInicioContrato || ""}
             onChange={e => set("dataInicioContrato", e.target.value)}
-            style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+            style={{ ...dateS }}
           />
 
           <label style={labelS}>🏁 Prazo final do contrato</label>
@@ -6801,7 +6803,7 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
             type="date"
             value={form.dataFimContrato || ""}
             onChange={e => set("dataFimContrato", e.target.value)}
-            style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+            style={{ ...dateS }}
           />
 
           <label style={labelS}>Forma de Pagamento</label>
@@ -7399,7 +7401,7 @@ function TelaFicha({ obras, onBack, onAdd }) {
                 {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
               </select>
               <label style={labelS}>Data de Início</label>
-              <input value={form.inicio} onChange={e => set("inicio", e.target.value)} type="date" style={inputS} />
+              <input value={form.inicio} onChange={e => set("inicio", e.target.value)} type="date" style={dateS} />
               <label style={labelS}>💰 Valor da Diária (R$/dia)</label>
               <input value={form.diaria} onChange={e => set("diaria", e.target.value)} type="number" placeholder="Ex: 100" style={inputS} />
               {form.cargo && SUGESTAO_DIARIA[form.cargo] && !form.diaria && (
@@ -7418,9 +7420,9 @@ function TelaFicha({ obras, onBack, onAdd }) {
             <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
               <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>🏥 Exame Médico (ASO)</div>
               <label style={labelS}>Data do exame</label>
-              <input value={form.asoData} onChange={e => set("asoData", e.target.value)} type="date" style={inputS} />
+              <input value={form.asoData} onChange={e => set("asoData", e.target.value)} type="date" style={dateS} />
               <label style={labelS}>Validade</label>
-              <input value={form.asoValidade} onChange={e => set("asoValidade", e.target.value)} type="date" style={inputS} />
+              <input value={form.asoValidade} onChange={e => set("asoValidade", e.target.value)} type="date" style={dateS} />
               <label style={labelS}>Status / Aptidão</label>
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 {[
@@ -9546,7 +9548,7 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
             }
           }
           return "";
-        })()} onChange={e => set("admissao", e.target.value)} type="date" style={{ ...inputS, boxSizing: "border-box", width: "100%" }} />
+        })()} onChange={e => set("admissao", e.target.value)} type="date" style={{ ...dateS }} />
         <label style={labelS}>💰 Valor da Diária (R$/dia)</label>
         <input value={form.diaria || ""} onChange={e => set("diaria", e.target.value)} type="number" placeholder="100" style={inputS} />
         <label style={labelS}>CTPS / PIS</label>
@@ -9626,14 +9628,14 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
           if (v.includes("-") && v.length === 10) return v;
           if (v.includes("/")) { const p = v.split("/"); if (p.length === 3) return `${p[2].padStart(4,"0")}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`; }
           return "";
-        })()} onChange={e => set("asoData", e.target.value)} type="date" style={{ ...inputS, boxSizing: "border-box", width: "100%" }} />
+        })()} onChange={e => set("asoData", e.target.value)} type="date" style={{ ...dateS }} />
         <label style={labelS}>Validade</label>
         <input value={(() => {
           const v = form.asoValidade || ""; if (!v) return "";
           if (v.includes("-") && v.length === 10) return v;
           if (v.includes("/")) { const p = v.split("/"); if (p.length === 3) return `${p[2].padStart(4,"0")}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`; }
           return "";
-        })()} onChange={e => set("asoValidade", e.target.value)} type="date" style={{ ...inputS, boxSizing: "border-box", width: "100%" }} />
+        })()} onChange={e => set("asoValidade", e.target.value)} type="date" style={{ ...dateS }} />
         <label style={labelS}>Status</label>
         <select value={form.asoStatus || "Apto"} onChange={e => set("asoStatus", e.target.value)} style={selS}>
           <option>Apto</option><option>Apto com restrições</option><option>Inapto</option>
@@ -11736,9 +11738,9 @@ function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemove }) {
           {trabalhadores.map(t => <option key={t.id} value={t.id}>{t.nome} — {t.cargo}</option>)}
         </select>
         <label style={labelS}>Data início</label>
-        <input value={form.inicio} onChange={e => set("inicio", e.target.value)} type="date" style={inputS} />
+        <input value={form.inicio} onChange={e => set("inicio", e.target.value)} type="date" style={dateS} />
         <label style={labelS}>Data fim</label>
-        <input value={form.fim} onChange={e => set("fim", e.target.value)} type="date" style={inputS} />
+        <input value={form.fim} onChange={e => set("fim", e.target.value)} type="date" style={dateS} />
         <label style={labelS}>Observação (opcional)</label>
         <input value={form.obs} onChange={e => set("obs", e.target.value)} placeholder="Férias regulares 30 dias..." style={inputS} />
         <Btn label="SALVAR" color={GREEN} onClick={salvar} />
@@ -12809,7 +12811,7 @@ function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar, onRemo
         <label style={labelS}>💰 Salário mensal (R$)</label>
         <input value={form.salarioMensal} onChange={e => set("salarioMensal", e.target.value)} type="number" placeholder="Ex: 5000" style={inputS} />
         <label style={labelS}>Data de Admissão</label>
-        <input value={form.dataAdmissao} onChange={e => set("dataAdmissao", e.target.value)} type="date" style={inputS} />
+        <input value={form.dataAdmissao} onChange={e => set("dataAdmissao", e.target.value)} type="date" style={dateS} />
         <div style={{ background: "#f9fafb", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: NAVY, fontWeight: 600 }}>
             <input type="checkbox" checked={!!form.ativo} onChange={e => set("ativo", e.target.checked)} style={{ width: 18, height: 18 }} />
@@ -14543,7 +14545,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={diaPagDiario}
               onChange={e => setDiaPagDiario(e.target.value)}
-              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
+              style={{ ...dateS, marginBottom: 6 }}
             />
             <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
               💡 Folha calculada apenas para esse dia específico. Use para pagar diária avulsa.
@@ -14558,7 +14560,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={diaPagSemanal}
               onChange={e => setDiaPagSemanal(e.target.value)}
-              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
+              style={{ ...dateS, marginBottom: 6 }}
             />
             <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
               💡 Calcula os 7 dias anteriores (inclusive) ao dia escolhido. Ex: pagamento toda sexta-feira.
@@ -14581,7 +14583,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
                 type="date"
                 value={quinzena === 1 ? diaPagQuinzenal1 : diaPagQuinzenal2}
                 onChange={e => quinzena === 1 ? setDiaPagQuinzenal1(e.target.value) : setDiaPagQuinzenal2(e.target.value)}
-                style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
+                style={{ ...dateS, marginBottom: 6 }}
               />
               <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
                 💡 Período calculado: {quinzena === 1 ? "dia 01 ao 15" : `dia 16 ao ${ultimoDia}`}. Data informada será exibida na folha.
@@ -14597,7 +14599,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={diaPagMensal}
               onChange={e => setDiaPagMensal(e.target.value)}
-              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
+              style={{ ...dateS, marginBottom: 6 }}
             />
             <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
               💡 Período calculado: mês inteiro ({meses[mes]}/{ano}, dia 1 ao {ultimoDia}). Data informada será exibida na folha.
@@ -14614,7 +14616,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={persInicio}
               onChange={e => setPersInicio(e.target.value)}
-              style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+              style={{ ...dateS }}
             />
 
             <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA FINAL</label>
@@ -14622,7 +14624,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={persFim}
               onChange={e => setPersFim(e.target.value)}
-              style={{ ...inputS, boxSizing: "border-box", width: "100%" }}
+              style={{ ...dateS }}
             />
 
             <label style={{ fontSize: 10, color: "#666", fontWeight: 700, display: "block", marginBottom: 2 }}>DATA DE PAGAMENTO</label>
@@ -14630,7 +14632,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               type="date"
               value={persPagamento}
               onChange={e => setPersPagamento(e.target.value)}
-              style={{ ...inputS, boxSizing: "border-box", width: "100%", marginBottom: 6 }}
+              style={{ ...dateS, marginBottom: 6 }}
             />
             {persInicio && persFim ? (
               <div style={{ background: "#fff5e6", borderRadius: 6, padding: "6px 8px", fontSize: 11, color: "#9a5a1a", lineHeight: 1.4 }}>
@@ -15208,7 +15210,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
         {form.tipo === "emprestimo" && (
           <>
             <label style={labelS}>Prazo de devolução</label>
-            <input value={form.prazo} onChange={e => set("prazo", e.target.value)} type="date" style={inputS} />
+            <input value={form.prazo} onChange={e => set("prazo", e.target.value)} type="date" style={dateS} />
           </>
         )}
 
@@ -16201,7 +16203,7 @@ function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes, onBac
         </select>
 
         <label style={labelS}>Próxima data</label>
-        <input value={form.proxData} onChange={e => set("proxData", e.target.value)} type="date" style={inputS} />
+        <input value={form.proxData} onChange={e => set("proxData", e.target.value)} type="date" style={dateS} />
 
         <label style={labelS}>Observação (opcional)</label>
         <input value={form.observacao} onChange={e => set("observacao", e.target.value)} placeholder="Ex: óleo 15W40, troca a cada 250h" style={inputS} />
@@ -17052,9 +17054,11 @@ function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
 
 export default function App() {
   const [splashAtivo, setSplashAtivo] = useState(true);
+  const [splashSaindo, setSplashSaindo] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setSplashAtivo(false), 4000);
-    return () => clearTimeout(t);
+    const tSaida = setTimeout(() => setSplashSaindo(true), 4100); // inicia fade-out
+    const tFim = setTimeout(() => setSplashAtivo(false), 4500);   // remove de vez
+    return () => { clearTimeout(tSaida); clearTimeout(tFim); };
   }, []);
 
   const [tela, setTelaRaw]        = useState("login");
@@ -17559,10 +17563,12 @@ export default function App() {
           alignItems: "center",
           justifyContent: "center",
           flexDirection: "column",
-          animation: "kmSplashFade 0.4s ease-out",
+          animation: splashSaindo ? "kmSplashOut 0.4s ease-in forwards" : "kmSplashFade 0.4s ease-out",
         }}>
           <style>{`
             @keyframes kmSplashFade { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes kmSplashOut { from { opacity: 1; } to { opacity: 0; } }
+            @keyframes kmSplashProgress { from { width: 0%; } to { width: 100%; } }
             @keyframes kmSplashPulse {
               0%, 100% { transform: scale(1); text-shadow: 0 0 20px rgba(245,166,35,0.4); }
               50% { transform: scale(1.04); text-shadow: 0 0 50px rgba(245,166,35,0.8); }
@@ -17626,14 +17632,28 @@ export default function App() {
             </div>
           </div>
 
-          {/* Footer da splash */}
+          {/* Footer da splash — barra de progresso */}
           <div style={{
-            position: "absolute", bottom: 30, left: 0, right: 0,
-            textAlign: "center",
-            fontSize: 10, color: "rgba(255,255,255,0.35)",
-            letterSpacing: 3, fontWeight: 600,
+            position: "absolute", bottom: 40, left: 0, right: 0,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
           }}>
-            CARREGANDO...
+            <div style={{
+              width: 160, height: 3, borderRadius: 3,
+              background: "rgba(255,255,255,0.12)", overflow: "hidden",
+            }}>
+              <div style={{
+                height: "100%", borderRadius: 3,
+                background: "linear-gradient(90deg, #F5A623, #ffd27a)",
+                boxShadow: "0 0 10px rgba(245,166,35,0.7)",
+                animation: "kmSplashProgress 4.4s cubic-bezier(0.4,0,0.2,1) forwards",
+              }} />
+            </div>
+            <div style={{
+              fontSize: 10, color: "rgba(255,255,255,0.35)",
+              letterSpacing: 3, fontWeight: 600,
+            }}>
+              CARREGANDO...
+            </div>
           </div>
         </div>
       )}
@@ -17653,6 +17673,14 @@ export default function App() {
         @media (max-width: 380px) {
           .km-app-wrapper {
             max-width: 100% !important;
+            box-shadow: none !important;
+          }
+        }
+        /* Rotação: celular em paisagem (tela baixa e larga) ocupa a largura toda, sem faixas escuras nem corte */
+        @media (orientation: landscape) and (max-height: 600px) {
+          .km-app-wrapper {
+            max-width: 100% !important;
+            min-height: 100vh !important;
             box-shadow: none !important;
           }
         }
