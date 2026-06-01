@@ -9621,6 +9621,26 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
           </>
         )}
 
+        <label style={labelS}>Dias não trabalhados que pagam</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+          {[{ k: "pagaFeriado", l: "🎉 Feriado nacional" }, { k: "pagaAtestado", l: "🏥 Atestado" }].map(o => {
+            const ehCLT = (form.formaCalculo || "diaria") === "mensal_fixo";
+            const ativo = form[o.k] !== undefined ? form[o.k] === true : ehCLT;
+            return (
+              <button key={o.k} type="button" onClick={() => set(o.k, !ativo)} style={{
+                flex: 1, padding: "10px 8px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center",
+                border: ativo ? "2px solid #15803d" : "1.5px solid #dde2ef",
+                background: ativo ? "#15803d15" : "#f9fafb", color: ativo ? "#15803d" : "#888",
+              }}>
+                {o.l}<br />{ativo ? "✓ Paga" : "Não paga"}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>
+          💡 Padrão: CLT paga, diarista não paga. Ajuste por trabalhador.
+        </div>
+
         <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🏥 Saúde / ASO</div>
         <label style={labelS}>Data do exame</label>
         <input value={(() => {
@@ -14305,8 +14325,11 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     // ────── CÁLCULO DO VALOR BRUTO ──────
     const diaria = parseFloat(t.diaria) || 0;
     const salarioFixo = parseFloat(t.salarioFixo) || 0;
-    // FERIADO NACIONAL conta como dia pago (Lei brasileira)
-    const diasPagos = presentes + atestados + feriados;
+    // #3: feriado/atestado pagam conforme config do trabalhador (default: CLT paga, diarista não)
+    const ehCLT = formaCalculo === "mensal_fixo";
+    const pagaFeriado = t.pagaFeriado !== undefined ? t.pagaFeriado === true : ehCLT;
+    const pagaAtestado = t.pagaAtestado !== undefined ? t.pagaAtestado === true : ehCLT;
+    const diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
     let bruto = 0;
 
     if (formaCalculo === "mensal_fixo" && salarioFixo > 0) {
