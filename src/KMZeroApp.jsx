@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "./firebase.js";
+import { db } from "./firebase.js";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
-/* ── HELPERS DATA ── */
+/* ── HELPERS DATAh ── */
 const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 const fmtData = (iso) => { const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); };
 const ultimosDias = (n) => {
@@ -85,35 +87,40 @@ function feriadoEm(dataISO) {
   return _cacheFeriados[ano][dataISO] || null;
 }
 
-/* ── STORAGE ── */
+/* ── STORAGE (Firestore + localStorage como cache offline) ── */
+const EMPRESA_ID = "km-consultoria";
+
 const store = {
   async get(key) {
     try {
-      // Tenta localStorage primeiro (Vercel/produção)
-      const v = localStorage.getItem("kmzero_" + key);
-      if (v) return JSON.parse(v);
-      // Fallback pra storage do Claude.ai (durante desenvolvimento)
-      if (typeof window !== "undefined" && window.storage && window.storage.get) {
-        const r = await window.storage.get(key);
-        return r ? JSON.parse(r.value) : null;
+      const ref = doc(db, "empresas", EMPRESA_ID, "dados", key);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const valor = snap.data().v;
+        try { localStorage.setItem("kmzero_" + key, JSON.stringify(valor)); } catch {}
+        return valor;
       }
-      return null;
-    } catch (e) { console.warn("store.get error:", e); return null; }
+      const v = localStorage.getItem("kmzero_" + key);
+      return v ? JSON.parse(v) : null;
+    } catch (e) {
+      console.warn("store.get offline:", e);
+      const v = localStorage.getItem("kmzero_" + key);
+      return v ? JSON.parse(v) : null;
+    }
   },
   async set(key, val) {
     try {
-      const json = JSON.stringify(val);
-      // Salva no localStorage (Vercel/produção)
-      localStorage.setItem("kmzero_" + key, json);
-      // Espelha no storage do Claude.ai se disponível
-      if (typeof window !== "undefined" && window.storage && window.storage.set) {
-        try { await window.storage.set(key, json); } catch {}
-      }
+      const ref = doc(db, "empresas", EMPRESA_ID, "dados", key);
+      await setDoc(ref, { v: val, ts: new Date().toISOString() });
+      try { localStorage.setItem("kmzero_" + key, JSON.stringify(val)); } catch {}
     } catch (e) {
-      console.warn("store.set error:", e);
-      // localStorage cheio? Tenta limpar e salvar
-      if (e.name === "QuotaExceededError") {
-        alert("⚠️ Armazenamento cheio! Faça backup e limpe dados antigos.");
+      console.warn("store.set offline:", e);
+      try {
+        localStorage.setItem("kmzero_" + key, JSON.stringify(val));
+      } catch (e2) {
+        if (e2.name === "QuotaExceededError") {
+          alert("⚠️ Armazenamento cheio! Faça backup e limpe dados antigos.");
+        }
       }
     }
   },
