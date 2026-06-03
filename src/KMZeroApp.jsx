@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "./firebase.js";
 import { db } from "./firebase.js";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 
 /* ── HELPERS DATAh ── */
 const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
@@ -88,16 +88,20 @@ function feriadoEm(dataISO) {
   return _cacheFeriados[ano][dataISO] || null;
 }
 
-/* ── STORAGE (Firestore + localStorage como cache offline) ── */
+/* ── STORAGE (Firestore + localStorage + sync em tempo real) ── */
 const EMPRESA_ID = "km-consultoria";
+
+const _storeHash   = {};
+const _storeSaving = new Set();
 
 const store = {
   async get(key) {
     try {
-      const ref = doc(db, "empresas", EMPRESA_ID, "dados", key);
+      const ref  = doc(db, "empresas", EMPRESA_ID, "dados", key);
       const snap = await getDoc(ref);
       if (snap.exists()) {
         const valor = snap.data().v;
+        _storeHash[key] = JSON.stringify(valor);
         try { localStorage.setItem("kmzero_" + key, JSON.stringify(valor)); } catch {}
         return valor;
       }
@@ -110,20 +114,35 @@ const store = {
     }
   },
   async set(key, val) {
+    const hash = JSON.stringify(val);
+    if (_storeHash[key] === hash) return;
+    _storeHash[key] = hash;
+    _storeSaving.add(key);
     try {
       const ref = doc(db, "empresas", EMPRESA_ID, "dados", key);
       await setDoc(ref, { v: val, ts: new Date().toISOString() });
       try { localStorage.setItem("kmzero_" + key, JSON.stringify(val)); } catch {}
     } catch (e) {
       console.warn("store.set offline:", e);
-      try {
-        localStorage.setItem("kmzero_" + key, JSON.stringify(val));
-      } catch (e2) {
-        if (e2.name === "QuotaExceededError") {
-          alert("⚠️ Armazenamento cheio! Faça backup e limpe dados antigos.");
-        }
+      try { localStorage.setItem("kmzero_" + key, JSON.stringify(val)); } catch (e2) {
+        if (e2.name === "QuotaExceededError") alert("⚠️ Armazenamento cheio! Faça backup e limpe dados antigos.");
       }
+    } finally {
+      setTimeout(() => _storeSaving.delete(key), 2000);
     }
+  },
+  listen(key, callback) {
+    const ref = doc(db, "empresas", EMPRESA_ID, "dados", key);
+    return onSnapshot(ref, (snap) => {
+      if (_storeSaving.has(key)) return;
+      if (!snap.exists()) return;
+      const val  = snap.data().v;
+      const hash = JSON.stringify(val);
+      if (_storeHash[key] === hash) return;
+      _storeHash[key] = hash;
+      try { localStorage.setItem("kmzero_" + key, JSON.stringify(val)); } catch {}
+      callback(val ?? null);
+    });
   },
   async clear() {
     try {
@@ -17230,6 +17249,40 @@ export default function App() {
       setCarregando(false);
     })();
   }, []);
+
+  // SYNC EM TEMPO REAL: atualiza automaticamente quando outro dispositivo salva
+  useEffect(() => {
+    if (carregando) return;
+    const unsubs = [
+      store.listen("obras",          v => setObras(v || [])),
+      store.listen("trabalhadores",  v => setTrab(v || [])),
+      store.listen("equips",         v => setEquips(v || [])),
+      store.listen("pedidos",        v => setPedidos(v || [])),
+      store.listen("historico",      v => setHistorico(v || {})),
+      store.listen("usuarios",       v => setUsuarios(v || [])),
+      store.listen("mensagens",      v => setMensagens(v || [])),
+      store.listen("diario",         v => setDiario(v || [])),
+      store.listen("ativos",         v => setAtivos(v || [])),
+      store.listen("abastecimentos", v => setAbast(v || [])),
+      store.listen("ferias",         v => setFerias(v || [])),
+      store.listen("rdos",           v => setRdos(v || [])),
+      store.listen("empresa",        v => { if (v) setEmpresa(v); }),
+      store.listen("produtividade",  v => setProd(v || [])),
+      store.listen("recebimentos",   v => setReceb(v || [])),
+      store.listen("movimentacoes",  v => setMov(v || [])),
+      store.listen("ferramentas",    v => setFerr(v || [])),
+      store.listen("links",          v => setLinks(v || LINKS_PADRAO)),
+      store.listen("adiantamentos",  v => setAdiant(v || [])),
+      store.listen("manutencoes",    v => setManut(v || [])),
+      store.listen("folhasSalvas",   v => setFolhasSalvas(v || [])),
+      store.listen("cronogramas",    v => setCronog(v || {})),
+      store.listen("movEquip",       v => setMovEquip(v || [])),
+      store.listen("despesasAvulsas",v => setDespesasAvulsas(v || [])),
+      store.listen("fotosObras",     v => setFotosObras(v || [])),
+      store.listen("fornecedores",   v => setFornecedores(v || [])),
+    ];
+    return () => unsubs.forEach(u => u && u());
+  }, [carregando]);
 
   useEffect(() => { if (!carregando) store.set("obras", obras); }, [obras, carregando]);
   useEffect(() => { if (!carregando) store.set("trabalhadores", trabalhadores); }, [trabalhadores, carregando]);
