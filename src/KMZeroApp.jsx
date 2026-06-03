@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 
 /* ── HELPERS DATAh ── */
 const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+const uuid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
 const fmtData = (iso) => { const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); };
 const ultimosDias = (n) => {
   const arr = [];
@@ -2697,7 +2698,7 @@ const EQUIP_COLOR = { "Em Uso": BLUE, "Quebrada": RED, "Disponível": GREEN };
 const STATUS_COLOR = { "Presente": GREEN, "Falta": RED, "Atestado": ORANGE };
 
 const DEFAULT_USUARIOS = [
-  { id: 1, nome: "Kleber Vieira Martins", email: "kleber@km.com",   senha: "123", pin: "", biometriaAtiva: false, perfil: "gestor",      obraId: null, tel: "(28) 99925-8172" },
+  { id: "gestor-km", nome: "Kleber Vieira Martins", email: "kvmprojetos@gmail.com", pin: "", biometriaAtiva: false, perfil: "gestor", obraId: null, tel: "(28) 99925-8172" },
 ];
 
 const EMPRESA_PADRAO = {
@@ -3497,12 +3498,13 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
         // Caso ainda não exista cadastro local para este email, cria um perfil de gestor padrão
         u = {
           id: r.user.uid,
-          nome: "Gestor",
+          nome: r.user.displayName || "Gestor",
           email: r.user.email,
           perfil: "gestor",
           ativo: true,
           firebaseUid: r.user.uid,
         };
+        if (onCadastrar) onCadastrar(u);
       }
       setCarregando(false);
       onLogin({ ...u, firebaseUid: r.user.uid, ultimoLogin: Date.now() });
@@ -4560,7 +4562,7 @@ function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos,
                   // Manda pra galeria
                   if (onSalvarFotoObra) {
                     onSalvarFotoObra({
-                      id: Date.now() + i,
+                      id: uuid(),
                       numero: numeroFoto,
                       obraId: obra.id,
                       obraNome: obra.nome,
@@ -4594,7 +4596,7 @@ function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos,
                 });
 
                 const rdo = {
-                  id: Date.now(),
+                  id: uuid(),
                   numero,
                   obraId: obra.id,
                   data: dataStr,
@@ -4766,7 +4768,7 @@ function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
   const enviarPedido = () => {
     if (itens.length === 0) return;
     onAddPedido({
-      id: Date.now(),
+      id: uuid(),
       obra: obra.nome,
       obraId: obra.id,
       itens, // múltiplos itens!
@@ -5624,7 +5626,7 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
       dataAtual = new Date(fim);
       dataAtual.setDate(dataAtual.getDate() + 1);
       return {
-        id: Date.now() + i,
+        id: uuid(),
         nome: e.nome,
         ordem: i,
         inicio: ini.toISOString().split("T")[0],
@@ -5643,7 +5645,7 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
     if (ja) {
       novas = etapas.map(e => e.id === etapa.id ? etapa : e);
     } else {
-      novas = [...etapas, { ...etapa, ordem: etapas.length, id: Date.now() }];
+      novas = [...etapas, { ...etapa, ordem: etapas.length, id: uuid() }];
     }
     onSalvar(obraId, novas);
     setModal(false);
@@ -6650,7 +6652,7 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
   const salvar = () => {
     if (!form.nome || !form.local) return;
     if (editandoId) onEditar({ ...form, id: editandoId });
-    else onAdd({ id: Date.now(), ...form });
+    else onAdd({ id: uuid(), ...form });
     setModal(false);
   };
 
@@ -7304,7 +7306,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
         </div>
         <Btn label="SALVAR" color={GREEN} onClick={() => {
           if (!form.nome || !form.cargo || !form.obraId) return;
-          const novo = { id: Date.now(), nome: form.nome, cargo: form.cargo, obraId: form.obraId, cpf: form.cpf, tel: form.tel, diaria: form.diaria };
+          const novo = { id: uuid(), nome: form.nome, cargo: form.cargo, obraId: form.obraId, cpf: form.cpf, tel: form.tel, diaria: form.diaria };
           onAdd(novo, null); // sempre sem login — é só pra folha
           setModal(false);
           setForm({ nome: "", cargo: "", obraId: "", cpf: "", tel: "", diaria: "" });
@@ -7530,7 +7532,7 @@ function TelaFicha({ obras, onBack, onAdd }) {
               ))}
             </div>
 
-            <Btn label="SALVAR FICHA COMPLETA" color={GOLD} onClick={() => { if (form.nome && form.cpf) { onAdd({ id: Date.now(), ...form }); setSalvo(true); } }} style={{ marginBottom: 24 }} />
+            <Btn label="SALVAR FICHA COMPLETA" color={GOLD} onClick={() => { if (form.nome && form.cpf) { onAdd({ id: uuid(), ...form }); setSalvo(true); } }} style={{ marginBottom: 24 }} />
           </>
         )}
       </div>
@@ -8042,7 +8044,7 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
     const fornecedor = fornecedores.find(f => f.id === parseInt(novoFornecedorId));
     const obraSelecionada = obras.find(o => o.id === parseInt(novoObraId));
     const novoPedido = {
-      id: Date.now(),
+      id: uuid(),
       obraId: parseInt(novoObraId),
       obraNome: obraSelecionada?.nome || "",
       itens: itensValidos,
@@ -9787,7 +9789,7 @@ function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, onMarca
 
   const enviar = () => {
     if (!destinatario || !texto.trim()) return;
-    onEnviar({ id: Date.now(), de: usuario.id, para: parseInt(destinatario), texto: texto.trim(), ts: Date.now(), lida: false });
+    onEnviar({ id: uuid(), de: usuario.id, para: parseInt(destinatario), texto: texto.trim(), ts: Date.now(), lida: false });
     setTexto(""); setDestinatario(""); setComposicao(false);
   };
 
@@ -10059,7 +10061,7 @@ function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onAdd, onR
         // Manda pra galeria também
         if (onSalvarFotoObra) {
           onSalvarFotoObra({
-            id: Date.now(),
+            id: uuid(),
             numero: numeroFoto,
             obraId: obra.id,
             obraNome: obra.nome,
@@ -10076,7 +10078,7 @@ function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onAdd, onR
       }
     }
 
-    onAdd({ id: Date.now(), obraId: obra.id, autor: usuario?.nome || "—", texto: texto.trim(), foto: fotoFinal, ts: Date.now() });
+    onAdd({ id: uuid(), obraId: obra.id, autor: usuario?.nome || "—", texto: texto.trim(), foto: fotoFinal, ts: Date.now() });
     setTexto("");
     setFoto(null);
     setSalvando(false);
@@ -10208,7 +10210,7 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
   const salvar = () => {
     if (!form.nome || !form.codigo || !form.obraId) return;
     if (editandoId) onEditar({ ...form, id: editandoId });
-    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId) });
+    else onAdd({ ...form, id: uuid(), obraId: parseInt(form.obraId) });
     setModal(false);
   };
 
@@ -10948,14 +10950,14 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
   const salvar = () => {
     if (!form.nome || !form.placa || !form.obraId) return;
     if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
-    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
+    else onAdd({ ...form, id: uuid(), obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
     setModal(false);
   };
 
   const abastecer = () => {
     if (!formAbast.litros || !formAbast.valor) return;
     onAbastecer({
-      id: Date.now(), ativoId: modalAbast.id, obraId: modalAbast.obraId,
+      id: uuid(), ativoId: modalAbast.id, obraId: modalAbast.obraId,
       litros: parseFloat(formAbast.litros), valor: parseFloat(formAbast.valor),
       horimetro: parseFloat(formAbast.horimetro) || 0, combustivel: formAbast.combustivel,
       fotoCupom: formAbast.fotoCupom,
@@ -11700,7 +11702,7 @@ function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemove }) {
 
   const salvar = () => {
     if (!form.trabId || !form.inicio || !form.fim) return;
-    onAdd({ id: Date.now(), trabId: parseInt(form.trabId), inicio: form.inicio, fim: form.fim, obs: form.obs });
+    onAdd({ id: uuid(), trabId: parseInt(form.trabId), inicio: form.inicio, fim: form.fim, obs: form.obs });
     setModal(false);
     setForm({ trabId: "", inicio: "", fim: "", obs: "" });
   };
@@ -12081,7 +12083,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
 
   const emitir = () => {
     const numero = proxNumero;
-    onEmitirRDO({ id: Date.now(), numero, obraId, data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
+    onEmitirRDO({ id: uuid(), numero, obraId, data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
     gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas: presencasDia, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias: ocorrenciasDia, encarregado: usuario?.nome, empresa, recebimentos });
   };
 
@@ -12764,7 +12766,7 @@ function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar, onRemo
   const salvar = () => {
     if (!form.nome) return;
     if (editandoId) onEditar({ ...form, id: editandoId, salarioMensal: parseFloat(form.salarioMensal) || 0 });
-    else onAdd({ ...form, id: Date.now(), salarioMensal: parseFloat(form.salarioMensal) || 0 });
+    else onAdd({ ...form, id: uuid(), salarioMensal: parseFloat(form.salarioMensal) || 0 });
     setModal(false);
   };
 
@@ -12908,7 +12910,7 @@ function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover })
       const jaExiste = usuarios.find(u => u.email.toLowerCase() === form.email.toLowerCase().trim());
       if (jaExiste) { alert("⚠️ Já existe um acesso com esse e-mail"); return; }
       const novo = {
-        id: Date.now(),
+        id: uuid(),
         nome: form.nome.trim(),
         email: form.email.toLowerCase().trim(),
         senha: form.senha,
@@ -13976,7 +13978,7 @@ function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd, onRem
 
   const adicionar = () => {
     if (!qtd) return;
-    onAdd({ id: Date.now(), obraId, tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
+    onAdd({ id: uuid(), obraId, tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
     setQtd(""); setObs("");
   };
 
@@ -14078,7 +14080,7 @@ function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack, onAdd 
 
   const confirmar = () => {
     onAdd({
-      id: Date.now(), pedidoId: pedidoSel.id, obraId: pedidoSel.obraId,
+      id: uuid(), pedidoId: pedidoSel.id, obraId: pedidoSel.obraId,
       material: pedidoSel.material, qtd: pedidoSel.qtd, foto, obs, conformidade,
       autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR"),
     });
@@ -14774,7 +14776,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
             return { trabId: t.id, nome: t.nome, cargo: t.cargo, ...c };
           });
           onSalvarFolha({
-            id: Date.now(), mes, ano, quinzena, periodo,
+            id: uuid(), mes, ano, quinzena, periodo,
             obraId: obraId === "todas" ? null : parseInt(obraId),
             itens, totalLiquido: totalFolha, totalAdiant: totalAdiantQuinzena,
             ts: Date.now(),
@@ -14813,7 +14815,7 @@ function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSolicitar }
     if (!trabId || !obraDestino) return;
     const t = trabalhadores.find(x => x.id === parseInt(trabId));
     onSolicitar({
-      id: Date.now(),
+      id: uuid(),
       trabId: parseInt(trabId),
       trabNome: t?.nome,
       obraOrigem: t?.obraId,
@@ -15051,7 +15053,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
     if (!form.itemId || !form.obraDestino) { alert("Selecione o item e a obra destino"); return; }
     if (form.tipo === "emprestimo" && !form.prazo) { alert("Defina o prazo de devolução"); return; }
     onSolicitar({
-      id: Date.now(),
+      id: uuid(),
       tipoItem: form.tipoItem,
       itemId: parseInt(form.itemId),
       itemNome: itemEscolhido.nome,
@@ -15449,7 +15451,7 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
   const salvar = () => {
     if (!form.nome || !form.obraId) return;
     if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
-    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
+    else onAdd({ ...form, id: uuid(), obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
     setModal(false);
   };
 
@@ -15691,7 +15693,7 @@ function TelaLinks({ links, onBack, onAdd, onRemover }) {
     if (!form.nome || !form.url) return;
     let url = form.url.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    onAdd({ id: Date.now(), ...form, url });
+    onAdd({ id: uuid(), ...form, url });
     setForm({ nome: "", url: "", icon: "🔗", cat: "Geral" });
     setModal(false);
   };
@@ -15848,7 +15850,7 @@ function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack, onAdd,
 
   const salvar = () => {
     if (!form.trabId || !form.valor) return;
-    onAdd({ id: Date.now(), trabId: parseInt(form.trabId), valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
+    onAdd({ id: uuid(), trabId: parseInt(form.trabId), valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
     setForm({ trabId: "", valor: "", motivo: "", data: new Date().toLocaleDateString("pt-BR") });
     setModal(false);
   };
@@ -16088,7 +16090,7 @@ function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes, onBac
 
   const salvar = () => {
     if (!form.itemId || !form.proxData) return;
-    onAdd({ id: Date.now(), ...form, ts: Date.now(), realizada: false });
+    onAdd({ id: uuid(), ...form, ts: Date.now(), realizada: false });
     setForm({ tipoItem: "ativo", itemId: "", tipo: "Troca de óleo", proxData: "", observacao: "", obraId: "" });
     setModal(false);
   };
@@ -16512,7 +16514,7 @@ function TelaAnexosObra({ obra, usuario, onBack }) {
 
       setProgresso({ atual: 70, total: 100, fase: "Salvando..." });
       const novoAnexo = {
-        id: Date.now() + "_" + Math.random().toString(36).substring(2, 9),
+        id: uuid(),
         obraId: obra.id,
         obraNome: obra.nome,
         categoria: categoriaUpload,
@@ -17447,7 +17449,7 @@ export default function App() {
         // Se o gestor pediu pra criar login, gera usuário também
         if (login && login.email) {
           const novoUsuario = {
-            id: Date.now() + 1,
+            id: uuid(),
             nome: t.nome,
             email: login.email.toLowerCase().trim(),
             senha: login.senha || "123",
