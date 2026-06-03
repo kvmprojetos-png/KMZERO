@@ -3553,14 +3553,20 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
   };
 
   const entrarComPIN = (u) => {
-    // Se for gestor, manda para a tela de senha (autenticação Firebase obrigatória)
+    // Gestor: Firebase Auth obrigatório
     if (u.perfil === "gestor") {
       setEmailGestor(u.email || "");
       setTelaInterna("gestor");
       return;
     }
-    // Encarregado entra direto pelo card "Continuar como"
-    onLogin({ ...u, ultimoLogin: Date.now() });
+    // Encarregado: exige PIN (se tiver) ou senha antes de entrar
+    setUsuarioSelecionado(u);
+    if (u.pin) {
+      setModoPIN("confirmar");
+    } else {
+      setEmailPrim(u.email || "");
+      setTelaInterna("primeiro_acesso");
+    }
   };
 
   if (modoPIN && usuarioSelecionado) {
