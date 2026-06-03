@@ -17244,8 +17244,12 @@ export default function App() {
       if (fotos_)   setFotosObras(fotos_);
       if (forn_)    setFornecedores(forn_);
       if (userLogado) {
-        setUsuario(userLogado);
-        setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
+        if (userLogado.perfil === "gestor") {
+          // Gestor: restaura sessão (Firebase Auth valida em background)
+          setUsuario(userLogado);
+          setTela("gestor");
+        }
+        // Encarregado: NAO restaura sessao — deve logar com senha sempre
       }
 
       // ⭐ AUTO-POPULA 30 DIAS apenas se ativado manualmente em Sistema > Gerar 30 dias
