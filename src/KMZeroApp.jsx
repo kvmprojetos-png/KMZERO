@@ -17126,14 +17126,14 @@ export default function App() {
   };
 
   const [usuarios, setUsuarios]   = useState(DEFAULT_USUARIOS);
-  const [obras, setObras]         = useState(DEFAULT_OBRAS);
-  const [trabalhadores, setTrab]  = useState(DEFAULT_TRABALHADORES);
-  const [equips, setEquips]       = useState(DEFAULT_EQUIPS);
+  const [obras, setObras]         = useState([]);
+  const [trabalhadores, setTrab]  = useState([]);
+  const [equips, setEquips]       = useState([]);
   const [pedidos, setPedidos]     = useState([]);
   const [historico, setHistorico] = useState({});
   const [mensagens, setMensagens] = useState([]);
   const [diario, setDiario]       = useState([]);
-  const [ativos, setAtivos]       = useState(DEFAULT_ATIVOS);
+  const [ativos, setAtivos]       = useState([]);
   const [abastecimentos, setAbast]= useState([]);
   const [ferias, setFerias]       = useState([]);
   const [rdosEmitidos, setRdos]   = useState([]);
@@ -17155,7 +17155,7 @@ export default function App() {
   const [movEquipSel, setMovEquipSel] = useState(null);
   const [movPessSel, setMovPessSel] = useState(null);
   const [fotosObras, setFotosObras] = useState([]); // galeria por obra
-  const [fornecedores, setFornecedores] = useState(DEFAULT_FORNECEDORES);
+  const [fornecedores, setFornecedores] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
   const obraAtual = usuario?.obraId ? obras.find(o => o.id === usuario.obraId) || obras[0] : obras[0];
