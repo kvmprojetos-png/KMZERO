@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "./firebase.js";
+import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual, loginAnonimo } from "./firebase.js";
 import { db } from "./firebase.js";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 
@@ -17190,6 +17190,10 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      // Garante autenticacao Firebase antes de acessar Firestore
+      // Lancadores sem Firebase Auth recebem token anonimo automaticamente
+      await loginAnonimo();
+
       const obras_   = await store.get("obras");
       const trab_    = await store.get("trabalhadores");
       const equips_  = await store.get("equips");
