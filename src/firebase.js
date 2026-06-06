@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword as fbUpdatePassword } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword as fbUpdatePassword, signInAnonymously } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -79,6 +79,17 @@ function traduzErroFirebase(codigo) {
             "auth/requires-recent-login": "Por seguranca, faca login novamente para realizar esta operacao.",
      };
      return traducoes[codigo] || "Nao foi possivel concluir a operacao.";
+}
+
+export async function loginAnonimo() {
+  try {
+    if (auth.currentUser) return { ok: true, user: auth.currentUser };
+    const cred = await signInAnonymously(auth);
+    return { ok: true, user: cred.user };
+  } catch (e) {
+    console.warn("loginAnonimo falhou:", e.message);
+    return { ok: false, erro: e.message };
+  }
 }
 
 export { auth, firebaseApp, db };
