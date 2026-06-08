@@ -7,6 +7,8 @@ import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 /* ── HELPERS DATAh ── */
 const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 const uuid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+// Normaliza id de obra vindo de <select> (string) para casar com obras seed (id numérico) ou novas (uuid string). Preserva "todas"/"".
+const idVal = (v) => /^\d+$/.test(v) ? Number(v) : v;
 const fmtData = (iso) => { const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); };
 const ultimosDias = (n) => {
   const arr = [];
@@ -5396,7 +5398,7 @@ function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
         {/* Filtros */}
         <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
           <label style={labelS}>🏗️ Obra</label>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={selS}>
+          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={selS}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -5547,7 +5549,7 @@ function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
 
       {!colapsada && (
         <>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: "1px solid #eee", fontSize: 12, fontWeight: 600, color: NAVY, background: "#fafbfc" }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: "1px solid #eee", fontSize: 12, fontWeight: 600, color: NAVY, background: "#fafbfc" }}>
             <option value="todas">🏗️ Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -5752,7 +5754,7 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma" sub="Etapas da obra" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={selS}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -6051,7 +6053,7 @@ function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma Pro" sub={obra?.nome || "—"} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
 
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 10 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -7236,7 +7238,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>🔍</span>
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou cargo..." style={{ ...inputS, paddingLeft: 38, marginBottom: 0 }} />
         </div>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12, marginTop: 8 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12, marginTop: 8 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -7320,7 +7322,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
           <option value="">Selecione a obra</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -7430,7 +7432,7 @@ function TelaFicha({ obras, onBack, onAdd }) {
                 {CARGOS.map(c => <option key={c}>{c}</option>)}
               </select>
               <label style={labelS}>Obra Atual</label>
-              <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
+              <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
                 <option value="">Selecione a obra</option>
                 {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
               </select>
@@ -7584,7 +7586,7 @@ function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, onBack })
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Relatório Diário" sub={`${obra?.nome || ""} — ${hoje}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 14 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -7713,7 +7715,7 @@ function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Dashboard" sub="Visão geral" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 14 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -8278,7 +8280,7 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
         </div>
 
         <label style={labelS}>🏗️ Obra</label>
-        <select value={novoObraId} onChange={e => setNovoObraId(e.target.value)} style={selS}>
+        <select value={novoObraId} onChange={e => setNovoObraId(idVal(e.target.value))} style={selS}>
           <option value="">Selecione a obra...</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -9564,7 +9566,7 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId || ""} onChange={e => set("obraId", e.target.value)} style={selS}>
+        <select value={form.obraId || ""} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <label style={labelS}>Data de Admissão</label>
@@ -9908,7 +9910,7 @@ function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Calendário" sub="Histórico de presenças" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
@@ -10007,7 +10009,7 @@ function TelaFolha({ obras, trabalhadores, historico, onBack }) {
             {[ano - 1, ano, ano + 1].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -10245,7 +10247,7 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Equipamentos" sub="Gestão completa" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -10290,7 +10292,7 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
         <label style={labelS}>Código</label>
         <input value={form.codigo} onChange={e => set("codigo", e.target.value)} placeholder="Ex: EQ045" style={inputS} />
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -10889,7 +10891,7 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
             <option value="semana">Última semana</option>
             <option value="mes">Último mês</option>
           </select>
-          <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, flex: 1, marginBottom: 0 }}>
+          <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, flex: 1, marginBottom: 0 }}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -10998,7 +11000,7 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ativos & Frota" sub="Veículos e maquinário" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -11070,7 +11072,7 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
         <label style={labelS}>Placa</label>
         <input value={form.placa} onChange={e => set("placa", e.target.value)} placeholder="ABC-1234" style={inputS} />
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -11439,7 +11441,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
         {/* Filtros */}
         <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
           <label style={labelS}>🏗️ Obra</label>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={selS}>
+          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={selS}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -11508,7 +11510,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
         )}
 
         <label style={labelS}>🏗️ Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
           <option value="">— Selecione —</option>
           {obras.filter(o => o.status === "Ativa").map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -11629,7 +11631,7 @@ function TelaCustos({ obras, trabalhadores, historico, ativos, abastecimentos, p
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Custos por Obra" sub={`${meses[mes]}/${ano}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 8 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 8 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -12636,7 +12638,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
         </div>
 
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={selS}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -13068,7 +13070,7 @@ function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover })
         </select>
 
         <label style={labelS}>🏗️ Obra que vai gerenciar</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
           <option value="">Sem obra fixa</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -14021,7 +14023,7 @@ function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd, onRem
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Produtividade" sub={obra?.nome} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -14745,7 +14747,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           );
         })()}
 
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15148,7 +15150,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 10 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15244,7 +15246,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
         )}
 
         <label style={labelS}>Obra de destino</label>
-        <select value={form.obraDestino} onChange={e => set("obraDestino", e.target.value)} style={selS}>
+        <select value={form.obraDestino} onChange={e => set("obraDestino", idVal(e.target.value))} style={selS}>
           <option value="">— Selecione —</option>
           {obras.filter(o => itemEscolhido ? o.id !== itemEscolhido.obraId : true).map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15486,7 +15488,7 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ferramentas" sub="Manuais e elétricas" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15520,7 +15522,7 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
         <input value={form.quantidade} onChange={e => set("quantidade", e.target.value)} type="number" min="1" style={inputS} />
 
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15826,7 +15828,7 @@ function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrabalhador
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou cargo..." style={inputS} />
 
         {aba === "trabalhadores" && (
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
