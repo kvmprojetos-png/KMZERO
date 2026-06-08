@@ -154,6 +154,11 @@ const store = {
   }
 };
 
+/* ── SESSÃO POR APARELHO — quem está logado é local, NUNCA no Firestore compartilhado.
+   (Antes a sessão ia pro store compartilhado e a sessão do gestor vazava pra todos os aparelhos.) ── */
+const getSessao = () => { try { return JSON.parse(localStorage.getItem("kmzero_sessao") || "null"); } catch { return null; } };
+const setSessao = (u) => { try { if (u) localStorage.setItem("kmzero_sessao", JSON.stringify(u)); else localStorage.removeItem("kmzero_sessao"); } catch (e) { console.warn(e); } };
+
 /* ════════════════════════════════════════════════════
    FILE STORE — Armazenamento de arquivos via IndexedDB
    Preparado para migração futura ao Firebase/Supabase Storage
@@ -17222,7 +17227,7 @@ export default function App() {
       const despAv_  = await store.get("despesasAvulsas");
       const fotos_   = await store.get("fotosObras");
       const forn_    = await store.get("fornecedores");
-      const userLogado = await store.get("usuarioLogado");
+      const userLogado = getSessao();
       if (obras_)   setObras(obras_);
       if (trab_)    setTrab(trab_);
       if (equips_)  setEquips(equips_);
@@ -17364,7 +17369,7 @@ export default function App() {
 
   const login = (u) => {
     setUsuario(u);
-    store.set("usuarioLogado", u);
+    setSessao(u);
     if (u.perfil === "gestor") setTela("gestor");
     else setTela("home");
   };
@@ -17374,7 +17379,7 @@ export default function App() {
     setUsuarios(us => us.map(x => x.id === uAtualizado.id ? uAtualizado : x));
     if (usuario?.id === uAtualizado.id) {
       setUsuario(uAtualizado);
-      store.set("usuarioLogado", uAtualizado);
+      setSessao(uAtualizado);
     }
   };
 
@@ -17387,7 +17392,7 @@ export default function App() {
   const logout = async () => {
     try { await logoutFirebase(); } catch (e) {}
     setUsuario(null);
-    store.set("usuarioLogado", null);
+    setSessao(null);
     setTela("login");
   };
   const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
