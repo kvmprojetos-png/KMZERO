@@ -3863,7 +3863,7 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
                     const cor = cores[u.id % cores.length];
                     const iniciais = u.nome.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
                     return (
-                      <button key={u.id} onClick={() => onLogin({ ...u, ultimoLogin: Date.now() })} className="km-btn-glow" style={{
+                      <button key={u.id} onClick={() => entrarComPIN(u)} className="km-btn-glow" style={{
                         width: "100%",
                         padding: "12px 14px",
                         borderRadius: 12,
