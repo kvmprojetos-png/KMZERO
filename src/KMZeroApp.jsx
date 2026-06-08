@@ -5354,7 +5354,7 @@ function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const [fotoExpandida, setFotoExpandida] = useState(null);
 
   const fotosFiltradas = fotos
-    .filter(f => filtroObra === "todas" || f.obraId === parseInt(filtroObra))
+    .filter(f => filtroObra === "todas" || f.obraId === filtroObra)
     .filter(f => !filtroData || f.data === filtroData)
     .sort((a, b) => b.id - a.id);
 
@@ -5531,7 +5531,7 @@ function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
     return { pres, falt, atest, diasPagos, diaria, total: diaria * diasPagos };
   };
 
-  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(filtroObra));
+  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === filtroObra);
   const dados = trabFiltro.map(t => ({ ...t, _calc: calcularDiasMes(t), _obra: obras.find(o => o.id === t.obraId) })).sort((a, b) => b._calc.total - a._calc.total);
   const totalGeral = dados.reduce((s, d) => s + d._calc.total, 0);
 
@@ -5752,7 +5752,7 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma" sub="Etapas da obra" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -6051,7 +6051,7 @@ function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma Pro" sub={obra?.nome || "—"} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
 
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 10 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -7192,7 +7192,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
   };
 
   const lista = trabalhadores
-    .filter(t => filtroObra === "todas" || t.obraId === parseInt(filtroObra))
+    .filter(t => filtroObra === "todas" || t.obraId === filtroObra)
     .filter(t => !busca || t.nome.toLowerCase().includes(busca.toLowerCase()) || (t.cargo || "").toLowerCase().includes(busca.toLowerCase()))
     .filter(t => {
       if (filtroStatus === "todos") return true;
@@ -7320,7 +7320,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
           <option value="">Selecione a obra</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -7430,7 +7430,7 @@ function TelaFicha({ obras, onBack, onAdd }) {
                 {CARGOS.map(c => <option key={c}>{c}</option>)}
               </select>
               <label style={labelS}>Obra Atual</label>
-              <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+              <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
                 <option value="">Selecione a obra</option>
                 {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
               </select>
@@ -7584,7 +7584,7 @@ function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, onBack })
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Relatório Diário" sub={`${obra?.nome || ""} — ${hoje}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 14 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -7684,7 +7684,7 @@ function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, onBack })
 function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
   const [obraId, setObraId] = useState("todas");
   const dias = ultimosDias(7);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
 
   const dadosPresenca = dias.map(d => {
     const pres = historico[d] || {};
@@ -7698,7 +7698,7 @@ function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
     return { dia: fmtData(d), Presentes: p, Faltas: f, Atestados: a };
   });
 
-  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === parseInt(obraId));
+  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === obraId);
   const dadosPedidos = [
     { name: "Aprovados",  value: totalPedidos.filter(p => p.status === "Aprovado").length,  color: GREEN },
     { name: "Aguardando", value: totalPedidos.filter(p => p.status === "Aguardando").length, color: ORANGE },
@@ -8066,11 +8066,11 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
     if (!novoObraId) { alert("Selecione uma obra."); return; }
     const itensValidos = novoItens.filter(i => i.material && i.material.trim());
     if (itensValidos.length === 0) { alert("Adicione pelo menos um item com nome."); return; }
-    const fornecedor = fornecedores.find(f => f.id === parseInt(novoFornecedorId));
-    const obraSelecionada = obras.find(o => o.id === parseInt(novoObraId));
+    const fornecedor = fornecedores.find(f => f.id === novoFornecedorId);
+    const obraSelecionada = obras.find(o => o.id === novoObraId);
     const novoPedido = {
       id: uuid(),
-      obraId: parseInt(novoObraId),
+      obraId: novoObraId,
       obraNome: obraSelecionada?.nome || "",
       itens: itensValidos,
       material: itensValidos[0].material, // compatibilidade legado
@@ -9564,7 +9564,7 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId || ""} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId || ""} onChange={e => set("obraId", e.target.value)} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <label style={labelS}>Data de Admissão</label>
@@ -9814,7 +9814,7 @@ function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, onMarca
 
   const enviar = () => {
     if (!destinatario || !texto.trim()) return;
-    onEnviar({ id: uuid(), de: usuario.id, para: parseInt(destinatario), texto: texto.trim(), ts: Date.now(), lida: false });
+    onEnviar({ id: uuid(), de: usuario.id, para: destinatario, texto: texto.trim(), ts: Date.now(), lida: false });
     setTexto(""); setDestinatario(""); setComposicao(false);
   };
 
@@ -9908,7 +9908,7 @@ function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Calendário" sub="Histórico de presenças" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
@@ -9974,7 +9974,7 @@ function TelaFolha({ obras, trabalhadores, historico, onBack }) {
     return count;
   })();
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
 
   const calcular = (t) => {
     const total = new Date(ano, mes + 1, 0).getDate();
@@ -10228,14 +10228,14 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
   const [filtroObra, setFiltroObra] = useState("todas");
   const [form, setForm] = useState({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const lista = filtroObra === "todas" ? equips : equips.filter(e => e.obraId === parseInt(filtroObra));
+  const lista = filtroObra === "todas" ? equips : equips.filter(e => e.obraId === filtroObra);
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" }); setModal(true); };
   const abrirEdit = (eq) => { setEditandoId(eq.id); setForm(eq); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.codigo || !form.obraId) return;
     if (editandoId) onEditar({ ...form, id: editandoId });
-    else onAdd({ ...form, id: uuid(), obraId: parseInt(form.obraId) });
+    else onAdd({ ...form, id: uuid(), obraId: form.obraId });
     setModal(false);
   };
 
@@ -10290,7 +10290,7 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
         <label style={labelS}>Código</label>
         <input value={form.codigo} onChange={e => set("codigo", e.target.value)} placeholder="Ex: EQ045" style={inputS} />
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -10680,7 +10680,7 @@ function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manute
 
   // 9) Etapas do cronograma atrasadas
   Object.entries(cronogramas || {}).forEach(([obraId, etapas]) => {
-    const obra = obras.find(o => o.id === parseInt(obraId));
+    const obra = obras.find(o => o.id === obraId);
     if (!obra) return;
     (etapas || []).forEach(e => {
       if (e.progresso === 100) return;
@@ -10689,9 +10689,9 @@ function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manute
           const fim = new Date(e.fim);
           const dias = Math.ceil((fim - agoraD) / (1000 * 60 * 60 * 24));
           if (dias < 0 && e.progresso < 100) {
-            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} atrasada ${Math.abs(dias)}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "alta", color: RED, navegarPara: "cronograma", contextoId: parseInt(obraId) });
+            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} atrasada ${Math.abs(dias)}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "alta", color: RED, navegarPara: "cronograma", contextoId: obraId });
           } else if (dias <= 7 && e.progresso < 80) {
-            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} vence em ${dias}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "media", color: ORANGE, navegarPara: "cronograma", contextoId: parseInt(obraId) });
+            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} vence em ${dias}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "media", color: ORANGE, navegarPara: "cronograma", contextoId: obraId });
           }
         }
       } catch (er) {}
@@ -10821,8 +10821,8 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
   const [obraId, setObraId] = useState("todas");
 
   const dias = ultimosDias(periodo === "semana" ? 7 : 30);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
-  const pedidosFiltro = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
+  const pedidosFiltro = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === obraId);
 
   let totalP = 0, totalF = 0, totalA = 0;
   dias.forEach(d => {
@@ -10861,7 +10861,7 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
         .footer{margin-top:40px;text-align:center;color:#888;font-size:11px;border-top:1px solid #ddd;padding-top:10px;}
       </style></head><body>
       <h1>📊 Relatório Consolidado — ${tituloPeriodo}</h1>
-      <p><b>Obra:</b> ${obraId === "todas" ? "Todas" : obras.find(o => o.id === parseInt(obraId))?.nome} &nbsp;|&nbsp; <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
+      <p><b>Obra:</b> ${obraId === "todas" ? "Todas" : obras.find(o => o.id === obraId)?.nome} &nbsp;|&nbsp; <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
       <h2>Resumo</h2>
       <div>
         <span class="stat" style="background:${GREEN}">${totalP} Presenças</span>
@@ -10967,15 +10967,15 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
     reader.readAsDataURL(file);
   };
 
-  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => a.obraId === parseInt(filtroObra));
+  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => a.obraId === filtroObra);
   const TIPOS = ["Retroescavadeira", "Caminhão", "Betoneira Móvel", "Empilhadeira", "Caminhão Pipa", "Caminhonete", "Outro"];
 
   const abrirNovo = () => { setEditandoId(null); setForm({ tipo: "Retroescavadeira", nome: "", placa: "", obraId: "", horimetro: 0, valorHora: 80, status: "Ativo" }); setModal(true); };
   const abrirEdit = (a) => { setEditandoId(a.id); setForm(a); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.placa || !form.obraId) return;
-    if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
-    else onAdd({ ...form, id: uuid(), obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
+    if (editandoId) onEditar({ ...form, id: editandoId, obraId: form.obraId, horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
+    else onAdd({ ...form, id: uuid(), obraId: form.obraId, horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
     setModal(false);
   };
 
@@ -11143,7 +11143,7 @@ function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
     const d = dataDeStr(a.data);
     if (!d) return false;
     if (d < dataInicio || d > hoje) return false;
-    if (filtroAtivo !== "todos" && a.ativoId !== parseInt(filtroAtivo)) return false;
+    if (filtroAtivo !== "todos" && a.ativoId !== filtroAtivo) return false;
     return true;
   });
 
@@ -11379,7 +11379,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
       ...form,
       id: editandoId || Date.now(),
       valor: parseFloat(form.valor) || 0,
-      obraId: parseInt(form.obraId),
+      obraId: form.obraId,
     };
     if (editandoId) onEditar(dados);
     else onAdd(dados);
@@ -11396,7 +11396,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
 
   // Filtrar despesas
   const despesasFiltradas = (despesas || []).filter(d => {
-    if (filtroObra !== "todas" && d.obraId !== parseInt(filtroObra)) return false;
+    if (filtroObra !== "todas" && d.obraId !== filtroObra) return false;
     try {
       const [dia, mes, ano] = (d.data || "").split("/");
       if (parseInt(mes) - 1 !== filtroMes) return false;
@@ -11629,7 +11629,7 @@ function TelaCustos({ obras, trabalhadores, historico, ativos, abastecimentos, p
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Custos por Obra" sub={`${meses[mes]}/${ano}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 8 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 8 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -11727,7 +11727,7 @@ function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemove }) {
 
   const salvar = () => {
     if (!form.trabId || !form.inicio || !form.fim) return;
-    onAdd({ id: uuid(), trabId: parseInt(form.trabId), inicio: form.inicio, fim: form.fim, obs: form.obs });
+    onAdd({ id: uuid(), trabId: form.trabId, inicio: form.inicio, fim: form.fim, obs: form.obs });
     setModal(false);
     setForm({ trabId: "", inicio: "", fim: "", obs: "" });
   };
@@ -12296,7 +12296,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
 
     // 💰 CUSTO consolidado da semana
     const custoMaoObra = Object.entries(trabPres).reduce((s, [tid, st]) => {
-      const t = trabalhadores.find(x => x.id === parseInt(tid));
+      const t = trabalhadores.find(x => x.id === tid);
       const diaria = (t && parseFloat(t.diaria)) || 0;
       return s + (st.p + st.a) * diaria; // presença + atestado pagam
     }, 0);
@@ -12426,7 +12426,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
           <th style="width:13%;text-align:right">💰 A pagar</th>
         </tr>
         ${Object.entries(trabPres).map(([tid, st]) => {
-          const t = trabalhadores.find(x => x.id === parseInt(tid));
+          const t = trabalhadores.find(x => x.id === tid);
           if (!t) return "";
           const diaria = parseFloat(t.diaria) || 0;
           const aPagar = (st.p + st.a) * diaria;
@@ -12636,7 +12636,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
         </div>
 
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -12928,7 +12928,7 @@ function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover })
 
     if (editando) {
       // Edição
-      onEditar({ ...editando, ...form, obraId: form.obraId ? parseInt(form.obraId) : null });
+      onEditar({ ...editando, ...form, obraId: form.obraId ? form.obraId : null });
       alert(`✅ Acesso atualizado!\n\n${form.nome}\n📧 ${form.email}\n🔑 ${form.senha}`);
     } else {
       // Novo
@@ -12940,7 +12940,7 @@ function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover })
         email: form.email.toLowerCase().trim(),
         senha: form.senha,
         cargo: form.cargo,
-        obraId: form.obraId ? parseInt(form.obraId) : null,
+        obraId: form.obraId ? form.obraId : null,
         perfil: form.perfil,
         tel: form.tel,
         pin: "",
@@ -14021,7 +14021,7 @@ function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd, onRem
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Produtividade" sub={obra?.nome} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -14321,7 +14321,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     }
   };
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
 
   const calcular = (t) => {
     // ════ NOVO: usa o tipo GLOBAL escolhido pelo gestor no topo da tela ════
@@ -14458,7 +14458,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         <div style="text-align:right;font-size:9pt"><b>${empresa.razaoSocial}</b><br>CNPJ: ${empresa.cnpj}<br>${empresa.responsavel}</div>
       </div>
       <h1>FOLHA QUINZENAL DE PAGAMENTO</h1>
-      <div class="periodo"><b>Período:</b> ${periodo} (${quinzena}ª quinzena de ${meses[mes]}/${ano}) ${obraId !== "todas" ? `| <b>Obra:</b> ${obras.find(o => o.id === parseInt(obraId))?.nome}` : ""}</div>
+      <div class="periodo"><b>Período:</b> ${periodo} (${quinzena}ª quinzena de ${meses[mes]}/${ano}) ${obraId !== "todas" ? `| <b>Obra:</b> ${obras.find(o => o.id === obraId)?.nome}` : ""}</div>
       <table>
         <tr>
           <th class="num" style="width:4%">Nº</th>
@@ -14501,7 +14501,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
       ${(() => {
         // Combustível da quinzena
         const abastQuinz = (abastecimentos || []).filter(a => {
-          if (obraId !== "todas" && a.obraId !== parseInt(obraId)) return false;
+          if (obraId !== "todas" && a.obraId !== obraId) return false;
           try {
             const [d, m, y] = (a.data || "").split("/");
             const dia = parseInt(d);
@@ -14802,7 +14802,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           });
           onSalvarFolha({
             id: uuid(), mes, ano, quinzena, periodo,
-            obraId: obraId === "todas" ? null : parseInt(obraId),
+            obraId: obraId === "todas" ? null : obraId,
             itens, totalLiquido: totalFolha, totalAdiant: totalAdiantQuinzena,
             ts: Date.now(),
           });
@@ -14838,13 +14838,13 @@ function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSolicitar }
 
   const enviar = () => {
     if (!trabId || !obraDestino) return;
-    const t = trabalhadores.find(x => x.id === parseInt(trabId));
+    const t = trabalhadores.find(x => x.id === trabId);
     onSolicitar({
       id: uuid(),
-      trabId: parseInt(trabId),
+      trabId: trabId,
       trabNome: t?.nome,
       obraOrigem: t?.obraId,
-      obraDestino: parseInt(obraDestino),
+      obraDestino: obraDestino,
       tipo, motivo,
       solicitante: usuario?.nome,
       status: "Aguardando",
@@ -15071,7 +15071,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const itens = form.tipoItem === "equipamento" ? (equips || []) : (ferramentas || []);
-  const itemEscolhido = itens.find(x => x.id === parseInt(form.itemId));
+  const itemEscolhido = itens.find(x => x.id === form.itemId);
   const obraOrigem = itemEscolhido ? obras.find(o => o.id === itemEscolhido.obraId) : null;
 
   const enviar = () => {
@@ -15080,13 +15080,13 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
     onSolicitar({
       id: uuid(),
       tipoItem: form.tipoItem,
-      itemId: parseInt(form.itemId),
+      itemId: form.itemId,
       itemNome: itemEscolhido.nome,
       itemCodigo: itemEscolhido.codigo || "",
       obraOrigemId: itemEscolhido.obraId,
       obraOrigemNome: obraOrigem?.nome,
-      obraDestinoId: parseInt(form.obraDestino),
-      obraDestinoNome: obras.find(o => o.id === parseInt(form.obraDestino))?.nome,
+      obraDestinoId: form.obraDestino,
+      obraDestinoNome: obras.find(o => o.id === form.obraDestino)?.nome,
       tipo: form.tipo,
       prazo: form.prazo,
       motivo: form.motivo,
@@ -15103,7 +15103,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
   const lista = (movEquip || []).filter(m => {
     if (aba === "ativas") return m.status === "Aguardando" || m.status === "Aprovado" || m.status === "Em trânsito";
     return m.status === "Devolvido" || m.status === "Concluído" || m.status === "Negado";
-  }).filter(m => filtroObra === "todas" || m.obraOrigemId === parseInt(filtroObra) || m.obraDestinoId === parseInt(filtroObra));
+  }).filter(m => filtroObra === "todas" || m.obraOrigemId === filtroObra || m.obraDestinoId === filtroObra);
 
   const aguardando = (movEquip || []).filter(m => m.status === "Aguardando").length;
   const aprovadas = (movEquip || []).filter(m => m.status === "Aprovado").length;
@@ -15469,14 +15469,14 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
   const ICONS = ["🔨", "🪓", "⛏️", "🧰", "🪛", "🚿", "🛒", "🪣", "🧱", "📐", "🪜", "🔗"];
   const SUGEST = ["Inchada", "Enxadão", "Carrinho de mão", "Pá", "Picareta", "Marreta", "Martelo", "Talhadeira", "Trena", "Nível", "Prumo", "Linha", "Colher de pedreiro", "Desempenadeira", "Régua"];
 
-  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => f.obraId === parseInt(filtroObra));
+  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => f.obraId === filtroObra);
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", quantidade: 1, obraId: "", estado: "Bom", icon: "🔨" }); setModal(true); };
   const abrirEdit = (f) => { setEditandoId(f.id); setForm(f); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.obraId) return;
-    if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
-    else onAdd({ ...form, id: uuid(), obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
+    if (editandoId) onEditar({ ...form, id: editandoId, obraId: form.obraId, quantidade: parseInt(form.quantidade) || 1 });
+    else onAdd({ ...form, id: uuid(), obraId: form.obraId, quantidade: parseInt(form.quantidade) || 1 });
     setModal(false);
   };
 
@@ -15789,7 +15789,7 @@ function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrabalhador
     : usuarios.filter(u => u.perfil === "encarregado" && u.tel);
 
   const filtrados = lista.filter(p => {
-    const passaObra = filtroObra === "todas" || p.obraId === parseInt(filtroObra);
+    const passaObra = filtroObra === "todas" || p.obraId === filtroObra;
     const passaBusca = !busca || p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.cargo || "").toLowerCase().includes(busca.toLowerCase());
     return passaObra && passaBusca;
   });
@@ -15875,7 +15875,7 @@ function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack, onAdd,
 
   const salvar = () => {
     if (!form.trabId || !form.valor) return;
-    onAdd({ id: uuid(), trabId: parseInt(form.trabId), valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
+    onAdd({ id: uuid(), trabId: form.trabId, valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
     setForm({ trabId: "", valor: "", motivo: "", data: new Date().toLocaleDateString("pt-BR") });
     setModal(false);
   };
@@ -16145,9 +16145,9 @@ function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes, onBac
   const ordenada = [...lista].map(m => ({ ...m, _s: checaStatus(m) })).sort((a, b) => a._s.prio - b._s.prio);
 
   const getNomeItem = (m) => {
-    if (m.tipoItem === "ativo") return ativos.find(x => x.id === parseInt(m.itemId))?.nome || "—";
-    if (m.tipoItem === "ferramenta") return ferramentas.find(x => x.id === parseInt(m.itemId))?.nome || "—";
-    if (m.tipoItem === "equipamento") return equips.find(x => x.id === parseInt(m.itemId))?.nome || "—";
+    if (m.tipoItem === "ativo") return ativos.find(x => x.id === m.itemId)?.nome || "—";
+    if (m.tipoItem === "ferramenta") return ferramentas.find(x => x.id === m.itemId)?.nome || "—";
+    if (m.tipoItem === "equipamento") return equips.find(x => x.id === m.itemId)?.nome || "—";
     return "—";
   };
 
@@ -16203,7 +16203,7 @@ function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes, onBac
         )}
 
         {ordenada.map(m => {
-          const obra = obras.find(o => o.id === parseInt(m.obraId));
+          const obra = obras.find(o => o.id === m.obraId);
           return (
             <div key={m.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${m._s.cor}` }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
