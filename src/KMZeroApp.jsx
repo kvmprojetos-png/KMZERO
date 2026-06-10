@@ -1,14 +1,97 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual, loginAnonimo } from "./firebase.js";
-import { db } from "./firebase.js";
-import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
+import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "./firebase.js";
+import { getApp } from "firebase/app";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
+import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
 
-/* ── HELPERS DATAh ── */
+/* ───────────────────────────────────────────
+   CLOUD SYNC — Fotos de obra (Storage + Firestore)
+   Fase 2 incremental: fotos sincronizam entre aparelhos.
+   Offline-first: salva local primeiro, nuvem em 2º plano.
+─────────────────────────────────────────── */
+const EMPRESA_ID = "kmzero"; // mono-empresa por ora; vira {empresaId} na migração multi-tenant
+
+let _fb = null;
+function cloudRefs() {
+  if (_fb) return _fb;
+  try {
+    const app = getApp();
+    _fb = { db: getFirestore(app), st: getStorage(app) };
+  } catch (e) {
+    console.warn("Firebase não inicializado — sync de fotos desativada:", e);
+    _fb = null;
+  }
+  return _fb;
+}
+
+async function enviarFotoNuvem(f) {
+  const fb = cloudRefs();
+  if (!fb) return false;
+  try {
+    const id = String(f.id);
+    const r = storageRef(fb.st, `empresas/${EMPRESA_ID}/fotosObras/${id}.jpg`);
+    await uploadString(r, f.foto, "data_url");
+    const url = await getDownloadURL(r);
+    const { foto, ...meta } = f; // não grava base64 no Firestore (limite 1MB/doc)
+    await setDoc(doc(fb.db, "empresas", EMPRESA_ID, "fotosObras", id), {
+      ...meta, id, fotoUrl: url, criadoEm: Date.now(),
+    });
+    return true;
+  } catch (e) {
+    console.error("enviarFotoNuvem:", e);
+    return false; // offline ou regra negada: foto continua salva local
+  }
+}
+
+function observarFotosNuvem(callback) {
+  const fb = cloudRefs();
+  if (!fb) return () => {};
+  try {
+    return onSnapshot(
+      collection(fb.db, "empresas", EMPRESA_ID, "fotosObras"),
+      snap => callback(snap.docs.map(d => { const x = d.data(); return { ...x, foto: x.fotoUrl }; })),
+      e => console.error("observarFotosNuvem:", e)
+    );
+  } catch (e) { console.error(e); return () => {}; }
+}
+
+/* ── Sync genérica de coleções (pedidos, presenças, ...) ── */
+const semUndefined = (o) => JSON.parse(JSON.stringify(o)); // Firestore rejeita undefined
+
+async function enviarDocNuvem(colecao, id, dados) {
+  const fb = cloudRefs();
+  if (!fb) return false;
+  try {
+    await setDoc(doc(fb.db, "empresas", EMPRESA_ID, colecao, String(id)), semUndefined(dados));
+    return true;
+  } catch (e) {
+    console.error("enviarDocNuvem", colecao, e);
+    return false; // offline: dado continua salvo local
+  }
+}
+
+async function removerDocNuvem(colecao, id) {
+  const fb = cloudRefs();
+  if (!fb) return false;
+  try { await deleteDoc(doc(fb.db, "empresas", EMPRESA_ID, colecao, String(id))); return true; }
+  catch (e) { console.error("removerDocNuvem", colecao, e); return false; }
+}
+
+function observarColecaoNuvem(colecao, callback) {
+  const fb = cloudRefs();
+  if (!fb) return () => {};
+  try {
+    return onSnapshot(
+      collection(fb.db, "empresas", EMPRESA_ID, colecao),
+      snap => callback(snap.docs.map(d => d.data())),
+      e => console.error("observarColecaoNuvem", colecao, e)
+    );
+  } catch (e) { console.error(e); return () => {}; }
+}
+
+/* ── HELPERS DATA ── */
 const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-const uuid = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
-// Normaliza id de obra vindo de <select> (string) para casar com obras seed (id numérico) ou novas (uuid string). Preserva "todas"/"".
-const idVal = (v) => /^\d+$/.test(v) ? Number(v) : v;
 const fmtData = (iso) => { const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); };
 const ultimosDias = (n) => {
   const arr = [];
@@ -90,61 +173,37 @@ function feriadoEm(dataISO) {
   return _cacheFeriados[ano][dataISO] || null;
 }
 
-/* ── STORAGE (Firestore + localStorage + sync em tempo real) ── */
-const EMPRESA_ID = "km-consultoria";
-
-const _storeHash   = {};
-const _storeSaving = new Set();
-
+/* ── STORAGE ── */
 const store = {
   async get(key) {
     try {
-      const ref  = doc(db, "empresas", EMPRESA_ID, "dados", key);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const valor = snap.data().v;
-        _storeHash[key] = JSON.stringify(valor);
-        try { localStorage.setItem("kmzero_" + key, JSON.stringify(valor)); } catch {}
-        return valor;
+      // Tenta localStorage primeiro (Vercel/produção)
+      const v = localStorage.getItem("kmzero_" + key);
+      if (v) return JSON.parse(v);
+      // Fallback pra storage do Claude.ai (durante desenvolvimento)
+      if (typeof window !== "undefined" && window.storage && window.storage.get) {
+        const r = await window.storage.get(key);
+        return r ? JSON.parse(r.value) : null;
       }
-      const v = localStorage.getItem("kmzero_" + key);
-      return v ? JSON.parse(v) : null;
-    } catch (e) {
-      console.warn("store.get offline:", e);
-      const v = localStorage.getItem("kmzero_" + key);
-      return v ? JSON.parse(v) : null;
-    }
+      return null;
+    } catch (e) { console.warn("store.get error:", e); return null; }
   },
   async set(key, val) {
-    const hash = JSON.stringify(val);
-    if (_storeHash[key] === hash) return;
-    _storeHash[key] = hash;
-    _storeSaving.add(key);
     try {
-      const ref = doc(db, "empresas", EMPRESA_ID, "dados", key);
-      await setDoc(ref, { v: val, ts: new Date().toISOString() });
-      try { localStorage.setItem("kmzero_" + key, JSON.stringify(val)); } catch {}
-    } catch (e) {
-      console.warn("store.set offline:", e);
-      try { localStorage.setItem("kmzero_" + key, JSON.stringify(val)); } catch (e2) {
-        if (e2.name === "QuotaExceededError") alert("⚠️ Armazenamento cheio! Faça backup e limpe dados antigos.");
+      const json = JSON.stringify(val);
+      // Salva no localStorage (Vercel/produção)
+      localStorage.setItem("kmzero_" + key, json);
+      // Espelha no storage do Claude.ai se disponível
+      if (typeof window !== "undefined" && window.storage && window.storage.set) {
+        try { await window.storage.set(key, json); } catch {}
       }
-    } finally {
-      setTimeout(() => _storeSaving.delete(key), 2000);
+    } catch (e) {
+      console.warn("store.set error:", e);
+      // localStorage cheio? Tenta limpar e salvar
+      if (e.name === "QuotaExceededError") {
+        alert("⚠️ Armazenamento cheio! Faça backup e limpe dados antigos.");
+      }
     }
-  },
-  listen(key, callback) {
-    const ref = doc(db, "empresas", EMPRESA_ID, "dados", key);
-    return onSnapshot(ref, (snap) => {
-      if (_storeSaving.has(key)) return;
-      if (!snap.exists()) return;
-      const val  = snap.data().v;
-      const hash = JSON.stringify(val);
-      if (_storeHash[key] === hash) return;
-      _storeHash[key] = hash;
-      try { localStorage.setItem("kmzero_" + key, JSON.stringify(val)); } catch {}
-      callback(val ?? null);
-    });
   },
   async clear() {
     try {
@@ -153,11 +212,6 @@ const store = {
     } catch (e) { console.warn(e); }
   }
 };
-
-/* ── SESSÃO POR APARELHO — quem está logado é local, NUNCA no Firestore compartilhado.
-   (Antes a sessão ia pro store compartilhado e a sessão do gestor vazava pra todos os aparelhos.) ── */
-const getSessao = () => { try { return JSON.parse(localStorage.getItem("kmzero_sessao") || "null"); } catch { return null; } };
-const setSessao = (u) => { try { if (u) localStorage.setItem("kmzero_sessao", JSON.stringify(u)); else localStorage.removeItem("kmzero_sessao"); } catch (e) { console.warn(e); } };
 
 /* ════════════════════════════════════════════════════
    FILE STORE — Armazenamento de arquivos via IndexedDB
@@ -2724,7 +2778,7 @@ const EQUIP_COLOR = { "Em Uso": BLUE, "Quebrada": RED, "Disponível": GREEN };
 const STATUS_COLOR = { "Presente": GREEN, "Falta": RED, "Atestado": ORANGE };
 
 const DEFAULT_USUARIOS = [
-  { id: "gestor-km", nome: "Kleber Vieira Martins", email: "kvmprojetos@gmail.com", pin: "", biometriaAtiva: false, perfil: "gestor", obraId: null, tel: "(28) 99925-8172" },
+  { id: 1, nome: "Kleber Vieira Martins", email: "kleber@km.com",   senha: "123", pin: "", biometriaAtiva: false, perfil: "gestor",      obraId: null, tel: "(28) 99925-8172" },
 ];
 
 const EMPRESA_PADRAO = {
@@ -3524,13 +3578,12 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
         // Caso ainda não exista cadastro local para este email, cria um perfil de gestor padrão
         u = {
           id: r.user.uid,
-          nome: r.user.displayName || "Gestor",
+          nome: "Gestor",
           email: r.user.email,
           perfil: "gestor",
           ativo: true,
           firebaseUid: r.user.uid,
         };
-        if (onCadastrar) onCadastrar(u);
       }
       setCarregando(false);
       onLogin({ ...u, firebaseUid: r.user.uid, ultimoLogin: Date.now() });
@@ -3560,20 +3613,14 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
   };
 
   const entrarComPIN = (u) => {
-    // Gestor: Firebase Auth obrigatório
+    // Se for gestor, manda para a tela de senha (autenticação Firebase obrigatória)
     if (u.perfil === "gestor") {
       setEmailGestor(u.email || "");
       setTelaInterna("gestor");
       return;
     }
-    // Encarregado: exige PIN (se tiver) ou senha antes de entrar
-    setUsuarioSelecionado(u);
-    if (u.pin) {
-      setModoPIN("confirmar");
-    } else {
-      setEmailPrim(u.email || "");
-      setTelaInterna("primeiro_acesso");
-    }
+    // Encarregado entra direto pelo card "Continuar como"
+    onLogin({ ...u, ultimoLogin: Date.now() });
   };
 
   if (modoPIN && usuarioSelecionado) {
@@ -3863,7 +3910,7 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
                     const cor = cores[u.id % cores.length];
                     const iniciais = u.nome.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
                     return (
-                      <button key={u.id} onClick={() => entrarComPIN(u)} className="km-btn-glow" style={{
+                      <button key={u.id} onClick={() => onLogin({ ...u, ultimoLogin: Date.now() })} className="km-btn-glow" style={{
                         width: "100%",
                         padding: "12px 14px",
                         borderRadius: 12,
@@ -4594,7 +4641,7 @@ function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos,
                   // Manda pra galeria
                   if (onSalvarFotoObra) {
                     onSalvarFotoObra({
-                      id: uuid(),
+                      id: Date.now() + i,
                       numero: numeroFoto,
                       obraId: obra.id,
                       obraNome: obra.nome,
@@ -4628,7 +4675,7 @@ function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos,
                 });
 
                 const rdo = {
-                  id: uuid(),
+                  id: Date.now(),
                   numero,
                   obraId: obra.id,
                   data: dataStr,
@@ -4800,7 +4847,7 @@ function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
   const enviarPedido = () => {
     if (itens.length === 0) return;
     onAddPedido({
-      id: uuid(),
+      id: Date.now(),
       obra: obra.nome,
       obraId: obra.id,
       itens, // múltiplos itens!
@@ -5361,7 +5408,7 @@ function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const [fotoExpandida, setFotoExpandida] = useState(null);
 
   const fotosFiltradas = fotos
-    .filter(f => filtroObra === "todas" || f.obraId === filtroObra)
+    .filter(f => filtroObra === "todas" || f.obraId === parseInt(filtroObra))
     .filter(f => !filtroData || f.data === filtroData)
     .sort((a, b) => b.id - a.id);
 
@@ -5403,7 +5450,7 @@ function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
         {/* Filtros */}
         <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
           <label style={labelS}>🏗️ Obra</label>
-          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={selS}>
+          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={selS}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -5538,7 +5585,7 @@ function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
     return { pres, falt, atest, diasPagos, diaria, total: diaria * diasPagos };
   };
 
-  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === filtroObra);
+  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(filtroObra));
   const dados = trabFiltro.map(t => ({ ...t, _calc: calcularDiasMes(t), _obra: obras.find(o => o.id === t.obraId) })).sort((a, b) => b._calc.total - a._calc.total);
   const totalGeral = dados.reduce((s, d) => s + d._calc.total, 0);
 
@@ -5554,7 +5601,7 @@ function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
 
       {!colapsada && (
         <>
-          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: "1px solid #eee", fontSize: 12, fontWeight: 600, color: NAVY, background: "#fafbfc" }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: "1px solid #eee", fontSize: 12, fontWeight: 600, color: NAVY, background: "#fafbfc" }}>
             <option value="todas">🏗️ Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -5658,7 +5705,7 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
       dataAtual = new Date(fim);
       dataAtual.setDate(dataAtual.getDate() + 1);
       return {
-        id: uuid(),
+        id: Date.now() + i,
         nome: e.nome,
         ordem: i,
         inicio: ini.toISOString().split("T")[0],
@@ -5677,7 +5724,7 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
     if (ja) {
       novas = etapas.map(e => e.id === etapa.id ? etapa : e);
     } else {
-      novas = [...etapas, { ...etapa, ordem: etapas.length, id: uuid() }];
+      novas = [...etapas, { ...etapa, ordem: etapas.length, id: Date.now() }];
     }
     onSalvar(obraId, novas);
     setModal(false);
@@ -5759,7 +5806,7 @@ function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma" sub="Etapas da obra" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -6058,7 +6105,7 @@ function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma Pro" sub={obra?.nome || "—"} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
 
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -6684,7 +6731,7 @@ function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos,
   const salvar = () => {
     if (!form.nome || !form.local) return;
     if (editandoId) onEditar({ ...form, id: editandoId });
-    else onAdd({ id: uuid(), ...form });
+    else onAdd({ id: Date.now(), ...form });
     setModal(false);
   };
 
@@ -7199,7 +7246,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
   };
 
   const lista = trabalhadores
-    .filter(t => filtroObra === "todas" || t.obraId === filtroObra)
+    .filter(t => filtroObra === "todas" || t.obraId === parseInt(filtroObra))
     .filter(t => !busca || t.nome.toLowerCase().includes(busca.toLowerCase()) || (t.cargo || "").toLowerCase().includes(busca.toLowerCase()))
     .filter(t => {
       if (filtroStatus === "todos") return true;
@@ -7243,7 +7290,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>🔍</span>
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou cargo..." style={{ ...inputS, paddingLeft: 38, marginBottom: 0 }} />
         </div>
-        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12, marginTop: 8 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12, marginTop: 8 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -7327,7 +7374,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
           <option value="">Selecione a obra</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -7338,7 +7385,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
         </div>
         <Btn label="SALVAR" color={GREEN} onClick={() => {
           if (!form.nome || !form.cargo || !form.obraId) return;
-          const novo = { id: uuid(), nome: form.nome, cargo: form.cargo, obraId: form.obraId, cpf: form.cpf, tel: form.tel, diaria: form.diaria };
+          const novo = { id: Date.now(), nome: form.nome, cargo: form.cargo, obraId: form.obraId, cpf: form.cpf, tel: form.tel, diaria: form.diaria };
           onAdd(novo, null); // sempre sem login — é só pra folha
           setModal(false);
           setForm({ nome: "", cargo: "", obraId: "", cpf: "", tel: "", diaria: "" });
@@ -7437,7 +7484,7 @@ function TelaFicha({ obras, onBack, onAdd }) {
                 {CARGOS.map(c => <option key={c}>{c}</option>)}
               </select>
               <label style={labelS}>Obra Atual</label>
-              <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+              <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
                 <option value="">Selecione a obra</option>
                 {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
               </select>
@@ -7564,7 +7611,7 @@ function TelaFicha({ obras, onBack, onAdd }) {
               ))}
             </div>
 
-            <Btn label="SALVAR FICHA COMPLETA" color={GOLD} onClick={() => { if (form.nome && form.cpf) { onAdd({ id: uuid(), ...form }); setSalvo(true); } }} style={{ marginBottom: 24 }} />
+            <Btn label="SALVAR FICHA COMPLETA" color={GOLD} onClick={() => { if (form.nome && form.cpf) { onAdd({ id: Date.now(), ...form }); setSalvo(true); } }} style={{ marginBottom: 24 }} />
           </>
         )}
       </div>
@@ -7591,7 +7638,7 @@ function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, onBack })
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Relatório Diário" sub={`${obra?.nome || ""} — ${hoje}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -7691,7 +7738,7 @@ function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, onBack })
 function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
   const [obraId, setObraId] = useState("todas");
   const dias = ultimosDias(7);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
 
   const dadosPresenca = dias.map(d => {
     const pres = historico[d] || {};
@@ -7705,7 +7752,7 @@ function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
     return { dia: fmtData(d), Presentes: p, Faltas: f, Atestados: a };
   });
 
-  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === obraId);
+  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === parseInt(obraId));
   const dadosPedidos = [
     { name: "Aprovados",  value: totalPedidos.filter(p => p.status === "Aprovado").length,  color: GREEN },
     { name: "Aguardando", value: totalPedidos.filter(p => p.status === "Aguardando").length, color: ORANGE },
@@ -7720,7 +7767,7 @@ function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Dashboard" sub="Visão geral" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 14 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -8073,11 +8120,11 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
     if (!novoObraId) { alert("Selecione uma obra."); return; }
     const itensValidos = novoItens.filter(i => i.material && i.material.trim());
     if (itensValidos.length === 0) { alert("Adicione pelo menos um item com nome."); return; }
-    const fornecedor = fornecedores.find(f => f.id === novoFornecedorId);
-    const obraSelecionada = obras.find(o => o.id === novoObraId);
+    const fornecedor = fornecedores.find(f => f.id === parseInt(novoFornecedorId));
+    const obraSelecionada = obras.find(o => o.id === parseInt(novoObraId));
     const novoPedido = {
-      id: uuid(),
-      obraId: novoObraId,
+      id: Date.now(),
+      obraId: parseInt(novoObraId),
       obraNome: obraSelecionada?.nome || "",
       itens: itensValidos,
       material: itensValidos[0].material, // compatibilidade legado
@@ -8285,7 +8332,7 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
         </div>
 
         <label style={labelS}>🏗️ Obra</label>
-        <select value={novoObraId} onChange={e => setNovoObraId(idVal(e.target.value))} style={selS}>
+        <select value={novoObraId} onChange={e => setNovoObraId(e.target.value)} style={selS}>
           <option value="">Selecione a obra...</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -8431,7 +8478,7 @@ function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
           font-size: 6.5pt; letter-spacing: 0.3px; font-weight: 800;
           text-transform: uppercase;
         }
-        table { width: 100%; border-collapse: collapse; font-size: 7pt; table-layout: auto; }
+        table { width: 100%; max-width: 100%; border-collapse: collapse; font-size: 7pt; table-layout: fixed; }
         th { background: #e8eef6; color: #003060; padding: 2px 4px; border: 1px solid #c5d0e0; text-align: left; font-size: 6pt; text-transform: uppercase; font-weight: 800; white-space: nowrap; }
         td { padding: 2px 4px; border: 1px solid #d5dce6; vertical-align: top; white-space: nowrap; }
         td.td-wrap { white-space: normal; overflow-wrap: break-word; word-break: normal; }
@@ -8517,7 +8564,7 @@ function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
       <table>
         <thead>
           <tr>
-            <th class="num">#</th>
+            <th class="num" style="width:16px;">#</th>
             <th>Material</th>
             <th style="text-align:right;width:50px;">Qtd</th>
           </tr>
@@ -8526,7 +8573,7 @@ function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
           ${itens.map((item, i) => `
             <tr>
               <td class="num">${i + 1}</td>
-              <td>
+              <td class="td-wrap">
                 <b>${item.materialBase || item.material}</b>
                 ${item.marca ? `<br/><span class="marca">🏷️ ${item.marca}</span>` : ""}
                 ${item.obs ? `<div class="obs-item">📝 ${item.obs}</div>` : ""}
@@ -9112,13 +9159,23 @@ function gerarFichaCadastralPDF(t, obra, empresa) {
 /* ════════════════════════════════════
    DETALHE DO TRABALHADOR
 ════════════════════════════════════ */
-function CalendarioPresenca({ trabalhador, historico }) {
+function CalendarioPresenca({ trabalhador, historico, podeEditar = false, onEditarDia }) {
   const [mesOffset, setMesOffset] = useState(0);
 
   const hoje = new Date();
   const ref = new Date(hoje.getFullYear(), hoje.getMonth() + mesOffset, 1);
   const ano = ref.getFullYear();
   const mes = ref.getMonth();
+
+  const chaveISODia = (dia) => `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  const PROXIMO_STATUS = { null: "Presente", "Presente": "Falta", "Falta": "Atestado", "Atestado": null };
+
+  const tocarDia = (dia, st) => {
+    if (!podeEditar || !onEditarDia) return;
+    const ehFuturo = mesOffset === 0 && dia > hoje.getDate();
+    if (ehFuturo) return;
+    onEditarDia(chaveISODia(dia), PROXIMO_STATUS[st] !== undefined ? PROXIMO_STATUS[st] : "Presente");
+  };
 
   const nomesMes = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const diasSemana = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -9199,6 +9256,7 @@ function CalendarioPresenca({ trabalhador, historico }) {
           return (
             <div
               key={i}
+              onClick={() => tocarDia(dia, st)}
               style={{
                 aspectRatio: "1",
                 background: corFundo(st),
@@ -9209,6 +9267,7 @@ function CalendarioPresenca({ trabalhador, historico }) {
                 justifyContent: "center",
                 border: ehHoje ? `2px solid ${NAVY}` : "1px solid #f1f5f9",
                 minHeight: 34,
+                cursor: podeEditar && !(ehMesAtual && dia > hoje.getDate()) ? "pointer" : "default",
               }}
             >
               <div style={{ fontSize: 12, fontWeight: 700, color: st ? corTexto(st) : "#94a3b8" }}>{dia}</div>
@@ -9242,11 +9301,16 @@ function CalendarioPresenca({ trabalhador, historico }) {
         <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fee2e2", borderRadius: 2, marginRight: 3 }}></span>Falta</span>
         <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fef3c7", borderRadius: 2, marginRight: 3 }}></span>Atestado</span>
       </div>
+      {podeEditar && (
+        <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: NAVY, fontWeight: 600, background: "#f0f6ff", borderRadius: 8, padding: "6px 8px" }}>
+          ✏️ Modo gestor: toque no dia para corrigir (Presente → Falta → Atestado → limpar)
+        </div>
+      )}
     </div>
   );
 }
 
-function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = [], empresa = {}, onBack, onEditar }) {
+function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = [], empresa = {}, usuario, onBack, onEditar, onEditarPresenca }) {
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState(trabalhador || {});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -9389,8 +9453,13 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
           </div>
         </div>
 
-        {/* CALENDÁRIO DE PRESENÇA DO MÊS */}
-        <CalendarioPresenca trabalhador={trabalhador} historico={historico} />
+        {/* CALENDÁRIO DE PRESENÇA DO MÊS (gestor pode corrigir) */}
+        <CalendarioPresenca
+          trabalhador={trabalhador}
+          historico={historico}
+          podeEditar={usuario?.perfil === "gestor"}
+          onEditarDia={(dataISO, novoStatus) => onEditarPresenca && onEditarPresenca(dataISO, trabalhador.id, novoStatus)}
+        />
 
         {/* ALIMENTAÇÃO DO MÊS */}
         {(() => {
@@ -9571,7 +9640,7 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId || ""} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+        <select value={form.obraId || ""} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <label style={labelS}>Data de Admissão</label>
@@ -9821,7 +9890,7 @@ function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, onMarca
 
   const enviar = () => {
     if (!destinatario || !texto.trim()) return;
-    onEnviar({ id: uuid(), de: usuario.id, para: destinatario, texto: texto.trim(), ts: Date.now(), lida: false });
+    onEnviar({ id: Date.now(), de: usuario.id, para: parseInt(destinatario), texto: texto.trim(), ts: Date.now(), lida: false });
     setTexto(""); setDestinatario(""); setComposicao(false);
   };
 
@@ -9915,7 +9984,7 @@ function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Calendário" sub="Histórico de presenças" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
@@ -9981,7 +10050,7 @@ function TelaFolha({ obras, trabalhadores, historico, onBack }) {
     return count;
   })();
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
 
   const calcular = (t) => {
     const total = new Date(ano, mes + 1, 0).getDate();
@@ -10014,7 +10083,7 @@ function TelaFolha({ obras, trabalhadores, historico, onBack }) {
             {[ano - 1, ano, ano + 1].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -10093,7 +10162,7 @@ function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onAdd, onR
         // Manda pra galeria também
         if (onSalvarFotoObra) {
           onSalvarFotoObra({
-            id: uuid(),
+            id: Date.now(),
             numero: numeroFoto,
             obraId: obra.id,
             obraNome: obra.nome,
@@ -10110,7 +10179,7 @@ function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onAdd, onR
       }
     }
 
-    onAdd({ id: uuid(), obraId: obra.id, autor: usuario?.nome || "—", texto: texto.trim(), foto: fotoFinal, ts: Date.now() });
+    onAdd({ id: Date.now(), obraId: obra.id, autor: usuario?.nome || "—", texto: texto.trim(), foto: fotoFinal, ts: Date.now() });
     setTexto("");
     setFoto(null);
     setSalvando(false);
@@ -10235,14 +10304,14 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
   const [filtroObra, setFiltroObra] = useState("todas");
   const [form, setForm] = useState({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const lista = filtroObra === "todas" ? equips : equips.filter(e => e.obraId === filtroObra);
+  const lista = filtroObra === "todas" ? equips : equips.filter(e => e.obraId === parseInt(filtroObra));
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" }); setModal(true); };
   const abrirEdit = (eq) => { setEditandoId(eq.id); setForm(eq); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.codigo || !form.obraId) return;
     if (editandoId) onEditar({ ...form, id: editandoId });
-    else onAdd({ ...form, id: uuid(), obraId: form.obraId });
+    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId) });
     setModal(false);
   };
 
@@ -10252,7 +10321,7 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Equipamentos" sub="Gestão completa" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -10297,7 +10366,7 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
         <label style={labelS}>Código</label>
         <input value={form.codigo} onChange={e => set("codigo", e.target.value)} placeholder="Ex: EQ045" style={inputS} />
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -10687,7 +10756,7 @@ function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manute
 
   // 9) Etapas do cronograma atrasadas
   Object.entries(cronogramas || {}).forEach(([obraId, etapas]) => {
-    const obra = obras.find(o => o.id === obraId);
+    const obra = obras.find(o => o.id === parseInt(obraId));
     if (!obra) return;
     (etapas || []).forEach(e => {
       if (e.progresso === 100) return;
@@ -10696,9 +10765,9 @@ function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manute
           const fim = new Date(e.fim);
           const dias = Math.ceil((fim - agoraD) / (1000 * 60 * 60 * 24));
           if (dias < 0 && e.progresso < 100) {
-            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} atrasada ${Math.abs(dias)}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "alta", color: RED, navegarPara: "cronograma", contextoId: obraId });
+            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} atrasada ${Math.abs(dias)}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "alta", color: RED, navegarPara: "cronograma", contextoId: parseInt(obraId) });
           } else if (dias <= 7 && e.progresso < 80) {
-            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} vence em ${dias}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "media", color: ORANGE, navegarPara: "cronograma", contextoId: obraId });
+            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} vence em ${dias}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "media", color: ORANGE, navegarPara: "cronograma", contextoId: parseInt(obraId) });
           }
         }
       } catch (er) {}
@@ -10828,8 +10897,8 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
   const [obraId, setObraId] = useState("todas");
 
   const dias = ultimosDias(periodo === "semana" ? 7 : 30);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
-  const pedidosFiltro = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === obraId);
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
+  const pedidosFiltro = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === parseInt(obraId));
 
   let totalP = 0, totalF = 0, totalA = 0;
   dias.forEach(d => {
@@ -10868,7 +10937,7 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
         .footer{margin-top:40px;text-align:center;color:#888;font-size:11px;border-top:1px solid #ddd;padding-top:10px;}
       </style></head><body>
       <h1>📊 Relatório Consolidado — ${tituloPeriodo}</h1>
-      <p><b>Obra:</b> ${obraId === "todas" ? "Todas" : obras.find(o => o.id === obraId)?.nome} &nbsp;|&nbsp; <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
+      <p><b>Obra:</b> ${obraId === "todas" ? "Todas" : obras.find(o => o.id === parseInt(obraId))?.nome} &nbsp;|&nbsp; <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
       <h2>Resumo</h2>
       <div>
         <span class="stat" style="background:${GREEN}">${totalP} Presenças</span>
@@ -10896,7 +10965,7 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
             <option value="semana">Última semana</option>
             <option value="mes">Último mês</option>
           </select>
-          <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, flex: 1, marginBottom: 0 }}>
+          <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, flex: 1, marginBottom: 0 }}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -10974,22 +11043,22 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
     reader.readAsDataURL(file);
   };
 
-  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => a.obraId === filtroObra);
+  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => a.obraId === parseInt(filtroObra));
   const TIPOS = ["Retroescavadeira", "Caminhão", "Betoneira Móvel", "Empilhadeira", "Caminhão Pipa", "Caminhonete", "Outro"];
 
   const abrirNovo = () => { setEditandoId(null); setForm({ tipo: "Retroescavadeira", nome: "", placa: "", obraId: "", horimetro: 0, valorHora: 80, status: "Ativo" }); setModal(true); };
   const abrirEdit = (a) => { setEditandoId(a.id); setForm(a); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.placa || !form.obraId) return;
-    if (editandoId) onEditar({ ...form, id: editandoId, obraId: form.obraId, horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
-    else onAdd({ ...form, id: uuid(), obraId: form.obraId, horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
+    if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
+    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
     setModal(false);
   };
 
   const abastecer = () => {
     if (!formAbast.litros || !formAbast.valor) return;
     onAbastecer({
-      id: uuid(), ativoId: modalAbast.id, obraId: modalAbast.obraId,
+      id: Date.now(), ativoId: modalAbast.id, obraId: modalAbast.obraId,
       litros: parseFloat(formAbast.litros), valor: parseFloat(formAbast.valor),
       horimetro: parseFloat(formAbast.horimetro) || 0, combustivel: formAbast.combustivel,
       fotoCupom: formAbast.fotoCupom,
@@ -11005,7 +11074,7 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ativos & Frota" sub="Veículos e maquinário" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -11077,7 +11146,7 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
         <label style={labelS}>Placa</label>
         <input value={form.placa} onChange={e => set("placa", e.target.value)} placeholder="ABC-1234" style={inputS} />
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -11150,7 +11219,7 @@ function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
     const d = dataDeStr(a.data);
     if (!d) return false;
     if (d < dataInicio || d > hoje) return false;
-    if (filtroAtivo !== "todos" && a.ativoId !== filtroAtivo) return false;
+    if (filtroAtivo !== "todos" && a.ativoId !== parseInt(filtroAtivo)) return false;
     return true;
   });
 
@@ -11386,7 +11455,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
       ...form,
       id: editandoId || Date.now(),
       valor: parseFloat(form.valor) || 0,
-      obraId: form.obraId,
+      obraId: parseInt(form.obraId),
     };
     if (editandoId) onEditar(dados);
     else onAdd(dados);
@@ -11403,7 +11472,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
 
   // Filtrar despesas
   const despesasFiltradas = (despesas || []).filter(d => {
-    if (filtroObra !== "todas" && d.obraId !== filtroObra) return false;
+    if (filtroObra !== "todas" && d.obraId !== parseInt(filtroObra)) return false;
     try {
       const [dia, mes, ano] = (d.data || "").split("/");
       if (parseInt(mes) - 1 !== filtroMes) return false;
@@ -11446,7 +11515,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
         {/* Filtros */}
         <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
           <label style={labelS}>🏗️ Obra</label>
-          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={selS}>
+          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={selS}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -11515,7 +11584,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
         )}
 
         <label style={labelS}>🏗️ Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
           <option value="">— Selecione —</option>
           {obras.filter(o => o.status === "Ativa").map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -11636,7 +11705,7 @@ function TelaCustos({ obras, trabalhadores, historico, ativos, abastecimentos, p
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Custos por Obra" sub={`${meses[mes]}/${ano}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 8 }}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 8 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -11734,7 +11803,7 @@ function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemove }) {
 
   const salvar = () => {
     if (!form.trabId || !form.inicio || !form.fim) return;
-    onAdd({ id: uuid(), trabId: form.trabId, inicio: form.inicio, fim: form.fim, obs: form.obs });
+    onAdd({ id: Date.now(), trabId: parseInt(form.trabId), inicio: form.inicio, fim: form.fim, obs: form.obs });
     setModal(false);
     setForm({ trabId: "", inicio: "", fim: "", obs: "" });
   };
@@ -11862,8 +11931,8 @@ function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, t
       .table-scroll { overflow-x: auto; max-width: 100%; }
       /* Coluna 1 (numero): compacta */
       th:first-child, td:first-child { min-width: 28px; }
-      /* Coluna 2 (nome): NÃO quebra, coluna se alarga ao texto */
-      th:nth-child(2), td:nth-child(2) { white-space: nowrap; min-width: 100px; }
+      /* Coluna 2 (nome): quebra em 2 linhas se for longo (não invade a coluna Cargo) */
+      th:nth-child(2), td:nth-child(2) { white-space: normal; overflow-wrap: break-word; word-break: normal; min-width: 100px; }
       td.num { text-align: right; white-space: nowrap; }
       tr:nth-child(even) td { background: #fafbfd; }
       .num { text-align: center; font-variant-numeric: tabular-nums; }
@@ -12115,7 +12184,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
 
   const emitir = () => {
     const numero = proxNumero;
-    onEmitirRDO({ id: uuid(), numero, obraId, data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
+    onEmitirRDO({ id: Date.now(), numero, obraId, data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
     gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas: presencasDia, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias: ocorrenciasDia, encarregado: usuario?.nome, empresa, recebimentos });
   };
 
@@ -12303,7 +12372,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
 
     // 💰 CUSTO consolidado da semana
     const custoMaoObra = Object.entries(trabPres).reduce((s, [tid, st]) => {
-      const t = trabalhadores.find(x => x.id === tid);
+      const t = trabalhadores.find(x => x.id === parseInt(tid));
       const diaria = (t && parseFloat(t.diaria)) || 0;
       return s + (st.p + st.a) * diaria; // presença + atestado pagam
     }, 0);
@@ -12433,7 +12502,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
           <th style="width:13%;text-align:right">💰 A pagar</th>
         </tr>
         ${Object.entries(trabPres).map(([tid, st]) => {
-          const t = trabalhadores.find(x => x.id === tid);
+          const t = trabalhadores.find(x => x.id === parseInt(tid));
           if (!t) return "";
           const diaria = parseFloat(t.diaria) || 0;
           const aPagar = (st.p + st.a) * diaria;
@@ -12643,7 +12712,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
         </div>
 
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -12798,7 +12867,7 @@ function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar, onRemo
   const salvar = () => {
     if (!form.nome) return;
     if (editandoId) onEditar({ ...form, id: editandoId, salarioMensal: parseFloat(form.salarioMensal) || 0 });
-    else onAdd({ ...form, id: uuid(), salarioMensal: parseFloat(form.salarioMensal) || 0 });
+    else onAdd({ ...form, id: Date.now(), salarioMensal: parseFloat(form.salarioMensal) || 0 });
     setModal(false);
   };
 
@@ -12932,22 +13001,23 @@ function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover })
     if (!form.nome.trim()) { alert("⚠️ Informe o nome"); return; }
     if (!form.email.trim()) { alert("⚠️ Informe o e-mail"); return; }
     if (!form.senha.trim()) { alert("⚠️ Informe a senha"); return; }
+    if (form.perfil !== "gestor" && !form.obraId) { alert("⚠️ Selecione a obra deste acesso.\n\nSem obra vinculada, o encarregado não vê a equipe nem os pedidos certos."); return; }
 
     if (editando) {
       // Edição
-      onEditar({ ...editando, ...form, obraId: form.obraId ? form.obraId : null });
+      onEditar({ ...editando, ...form, obraId: form.obraId ? parseInt(form.obraId) : null });
       alert(`✅ Acesso atualizado!\n\n${form.nome}\n📧 ${form.email}\n🔑 ${form.senha}`);
     } else {
       // Novo
       const jaExiste = usuarios.find(u => u.email.toLowerCase() === form.email.toLowerCase().trim());
       if (jaExiste) { alert("⚠️ Já existe um acesso com esse e-mail"); return; }
       const novo = {
-        id: uuid(),
+        id: Date.now(),
         nome: form.nome.trim(),
         email: form.email.toLowerCase().trim(),
         senha: form.senha,
         cargo: form.cargo,
-        obraId: form.obraId ? form.obraId : null,
+        obraId: form.obraId ? parseInt(form.obraId) : null,
         perfil: form.perfil,
         tel: form.tel,
         pin: "",
@@ -13075,7 +13145,7 @@ function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover })
         </select>
 
         <label style={labelS}>🏗️ Obra que vai gerenciar</label>
-        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
           <option value="">Sem obra fixa</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -14010,7 +14080,7 @@ function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd, onRem
 
   const adicionar = () => {
     if (!qtd) return;
-    onAdd({ id: uuid(), obraId, tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
+    onAdd({ id: Date.now(), obraId, tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
     setQtd(""); setObs("");
   };
 
@@ -14028,7 +14098,7 @@ function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd, onRem
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Produtividade" sub={obra?.nome} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -14099,8 +14169,9 @@ function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack, onAdd 
   const [obs, setObs] = useState("");
   const [conformidade, setConformidade] = useState("Conforme");
 
-  const aprovados = pedidos.filter(p => p.status === "Aprovado" && (!usuario?.obraId || p.obraId === usuario.obraId));
-  const meusReceb = recebimentos.filter(r => !usuario?.obraId || r.obraId === usuario.obraId);
+  const ehGestor = usuario?.perfil === "gestor";
+  const aprovados = pedidos.filter(p => p.status === "Aprovado" && (ehGestor || (usuario?.obraId && p.obraId === usuario.obraId)));
+  const meusReceb = recebimentos.filter(r => ehGestor || (usuario?.obraId && r.obraId === usuario.obraId));
 
   const handleFoto = (e) => {
     const f = e.target.files?.[0];
@@ -14112,7 +14183,7 @@ function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack, onAdd 
 
   const confirmar = () => {
     onAdd({
-      id: uuid(), pedidoId: pedidoSel.id, obraId: pedidoSel.obraId,
+      id: Date.now(), pedidoId: pedidoSel.id, obraId: pedidoSel.obraId,
       material: pedidoSel.material, qtd: pedidoSel.qtd, foto, obs, conformidade,
       autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR"),
     });
@@ -14328,7 +14399,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     }
   };
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === obraId);
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
 
   const calcular = (t) => {
     // ════ NOVO: usa o tipo GLOBAL escolhido pelo gestor no topo da tela ════
@@ -14465,7 +14536,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         <div style="text-align:right;font-size:9pt"><b>${empresa.razaoSocial}</b><br>CNPJ: ${empresa.cnpj}<br>${empresa.responsavel}</div>
       </div>
       <h1>FOLHA QUINZENAL DE PAGAMENTO</h1>
-      <div class="periodo"><b>Período:</b> ${periodo} (${quinzena}ª quinzena de ${meses[mes]}/${ano}) ${obraId !== "todas" ? `| <b>Obra:</b> ${obras.find(o => o.id === obraId)?.nome}` : ""}</div>
+      <div class="periodo"><b>Período:</b> ${periodo} (${quinzena}ª quinzena de ${meses[mes]}/${ano}) ${obraId !== "todas" ? `| <b>Obra:</b> ${obras.find(o => o.id === parseInt(obraId))?.nome}` : ""}</div>
       <table>
         <tr>
           <th class="num" style="width:4%">Nº</th>
@@ -14508,7 +14579,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
       ${(() => {
         // Combustível da quinzena
         const abastQuinz = (abastecimentos || []).filter(a => {
-          if (obraId !== "todas" && a.obraId !== obraId) return false;
+          if (obraId !== "todas" && a.obraId !== parseInt(obraId)) return false;
           try {
             const [d, m, y] = (a.data || "").split("/");
             const dia = parseInt(d);
@@ -14752,7 +14823,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           );
         })()}
 
-        <select value={obraId} onChange={e => setObraId(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -14808,8 +14879,8 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
             return { trabId: t.id, nome: t.nome, cargo: t.cargo, ...c };
           });
           onSalvarFolha({
-            id: uuid(), mes, ano, quinzena, periodo,
-            obraId: obraId === "todas" ? null : obraId,
+            id: Date.now(), mes, ano, quinzena, periodo,
+            obraId: obraId === "todas" ? null : parseInt(obraId),
             itens, totalLiquido: totalFolha, totalAdiant: totalAdiantQuinzena,
             ts: Date.now(),
           });
@@ -14845,13 +14916,13 @@ function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSolicitar }
 
   const enviar = () => {
     if (!trabId || !obraDestino) return;
-    const t = trabalhadores.find(x => x.id === trabId);
+    const t = trabalhadores.find(x => x.id === parseInt(trabId));
     onSolicitar({
-      id: uuid(),
-      trabId: trabId,
+      id: Date.now(),
+      trabId: parseInt(trabId),
       trabNome: t?.nome,
       obraOrigem: t?.obraId,
-      obraDestino: obraDestino,
+      obraDestino: parseInt(obraDestino),
       tipo, motivo,
       solicitante: usuario?.nome,
       status: "Aguardando",
@@ -15078,22 +15149,22 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const itens = form.tipoItem === "equipamento" ? (equips || []) : (ferramentas || []);
-  const itemEscolhido = itens.find(x => x.id === form.itemId);
+  const itemEscolhido = itens.find(x => x.id === parseInt(form.itemId));
   const obraOrigem = itemEscolhido ? obras.find(o => o.id === itemEscolhido.obraId) : null;
 
   const enviar = () => {
     if (!form.itemId || !form.obraDestino) { alert("Selecione o item e a obra destino"); return; }
     if (form.tipo === "emprestimo" && !form.prazo) { alert("Defina o prazo de devolução"); return; }
     onSolicitar({
-      id: uuid(),
+      id: Date.now(),
       tipoItem: form.tipoItem,
-      itemId: form.itemId,
+      itemId: parseInt(form.itemId),
       itemNome: itemEscolhido.nome,
       itemCodigo: itemEscolhido.codigo || "",
       obraOrigemId: itemEscolhido.obraId,
       obraOrigemNome: obraOrigem?.nome,
-      obraDestinoId: form.obraDestino,
-      obraDestinoNome: obras.find(o => o.id === form.obraDestino)?.nome,
+      obraDestinoId: parseInt(form.obraDestino),
+      obraDestinoNome: obras.find(o => o.id === parseInt(form.obraDestino))?.nome,
       tipo: form.tipo,
       prazo: form.prazo,
       motivo: form.motivo,
@@ -15110,7 +15181,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
   const lista = (movEquip || []).filter(m => {
     if (aba === "ativas") return m.status === "Aguardando" || m.status === "Aprovado" || m.status === "Em trânsito";
     return m.status === "Devolvido" || m.status === "Concluído" || m.status === "Negado";
-  }).filter(m => filtroObra === "todas" || m.obraOrigemId === filtroObra || m.obraDestinoId === filtroObra);
+  }).filter(m => filtroObra === "todas" || m.obraOrigemId === parseInt(filtroObra) || m.obraDestinoId === parseInt(filtroObra));
 
   const aguardando = (movEquip || []).filter(m => m.status === "Aguardando").length;
   const aprovadas = (movEquip || []).filter(m => m.status === "Aprovado").length;
@@ -15155,7 +15226,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 10 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15251,7 +15322,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
         )}
 
         <label style={labelS}>Obra de destino</label>
-        <select value={form.obraDestino} onChange={e => set("obraDestino", idVal(e.target.value))} style={selS}>
+        <select value={form.obraDestino} onChange={e => set("obraDestino", e.target.value)} style={selS}>
           <option value="">— Selecione —</option>
           {obras.filter(o => itemEscolhido ? o.id !== itemEscolhido.obraId : true).map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15476,14 +15547,14 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
   const ICONS = ["🔨", "🪓", "⛏️", "🧰", "🪛", "🚿", "🛒", "🪣", "🧱", "📐", "🪜", "🔗"];
   const SUGEST = ["Inchada", "Enxadão", "Carrinho de mão", "Pá", "Picareta", "Marreta", "Martelo", "Talhadeira", "Trena", "Nível", "Prumo", "Linha", "Colher de pedreiro", "Desempenadeira", "Régua"];
 
-  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => f.obraId === filtroObra);
+  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => f.obraId === parseInt(filtroObra));
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", quantidade: 1, obraId: "", estado: "Bom", icon: "🔨" }); setModal(true); };
   const abrirEdit = (f) => { setEditandoId(f.id); setForm(f); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.obraId) return;
-    if (editandoId) onEditar({ ...form, id: editandoId, obraId: form.obraId, quantidade: parseInt(form.quantidade) || 1 });
-    else onAdd({ ...form, id: uuid(), obraId: form.obraId, quantidade: parseInt(form.quantidade) || 1 });
+    if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
+    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
     setModal(false);
   };
 
@@ -15493,7 +15564,7 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ferramentas" sub="Manuais e elétricas" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15527,7 +15598,7 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
         <input value={form.quantidade} onChange={e => set("quantidade", e.target.value)} type="number" min="1" style={inputS} />
 
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", idVal(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value)} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -15725,7 +15796,7 @@ function TelaLinks({ links, onBack, onAdd, onRemover }) {
     if (!form.nome || !form.url) return;
     let url = form.url.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    onAdd({ id: uuid(), ...form, url });
+    onAdd({ id: Date.now(), ...form, url });
     setForm({ nome: "", url: "", icon: "🔗", cat: "Geral" });
     setModal(false);
   };
@@ -15796,7 +15867,7 @@ function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrabalhador
     : usuarios.filter(u => u.perfil === "encarregado" && u.tel);
 
   const filtrados = lista.filter(p => {
-    const passaObra = filtroObra === "todas" || p.obraId === filtroObra;
+    const passaObra = filtroObra === "todas" || p.obraId === parseInt(filtroObra);
     const passaBusca = !busca || p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.cargo || "").toLowerCase().includes(busca.toLowerCase());
     return passaObra && passaBusca;
   });
@@ -15833,7 +15904,7 @@ function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrabalhador
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou cargo..." style={inputS} />
 
         {aba === "trabalhadores" && (
-          <select value={filtroObra} onChange={e => setFiltroObra(idVal(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -15882,7 +15953,7 @@ function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack, onAdd,
 
   const salvar = () => {
     if (!form.trabId || !form.valor) return;
-    onAdd({ id: uuid(), trabId: form.trabId, valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
+    onAdd({ id: Date.now(), trabId: parseInt(form.trabId), valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
     setForm({ trabId: "", valor: "", motivo: "", data: new Date().toLocaleDateString("pt-BR") });
     setModal(false);
   };
@@ -16122,7 +16193,7 @@ function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes, onBac
 
   const salvar = () => {
     if (!form.itemId || !form.proxData) return;
-    onAdd({ id: uuid(), ...form, ts: Date.now(), realizada: false });
+    onAdd({ id: Date.now(), ...form, ts: Date.now(), realizada: false });
     setForm({ tipoItem: "ativo", itemId: "", tipo: "Troca de óleo", proxData: "", observacao: "", obraId: "" });
     setModal(false);
   };
@@ -16152,9 +16223,9 @@ function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes, onBac
   const ordenada = [...lista].map(m => ({ ...m, _s: checaStatus(m) })).sort((a, b) => a._s.prio - b._s.prio);
 
   const getNomeItem = (m) => {
-    if (m.tipoItem === "ativo") return ativos.find(x => x.id === m.itemId)?.nome || "—";
-    if (m.tipoItem === "ferramenta") return ferramentas.find(x => x.id === m.itemId)?.nome || "—";
-    if (m.tipoItem === "equipamento") return equips.find(x => x.id === m.itemId)?.nome || "—";
+    if (m.tipoItem === "ativo") return ativos.find(x => x.id === parseInt(m.itemId))?.nome || "—";
+    if (m.tipoItem === "ferramenta") return ferramentas.find(x => x.id === parseInt(m.itemId))?.nome || "—";
+    if (m.tipoItem === "equipamento") return equips.find(x => x.id === parseInt(m.itemId))?.nome || "—";
     return "—";
   };
 
@@ -16210,7 +16281,7 @@ function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes, onBac
         )}
 
         {ordenada.map(m => {
-          const obra = obras.find(o => o.id === m.obraId);
+          const obra = obras.find(o => o.id === parseInt(m.obraId));
           return (
             <div key={m.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${m._s.cor}` }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
@@ -16546,7 +16617,7 @@ function TelaAnexosObra({ obra, usuario, onBack }) {
 
       setProgresso({ atual: 70, total: 100, fase: "Salvando..." });
       const novoAnexo = {
-        id: uuid(),
+        id: Date.now() + "_" + Math.random().toString(36).substring(2, 9),
         obraId: obra.id,
         obraNome: obra.nome,
         categoria: categoriaUpload,
@@ -17160,14 +17231,36 @@ export default function App() {
   };
 
   const [usuarios, setUsuarios]   = useState(DEFAULT_USUARIOS);
-  const [obras, setObras]         = useState([]);
-  const [trabalhadores, setTrab]  = useState([]);
-  const [equips, setEquips]       = useState([]);
+  const [obras, setObras]         = useState(DEFAULT_OBRAS);
+  const [trabalhadores, setTrab]  = useState(DEFAULT_TRABALHADORES);
+  const [equips, setEquips]       = useState(DEFAULT_EQUIPS);
   const [pedidos, setPedidos]     = useState([]);
+
+  // ── SYNC PEDIDOS (Fase 2): lançador cria na obra, gestor vê de qualquer cidade ──
+  const criarPedidoSync = useCallback(p => {
+    setPedidos(ps => [p, ...ps]);
+    enviarDocNuvem("pedidos", p.id, p);
+  }, []);
+  const mudarStatusPedidoSync = useCallback((id, status, extras = {}) => {
+    setPedidos(ps => ps.map(p => {
+      if (p.id !== id) return p;
+      const novo = { ...p, status, ...extras };
+      enviarDocNuvem("pedidos", id, novo);
+      return novo;
+    }));
+  }, []);
+  const editarPedidoSync = useCallback(pa => {
+    setPedidos(ps => ps.map(p => p.id === pa.id ? pa : p));
+    enviarDocNuvem("pedidos", pa.id, pa);
+  }, []);
+  const removerPedidoSync = useCallback(id => {
+    setPedidos(ps => ps.filter(p => p.id !== id));
+    removerDocNuvem("pedidos", id);
+  }, []);
   const [historico, setHistorico] = useState({});
   const [mensagens, setMensagens] = useState([]);
   const [diario, setDiario]       = useState([]);
-  const [ativos, setAtivos]       = useState([]);
+  const [ativos, setAtivos]       = useState(DEFAULT_ATIVOS);
   const [abastecimentos, setAbast]= useState([]);
   const [ferias, setFerias]       = useState([]);
   const [rdosEmitidos, setRdos]   = useState([]);
@@ -17189,7 +17282,53 @@ export default function App() {
   const [movEquipSel, setMovEquipSel] = useState(null);
   const [movPessSel, setMovPessSel] = useState(null);
   const [fotosObras, setFotosObras] = useState([]); // galeria por obra
-  const [fornecedores, setFornecedores] = useState([]);
+
+  // Salva foto: local imediato (offline-first) + nuvem em segundo plano
+  const salvarFotoObraSync = useCallback(f => {
+    setFotosObras(fs => [f, ...fs]);
+    enviarFotoNuvem(f);
+  }, []);
+
+  // Recebe fotos dos outros aparelhos em tempo real (gestor vê fotos do encarregado)
+  useEffect(() => {
+    if (!usuario?.firebaseUid) return;
+    const parar = observarFotosNuvem(nuvem => {
+      setFotosObras(loc => {
+        const ids = new Set(loc.map(x => String(x.id)));
+        const novas = nuvem.filter(n => !ids.has(String(n.id)));
+        return novas.length ? [...novas, ...loc] : loc;
+      });
+    });
+    return parar;
+  }, [usuario?.firebaseUid]);
+
+  // Recebe pedidos de todos os aparelhos (nuvem vence em caso de mesmo id — ex: aprovação do gestor)
+  useEffect(() => {
+    if (!usuario?.firebaseUid) return;
+    return observarColecaoNuvem("pedidos", nuvem => {
+      setPedidos(loc => {
+        const porId = new Map(loc.map(p => [String(p.id), p]));
+        nuvem.forEach(n => porId.set(String(n.id), n));
+        return [...porId.values()].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
+      });
+    });
+  }, [usuario?.firebaseUid]);
+
+  // Recebe presenças de todos os aparelhos (gestor enxerga o ponto lançado na obra)
+  useEffect(() => {
+    if (!usuario?.firebaseUid) return;
+    return observarColecaoNuvem("presencas", docs => {
+      setHistorico(local => {
+        const novo = { ...local };
+        docs.forEach(d => {
+          if (!d.data || d.trabId === undefined || d.trabId === null) return;
+          novo[d.data] = { ...(novo[d.data] || {}), [d.trabId]: d.status };
+        });
+        return novo;
+      });
+    });
+  }, [usuario?.firebaseUid]);
+  const [fornecedores, setFornecedores] = useState(DEFAULT_FORNECEDORES);
   const [carregando, setCarregando] = useState(true);
 
   const obraAtual = usuario?.obraId ? obras.find(o => o.id === usuario.obraId) || obras[0] : obras[0];
@@ -17197,10 +17336,6 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      // Garante autenticacao Firebase antes de acessar Firestore
-      // Lancadores sem Firebase Auth recebem token anonimo automaticamente
-      await loginAnonimo();
-
       const obras_   = await store.get("obras");
       const trab_    = await store.get("trabalhadores");
       const equips_  = await store.get("equips");
@@ -17227,7 +17362,7 @@ export default function App() {
       const despAv_  = await store.get("despesasAvulsas");
       const fotos_   = await store.get("fotosObras");
       const forn_    = await store.get("fornecedores");
-      const userLogado = getSessao();
+      const userLogado = await store.get("usuarioLogado");
       if (obras_)   setObras(obras_);
       if (trab_)    setTrab(trab_);
       if (equips_)  setEquips(equips_);
@@ -17255,12 +17390,8 @@ export default function App() {
       if (fotos_)   setFotosObras(fotos_);
       if (forn_)    setFornecedores(forn_);
       if (userLogado) {
-        if (userLogado.perfil === "gestor") {
-          // Gestor: restaura sessão (Firebase Auth valida em background)
-          setUsuario(userLogado);
-          setTela("gestor");
-        }
-        // Encarregado: NAO restaura sessao — deve logar com senha sempre
+        setUsuario(userLogado);
+        setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
       }
 
       // ⭐ AUTO-POPULA 30 DIAS apenas se ativado manualmente em Sistema > Gerar 30 dias
@@ -17270,40 +17401,6 @@ export default function App() {
       setCarregando(false);
     })();
   }, []);
-
-  // SYNC EM TEMPO REAL: atualiza automaticamente quando outro dispositivo salva
-  useEffect(() => {
-    if (carregando) return;
-    const unsubs = [
-      store.listen("obras",          v => setObras(v || [])),
-      store.listen("trabalhadores",  v => setTrab(v || [])),
-      store.listen("equips",         v => setEquips(v || [])),
-      store.listen("pedidos",        v => setPedidos(v || [])),
-      store.listen("historico",      v => setHistorico(v || {})),
-      store.listen("usuarios",       v => setUsuarios(v || [])),
-      store.listen("mensagens",      v => setMensagens(v || [])),
-      store.listen("diario",         v => setDiario(v || [])),
-      store.listen("ativos",         v => setAtivos(v || [])),
-      store.listen("abastecimentos", v => setAbast(v || [])),
-      store.listen("ferias",         v => setFerias(v || [])),
-      store.listen("rdos",           v => setRdos(v || [])),
-      store.listen("empresa",        v => { if (v) setEmpresa(v); }),
-      store.listen("produtividade",  v => setProd(v || [])),
-      store.listen("recebimentos",   v => setReceb(v || [])),
-      store.listen("movimentacoes",  v => setMov(v || [])),
-      store.listen("ferramentas",    v => setFerr(v || [])),
-      store.listen("links",          v => setLinks(v || LINKS_PADRAO)),
-      store.listen("adiantamentos",  v => setAdiant(v || [])),
-      store.listen("manutencoes",    v => setManut(v || [])),
-      store.listen("folhasSalvas",   v => setFolhasSalvas(v || [])),
-      store.listen("cronogramas",    v => setCronog(v || {})),
-      store.listen("movEquip",       v => setMovEquip(v || [])),
-      store.listen("despesasAvulsas",v => setDespesasAvulsas(v || [])),
-      store.listen("fotosObras",     v => setFotosObras(v || [])),
-      store.listen("fornecedores",   v => setFornecedores(v || [])),
-    ];
-    return () => unsubs.forEach(u => u && u());
-  }, [carregando]);
 
   useEffect(() => { if (!carregando) store.set("obras", obras); }, [obras, carregando]);
   useEffect(() => { if (!carregando) store.set("trabalhadores", trabalhadores); }, [trabalhadores, carregando]);
@@ -17332,7 +17429,26 @@ export default function App() {
   useEffect(() => { if (!carregando) store.set("fotosObras", fotosObras); }, [fotosObras, carregando]);
   useEffect(() => { if (!carregando) store.set("fornecedores", fornecedores); }, [fornecedores, carregando]);
 
-  const salvarPresencas = (novas) => setHistorico(h => ({ ...h, [hojeStr()]: { ...(h[hojeStr()] || {}), ...novas } }));
+  // Gestor corrige a presença de qualquer dia (acerta a folha) — local + nuvem
+  const editarPresencaDia = (dataISO, trabId, status) => {
+    setHistorico(h => {
+      const dia = { ...(h[dataISO] || {}) };
+      if (status === null) delete dia[trabId]; else dia[trabId] = status;
+      return { ...h, [dataISO]: dia };
+    });
+    if (status === null) removerDocNuvem("presencas", `${dataISO}_${trabId}`);
+    else enviarDocNuvem("presencas", `${dataISO}_${trabId}`, { data: dataISO, trabId, status, criadoEm: Date.now(), editadoPorGestor: true });
+  };
+
+  const salvarPresencas = (novas) => {
+    const dia = hojeStr();
+    setHistorico(h => ({ ...h, [dia]: { ...(h[dia] || {}), ...novas } }));
+    // Nuvem: 1 documento por dia+trabalhador (gestor vê de qualquer cidade)
+    Object.entries(novas).forEach(([trabId, status]) => {
+      const tid = isNaN(Number(trabId)) ? trabId : Number(trabId);
+      enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, status, criadoEm: Date.now() });
+    });
+  };
   const verTrabalhador = (t) => { setTrabSelecionado(t); setTela("trab_detalhe"); };
   const editarTrabalhador = (t) => {
     setTrab(ts => ts.map(x => x.id === t.id ? t : x));
@@ -17369,7 +17485,7 @@ export default function App() {
 
   const login = (u) => {
     setUsuario(u);
-    setSessao(u);
+    store.set("usuarioLogado", u);
     if (u.perfil === "gestor") setTela("gestor");
     else setTela("home");
   };
@@ -17379,7 +17495,7 @@ export default function App() {
     setUsuarios(us => us.map(x => x.id === uAtualizado.id ? uAtualizado : x));
     if (usuario?.id === uAtualizado.id) {
       setUsuario(uAtualizado);
-      setSessao(uAtualizado);
+      store.set("usuarioLogado", uAtualizado);
     }
   };
 
@@ -17392,7 +17508,7 @@ export default function App() {
   const logout = async () => {
     try { await logoutFirebase(); } catch (e) {}
     setUsuario(null);
-    setSessao(null);
+    store.set("usuarioLogado", null);
     setTela("login");
   };
   const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
@@ -17505,14 +17621,14 @@ export default function App() {
     switch (tela) {
       case "login":      return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} />;
       case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} onNav={setTela} onLogout={logout} />;
-      case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={r => setRdos(rs => [r, ...rs])} onSalvarFotoObra={f => setFotosObras(fs => [f, ...fs])} />;
-      case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={p => setPedidos(ps => [p, ...ps])} />;
+      case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={r => setRdos(rs => [r, ...rs])} onSalvarFotoObra={salvarFotoObraSync} />;
+      case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={criarPedidoSync} />;
       case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => f.obraId === obraAtual?.id).length} onBack={() => setTela("home")} onSalvar={f => setFotosObras(fs => [f, ...fs])} />;
       case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} usuario={usuario} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => f.id !== id))} />;
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
-      case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={f => setFotosObras(fs => [f, ...fs])} />;
-      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} />;
+      case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={salvarFotoObraSync} />;
+      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
       case "obras":      return <TelaObras obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
@@ -17523,7 +17639,7 @@ export default function App() {
         // Se o gestor pediu pra criar login, gera usuário também
         if (login && login.email) {
           const novoUsuario = {
-            id: uuid(),
+            id: Date.now() + 1,
             nome: t.nome,
             email: login.email.toLowerCase().trim(),
             senha: login.senha || "123",
@@ -17557,10 +17673,10 @@ export default function App() {
       case "consolidado":return <TelaRelatorioConsolidado obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} historico={historico} onBack={voltar} />;
       case "dashboard":  return <TelaDashboard obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} historico={historico} onBack={voltar} />;
       case "alertas":    return <TelaAlertas obras={obras} trabalhadores={trabalhadores} equips={equips} pedidos={pedidos} historico={historico} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
-      case "pedidos":    return <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} usuario={usuario} fornecedores={fornecedores} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} onRemover={id => setPedidos(ps => ps.filter(p => p.id !== id))} onCriar={p => setPedidos(ps => [p, ...ps])} />;
-      case "pedido_detalhe": return pedidoSelecionado ? <TelaPedidoDetalhe pedido={pedidos.find(x => x.id === pedidoSelecionado.id) || pedidoSelecionado} obras={obras} empresa={empresa} onBack={voltar} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} onRemover={id => setPedidos(ps => ps.filter(p => p.id !== id))} onEditar={pedidoAtualizado => setPedidos(ps => ps.map(p => p.id === pedidoAtualizado.id ? pedidoAtualizado : p))} /> : <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Aprovado", ...extras } : p))} onNegar={id => setPedidos(ps => ps.map(p => p.id === id ? { ...p, status: "Negado" } : p))} onRemover={id => setPedidos(ps => ps.filter(p => p.id !== id))} />;
+      case "pedidos":    return <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} usuario={usuario} fornecedores={fornecedores} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} onCriar={criarPedidoSync} />;
+      case "pedido_detalhe": return pedidoSelecionado ? <TelaPedidoDetalhe pedido={pedidos.find(x => x.id === pedidoSelecionado.id) || pedidoSelecionado} obras={obras} empresa={empresa} onBack={voltar} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} onEditar={editarPedidoSync} /> : <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} />;
       case "mapa":       return <TelaMapa obras={obras} trabalhadores={trabalhadores} onBack={voltar} onEditar={() => setTela("obras")} />;
-      case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} onBack={voltar} onEditar={editarTrabalhador} />;
+      case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} usuario={usuario} onBack={voltar} onEditar={editarTrabalhador} onEditarPresenca={editarPresencaDia} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={m => setMensagens(ms => [m, ...ms])} onMarcarLida={id => setMensagens(ms => ms.map(m => m.id === id ? { ...m, lida: true } : m))} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
       case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} />;
