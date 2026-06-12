@@ -3539,6 +3539,9 @@ function TelaPIN({ usuario, modo, onSucesso, onCancelar, onCriarPIN }) {
   );
 }
 
+// Encarregados usam "usuário" (sem @); o Firebase Auth exige email — mapeia p/ email interno
+const emailAuthKM = (e) => { const v = String(e || "").trim().toLowerCase(); return v.includes("@") ? v : v + "@kmzero.app"; };
+
 function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadastrar }) {
   const [tipo, setTipo] = useState("encarregado");
   const [email, setEmail] = useState("");
@@ -3604,12 +3607,24 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
     setErro(r.erro || "Email ou senha incorretos.");
   };
 
-  const entrarPrimeiroAcesso = () => {
+  const entrarPrimeiroAcesso = async () => {
     setErro("");
     const u = usuarios.find(u => u.email.toLowerCase() === emailPrim.toLowerCase().trim() && u.senha === senhaPrim && u.perfil === "encarregado");
     if (!u) return setErro("Acesso não encontrado. Confirme com o gestor o e-mail e senha cadastrados.");
-    // Login direto, sem PIN
-    onLogin({ ...u, ultimoLogin: Date.now() });
+    setCarregando(true);
+    // Autentica no Firebase (necessário pro sync seguro na nuvem)
+    const r = await loginFirebase(emailAuthKM(u.email), senhaPrim);
+    setCarregando(false);
+    if (r.ok) {
+      onLogin({ ...u, firebaseUid: r.user.uid, ultimoLogin: Date.now() });
+      return;
+    }
+    if (r.codigo === "auth/network-request-failed") {
+      // Sem internet: entra local (offline-first); sync volta no próximo login online
+      onLogin({ ...u, ultimoLogin: Date.now() });
+      return;
+    }
+    setErro(r.erro || "Não foi possível autenticar. Tente novamente.");
   };
 
   const entrarComPIN = (u) => {
@@ -3619,8 +3634,14 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
       setTelaInterna("gestor");
       return;
     }
-    // Encarregado entra direto pelo card "Continuar como"
-    onLogin({ ...u, ultimoLogin: Date.now() });
+    // Encarregado: precisa de sessão Firebase real no aparelho (sync seguro)
+    const fbUser = usuarioAtual();
+    if (!fbUser || fbUser.isAnonymous) {
+      setEmailPrim(u.email || "");
+      setTelaInterna("primeiro_acesso");
+      return;
+    }
+    onLogin({ ...u, firebaseUid: u.firebaseUid || fbUser.uid, ultimoLogin: Date.now() });
   };
 
   if (modoPIN && usuarioSelecionado) {
@@ -3910,7 +3931,7 @@ function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadast
                     const cor = cores[u.id % cores.length];
                     const iniciais = u.nome.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
                     return (
-                      <button key={u.id} onClick={() => onLogin({ ...u, ultimoLogin: Date.now() })} className="km-btn-glow" style={{
+                      <button key={u.id} onClick={() => entrarComPIN(u)} className="km-btn-glow" style={{
                         width: "100%",
                         padding: "12px 14px",
                         borderRadius: 12,
