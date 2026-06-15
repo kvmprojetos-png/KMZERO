@@ -9738,6 +9738,11 @@ function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmitidos = 
             ℹ️ O período da folha será definido manualmente cada vez que você gerar a folha desse trabalhador.
           </div>
         )}
+        <label style={labelS}>📌 Último pagamento (âncora do ciclo)</label>
+        <input value={form.ultimoPagamento || ""} onChange={e => set("ultimoPagamento", e.target.value)} type="date" style={{ ...dateS }} />
+        <div style={{ fontSize: 10, color: "#888", marginTop: -4, marginBottom: 10, lineHeight: 1.4 }}>
+          Data da última sexta em que recebeu. A folha "Por Ciclo" usa isso para abrir o próximo período automaticamente (seg–sex).
+        </div>
         <label style={labelS}>Forma de cálculo do dia</label>
         <select value={form.formaCalculo || "diaria"} onChange={e => set("formaCalculo", e.target.value)} style={selS}>
           <option value="diaria">Por diária (R$ × dias trabalhados)</option>
@@ -14314,7 +14319,7 @@ function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack, onAdd 
 /* ════════════════════════════════════
    FOLHA QUINZENAL (1ª: 1-15 / 2ª: 16-fim)
 ════════════════════════════════════ */
-function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, abastecimentos = [], ativos = [], empresa, onBack, onSalvarFolha }) {
+function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, abastecimentos = [], ativos = [], empresa, onBack, onSalvarFolha, onMarcarPago }) {
   const hoje = new Date();
   // ════ ESCOLHA DO REGIME DA FOLHA (definida pelo gestor) ════
   const [tipoRegime, setTipoRegime] = useState("quinzenal"); // diaria | semanal | quinzenal | mensal
@@ -14422,7 +14427,50 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
 
   const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
 
+  const calcularCiclo = (t) => {
+    const tipo = t.tipoFolha || "quinzenal";
+    const nUteis = tipo === "semanal" ? 5 : tipo === "mensal" ? 22 : 10;
+    const diaria = parseFloat(t.diaria) || 0;
+    const salarioFixo = parseFloat(t.salarioFixo) || 0;
+    const formaCalculo = t.formaCalculo || "diaria";
+    const ehCLT = formaCalculo === "mensal_fixo";
+    const pagaFeriado = t.pagaFeriado !== undefined ? t.pagaFeriado === true : ehCLT;
+    const pagaAtestado = t.pagaAtestado !== undefined ? t.pagaAtestado === true : ehCLT;
+    const base = { presentes: 0, faltas: 0, atestados: 0, feriados: 0, diaria, salarioFixo, diasPagos: 0, diasTotaisPeriodo: 0, bruto: 0, adiantDesconto: 0, liquido: 0, tipoFolha: tipo, descricaoPeriodo: "Ciclo", formaCalculo, semAncora: false, periodoIni: null, periodoFim: null, proxPagamento: null };
+    if (!t.ultimoPagamento) return { ...base, semAncora: true };
+    const ancora = new Date(t.ultimoPagamento + "T12:00:00");
+    let presentes = 0, faltas = 0, atestados = 0, feriados = 0, contados = 0;
+    let cursor = new Date(ancora), primeiroDiaUtil = null, ultimoDiaUtil = null, guard = 0;
+    while (contados < nUteis && guard < 120) {
+      guard++;
+      cursor.setDate(cursor.getDate() + 1);
+      if (cursor.getDay() === 0 || cursor.getDay() === 6) continue;
+      const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+      if (!primeiroDiaUtil) primeiroDiaUtil = iso;
+      ultimoDiaUtil = iso;
+      contados++;
+      const sdia = (historico[iso] || {})[t.id];
+      const fer = feriadoEm(iso);
+      if (fer && fer.tipo === "nacional" && (sdia === undefined || sdia === "" || sdia === "Feriado" || sdia === "Falta")) { feriados++; continue; }
+      if (sdia === "Presente") presentes++;
+      else if (sdia === "Falta") faltas++;
+      else if (sdia === "Atestado") atestados++;
+      else if (sdia === "Feriado") feriados++;
+    }
+    const diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
+    const bruto = diaria * diasPagos;
+    let adiantDesconto = 0;
+    if (adiantamentos && primeiroDiaUtil && ultimoDiaUtil) {
+      adiantDesconto = adiantamentos.filter(a => a.trabId === t.id).filter(a => {
+        try { const [d, m, an] = a.data.split("/"); const isoA = `${an}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; return isoA >= primeiroDiaUtil && isoA <= ultimoDiaUtil; } catch { return false; }
+      }).reduce((sm, a) => sm + a.valor, 0);
+    }
+    const liquido = Math.max(0, bruto - adiantDesconto);
+    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: ultimoDiaUtil };
+  };
+
   const calcular = (t) => {
+    if (tipoRegime === "ciclo") return calcularCiclo(t);
     // ════ NOVO: usa o tipo GLOBAL escolhido pelo gestor no topo da tela ════
     const periodo = calcularPeriodo();
     const formaCalculo = t.formaCalculo || "diaria";
@@ -14657,6 +14705,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               { k: "quinzenal", l: "🗓️ Quinzenal", c: GOLD, d: "15 dias" },
               { k: "mensal", l: "📊 Mensal", c: "#7c3aed", d: "Mês completo" },
               { k: "personalizado", l: "⚙️ Personalizado", c: "#e87722", d: "Você escolhe o período" },
+              { k: "ciclo", l: "🔁 Por Ciclo", c: "#0e7490", d: "Sexta a sexta, por colaborador" },
             ].map(opt => (
               <button
                 key={opt.k}
@@ -14807,7 +14856,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         )}
 
         {/* ════ BANNER DE FERIADOS NO PERÍODO ════ */}
-        {(() => {
+        {tipoRegime !== "ciclo" && (() => {
           const p = calcularPeriodo();
           const feriadosNoPeriodo = [];
           const adicionarSe = (dia, m, a) => {
@@ -14852,7 +14901,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         <div style={{ background: `linear-gradient(135deg,${GREEN},#1a8540)`, borderRadius: 14, padding: 16, marginBottom: 12, color: "#fff", boxShadow: "0 4px 14px #2aa84f44" }}>
           <div style={{ fontSize: 11, opacity: 0.9 }}>Total da folha {tipoRegime} (líquido)</div>
           <div style={{ fontSize: 30, fontWeight: 900 }}>R$ {totalFolha.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
-          <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{trabFiltro.length} trabalhador(es) • {(() => {
+          <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{trabFiltro.length} trabalhador(es) • {tipoRegime === "ciclo" ? "ciclo por colaborador" : (() => {
             const p = calcularPeriodo();
             if (p.mesInicio === p.mesFim) return `${p.diaFim - p.diaInicio + 1} dias`;
             return `${p.diaInicio}/${p.mesInicio + 1} a ${p.diaFim}/${p.mesFim + 1}`;
@@ -14864,6 +14913,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           )}
         </div>
 
+        {tipoRegime !== "ciclo" && (<>
         {/* Tabela compacta */}
         <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
           <div style={{ background: NAVY, color: "#fff", padding: "8px 12px", fontSize: 11, fontWeight: 700, display: "grid", gridTemplateColumns: "1fr 40px 70px 80px", gap: 6 }}>
@@ -14915,6 +14965,51 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           <div style={{ background: "#f0fdf4", color: GREEN, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, marginTop: 8, textAlign: "center" }}>
             ✅ Folha salva no histórico!
           </div>
+        )}
+        </>)}
+
+        {tipoRegime === "ciclo" && (
+          <>
+            <div style={{ background: "#ecfeff", border: "1px solid #0e749030", borderRadius: 12, padding: "10px 14px", fontSize: 11, color: "#155e63", marginBottom: 10, lineHeight: 1.5 }}>
+              🔁 <b>Folha por ciclo:</b> cada colaborador fecha conforme o regime dele (semanal = 5 dias úteis · quinzenal = 10), contando só seg–sex a partir do <b>último pagamento</b>. Ao pagar, toque em <b>"Marcar pago"</b> que o ciclo avança sozinho. Configure regime e último pagamento na ficha de cada um (Equipe › trabalhador).
+            </div>
+            <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
+              {trabFiltro.map(t => {
+                const c = calcular(t);
+                const fmt = iso => iso ? new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "—";
+                return (
+                  <div key={t.id} style={{ padding: "10px 12px", borderBottom: "1px solid #f0f0f0", fontSize: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: NAVY }}>{t.nome}</div>
+                        <div style={{ fontSize: 10, color: "#888" }}>{t.cargo} • {(t.tipoFolha || "quinzenal") === "semanal" ? "Semanal" : "Quinzenal"} • R$ {(parseFloat(t.diaria) || 0).toFixed(2)}/dia</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontWeight: 800, color: GREEN, fontSize: 14 }}>R$ {c.liquido.toFixed(2)}</div>
+                        <div style={{ fontSize: 10, color: "#888" }}>{c.diasPagos} dia(s) pago(s)</div>
+                      </div>
+                    </div>
+                    {c.semAncora ? (
+                      <div style={{ background: "#fff7e6", color: "#9a6a1a", borderRadius: 6, padding: "5px 8px", marginTop: 6, fontSize: 11 }}>
+                        ⚠️ Sem âncora. Defina o "Último pagamento" na ficha desse colaborador para abrir o ciclo.
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, gap: 8 }}>
+                        <div style={{ fontSize: 11, color: "#666" }}>
+                          Período: <b>{fmt(c.periodoIni)}</b> a <b>{fmt(c.periodoFim)}</b> • {c.presentes}P {c.faltas}F{c.atestados > 0 ? ` ${c.atestados}A` : ""}{c.adiantDesconto > 0 ? ` • vale R$ ${c.adiantDesconto.toFixed(2)}` : ""}
+                        </div>
+                        <button onClick={() => {
+                          if (!confirm(`Marcar ${t.nome} como PAGO até ${fmt(c.proxPagamento)} (líquido R$ ${c.liquido.toFixed(2)})?\n\nO próximo ciclo começa no dia seguinte.`)) return;
+                          onMarcarPago && onMarcarPago(t, c.proxPagamento);
+                        }} style={{ background: GREEN, color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>✓ Marcar pago</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {trabFiltro.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "#aaa" }}>Nenhum trabalhador.</div>}
+            </div>
+          </>
         )}
       </div>
       <KMFooter />
@@ -17761,7 +17856,7 @@ export default function App() {
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} usuario={usuario} onBack={voltar} onEditar={editarTrabalhador} onEditarPresenca={editarPresencaDia} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={enviarMensagemSync} onMarcarLida={marcarLidaSync} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
-      case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} />;
+      case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} />;
       case "equip_gestao":return <TelaEquipamentosGestao obras={obras} equips={equips} onBack={voltar} onAdd={eq => setEquips(es => [...es, eq])} onEditar={eq => setEquips(es => es.map(x => x.id === eq.id ? eq : x))} onRemover={id => setEquips(es => es.filter(e => e.id !== id))} />;
       case "ativos":     return <TelaAtivos obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onAdd={a => setAtivos(as => [...as, a])} onEditar={a => setAtivos(as => as.map(x => x.id === a.id ? a : x))} onRemover={id => setAtivos(as => as.filter(a => a.id !== id))} onAbastecer={a => setAbast(abs => [a, ...abs])} />;
       case "frota":      return <TelaFrota obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
@@ -17776,7 +17871,7 @@ export default function App() {
       case "perfil_pin": return <TelaPerfilPIN usuario={usuario} onAtualizar={atualizarUsuario} onBack={voltar} />;
       case "produtividade": return <TelaProdutividade obras={obras} usuario={usuario} produtividade={produtividade} onBack={voltar} onAdd={p => setProd(ps => [p, ...ps])} onRemove={id => setProd(ps => ps.filter(p => p.id !== id))} />;
       case "recebimento":   return <TelaRecebimento obras={obras} pedidos={pedidos} usuario={usuario} recebimentos={recebimentos} onBack={voltar} onAdd={r => setReceb(rs => [r, ...rs])} />;
-      case "folha_quinzenal": return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} />;
+      case "folha_quinzenal": return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} />;
       case "hist_folha":      return <TelaHistFolha obras={obras} trabalhadores={trabalhadores} folhasSalvas={folhasSalvas} onBack={voltar} onRemover={id => setFolhasSalvas(fs => fs.filter(f => f.id !== id))} />;
       case "manutencao":      return <TelaManutencao obras={obras} ativos={ativos} ferramentas={ferramentas} equips={equips} manutencoes={manutencoes} onBack={voltar} onAdd={salvarManutencao} onRemover={id => setManut(ms => ms.filter(m => m.id !== id))} />;
       case "solicitar_mov": return <TelaSolicitarMov obras={obras} trabalhadores={trabalhadores} usuario={usuario} onBack={() => setTela("home")} onSolicitar={m => setMov(ms => [m, ...ms])} />;
