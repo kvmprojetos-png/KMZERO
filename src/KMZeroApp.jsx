@@ -5429,7 +5429,7 @@ function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const [fotoExpandida, setFotoExpandida] = useState(null);
 
   const fotosFiltradas = fotos
-    .filter(f => filtroObra === "todas" || f.obraId === parseInt(filtroObra))
+    .filter(f => filtroObra === "todas" || String(f.obraId) === String(filtroObra))
     .filter(f => !filtroData || f.data === filtroData)
     .sort((a, b) => b.id - a.id);
 
@@ -5606,7 +5606,7 @@ function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
     return { pres, falt, atest, diasPagos, diaria, total: diaria * diasPagos };
   };
 
-  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(filtroObra));
+  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(filtroObra));
   const dados = trabFiltro.map(t => ({ ...t, _calc: calcularDiasMes(t), _obra: obras.find(o => o.id === t.obraId) })).sort((a, b) => (b._calc.total - a._calc.total) || (a.nome || "").localeCompare(b.nome || ""));
   const totalGeral = dados.reduce((s, d) => s + d._calc.total, 0);
 
@@ -7267,7 +7267,7 @@ function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd, onRemo
   };
 
   const lista = trabalhadores
-    .filter(t => filtroObra === "todas" || t.obraId === parseInt(filtroObra))
+    .filter(t => filtroObra === "todas" || String(t.obraId) === String(filtroObra))
     .filter(t => !busca || t.nome.toLowerCase().includes(busca.toLowerCase()) || (t.cargo || "").toLowerCase().includes(busca.toLowerCase()))
     .filter(t => {
       if (filtroStatus === "todos") return true;
@@ -7759,7 +7759,7 @@ function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, onBack })
 function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
   const [obraId, setObraId] = useState("todas");
   const dias = ultimosDias(7);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
 
   const dadosPresenca = dias.map(d => {
     const pres = historico[d] || {};
@@ -7773,7 +7773,7 @@ function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
     return { dia: fmtData(d), Presentes: p, Faltas: f, Atestados: a };
   });
 
-  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === parseInt(obraId));
+  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => String(p.obraId) === String(obraId));
   const dadosPedidos = [
     { name: "Aprovados",  value: totalPedidos.filter(p => p.status === "Aprovado").length,  color: GREEN },
     { name: "Aguardando", value: totalPedidos.filter(p => p.status === "Aguardando").length, color: ORANGE },
@@ -8141,11 +8141,11 @@ function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onAprovar,
     if (!novoObraId) { alert("Selecione uma obra."); return; }
     const itensValidos = novoItens.filter(i => i.material && i.material.trim());
     if (itensValidos.length === 0) { alert("Adicione pelo menos um item com nome."); return; }
-    const fornecedor = fornecedores.find(f => f.id === parseInt(novoFornecedorId));
-    const obraSelecionada = obras.find(o => o.id === parseInt(novoObraId));
+    const fornecedor = fornecedores.find(f => String(f.id) === String(novoFornecedorId));
+    const obraSelecionada = obras.find(o => String(o.id) === String(novoObraId));
     const novoPedido = {
       id: Date.now(),
-      obraId: parseInt(novoObraId),
+      obraId: novoObraId,
       obraNome: obraSelecionada?.nome || "",
       itens: itensValidos,
       material: itensValidos[0].material, // compatibilidade legado
@@ -9916,7 +9916,7 @@ function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, onMarca
 
   const enviar = () => {
     if (!destinatario || !texto.trim()) return;
-    onEnviar({ id: Date.now(), de: usuario.id, para: parseInt(destinatario), texto: texto.trim(), ts: Date.now(), lida: false });
+    onEnviar({ id: Date.now(), de: usuario.id, para: destinatario, texto: texto.trim(), ts: Date.now(), lida: false });
     setTexto(""); setDestinatario(""); setComposicao(false);
   };
 
@@ -10076,7 +10076,7 @@ function TelaFolha({ obras, trabalhadores, historico, onBack }) {
     return count;
   })();
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
 
   const calcular = (t) => {
     const total = new Date(ano, mes + 1, 0).getDate();
@@ -10330,7 +10330,7 @@ function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar, onRemo
   const [filtroObra, setFiltroObra] = useState("todas");
   const [form, setForm] = useState({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const lista = filtroObra === "todas" ? equips : equips.filter(e => e.obraId === parseInt(filtroObra));
+  const lista = filtroObra === "todas" ? equips : equips.filter(e => String(e.obraId) === String(filtroObra));
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" }); setModal(true); };
   const abrirEdit = (eq) => { setEditandoId(eq.id); setForm(eq); setModal(true); };
@@ -10782,7 +10782,7 @@ function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manute
 
   // 9) Etapas do cronograma atrasadas
   Object.entries(cronogramas || {}).forEach(([obraId, etapas]) => {
-    const obra = obras.find(o => o.id === parseInt(obraId));
+    const obra = obras.find(o => String(o.id) === String(obraId));
     if (!obra) return;
     (etapas || []).forEach(e => {
       if (e.progresso === 100) return;
@@ -10791,9 +10791,9 @@ function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manute
           const fim = new Date(e.fim);
           const dias = Math.ceil((fim - agoraD) / (1000 * 60 * 60 * 24));
           if (dias < 0 && e.progresso < 100) {
-            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} atrasada ${Math.abs(dias)}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "alta", color: RED, navegarPara: "cronograma", contextoId: parseInt(obraId) });
+            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} atrasada ${Math.abs(dias)}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "alta", color: RED, navegarPara: "cronograma", contextoId: obraId });
           } else if (dias <= 7 && e.progresso < 80) {
-            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} vence em ${dias}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "media", color: ORANGE, navegarPara: "cronograma", contextoId: parseInt(obraId) });
+            alertas.push({ id: `cron-${e.id}`, tipo: "Cronograma", icone: "📅", titulo: `${e.nome} vence em ${dias}d`, detalhe: `${obra.nome} • ${e.progresso || 0}% concluído`, prio: "media", color: ORANGE, navegarPara: "cronograma", contextoId: obraId });
           }
         }
       } catch (er) {}
@@ -10923,8 +10923,8 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
   const [obraId, setObraId] = useState("todas");
 
   const dias = ultimosDias(periodo === "semana" ? 7 : 30);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
-  const pedidosFiltro = obraId === "todas" ? pedidos : pedidos.filter(p => p.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
+  const pedidosFiltro = obraId === "todas" ? pedidos : pedidos.filter(p => String(p.obraId) === String(obraId));
 
   let totalP = 0, totalF = 0, totalA = 0;
   dias.forEach(d => {
@@ -10963,7 +10963,7 @@ function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, on
         .footer{margin-top:40px;text-align:center;color:#888;font-size:11px;border-top:1px solid #ddd;padding-top:10px;}
       </style></head><body>
       <h1>📊 Relatório Consolidado — ${tituloPeriodo}</h1>
-      <p><b>Obra:</b> ${obraId === "todas" ? "Todas" : obras.find(o => o.id === parseInt(obraId))?.nome} &nbsp;|&nbsp; <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
+      <p><b>Obra:</b> ${obraId === "todas" ? "Todas" : obras.find(o => String(o.id) === String(obraId))?.nome} &nbsp;|&nbsp; <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
       <h2>Resumo</h2>
       <div>
         <span class="stat" style="background:${GREEN}">${totalP} Presenças</span>
@@ -11069,7 +11069,7 @@ function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEditar, on
     reader.readAsDataURL(file);
   };
 
-  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => a.obraId === parseInt(filtroObra));
+  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => String(a.obraId) === String(filtroObra));
   const TIPOS = ["Retroescavadeira", "Caminhão", "Betoneira Móvel", "Empilhadeira", "Caminhão Pipa", "Caminhonete", "Outro"];
 
   const abrirNovo = () => { setEditandoId(null); setForm({ tipo: "Retroescavadeira", nome: "", placa: "", obraId: "", horimetro: 0, valorHora: 80, status: "Ativo" }); setModal(true); };
@@ -11245,7 +11245,7 @@ function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
     const d = dataDeStr(a.data);
     if (!d) return false;
     if (d < dataInicio || d > hoje) return false;
-    if (filtroAtivo !== "todos" && a.ativoId !== parseInt(filtroAtivo)) return false;
+    if (filtroAtivo !== "todos" && String(a.ativoId) !== String(filtroAtivo)) return false;
     return true;
   });
 
@@ -11498,7 +11498,7 @@ function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, on
 
   // Filtrar despesas
   const despesasFiltradas = (despesas || []).filter(d => {
-    if (filtroObra !== "todas" && d.obraId !== parseInt(filtroObra)) return false;
+    if (filtroObra !== "todas" && String(d.obraId) !== String(filtroObra)) return false;
     try {
       const [dia, mes, ano] = (d.data || "").split("/");
       if (parseInt(mes) - 1 !== filtroMes) return false;
@@ -12398,7 +12398,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
 
     // 💰 CUSTO consolidado da semana
     const custoMaoObra = Object.entries(trabPres).reduce((s, [tid, st]) => {
-      const t = trabalhadores.find(x => x.id === parseInt(tid));
+      const t = trabalhadores.find(x => String(x.id) === String(tid));
       const diaria = (t && parseFloat(t.diaria)) || 0;
       return s + (st.p + st.a) * diaria; // presença + atestado pagam
     }, 0);
@@ -12528,7 +12528,7 @@ function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, histor
           <th style="width:13%;text-align:right">💰 A pagar</th>
         </tr>
         ${Object.entries(trabPres).map(([tid, st]) => {
-          const t = trabalhadores.find(x => x.id === parseInt(tid));
+          const t = trabalhadores.find(x => String(x.id) === String(tid));
           if (!t) return "";
           const diaria = parseFloat(t.diaria) || 0;
           const aPagar = (st.p + st.a) * diaria;
@@ -14425,7 +14425,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
     }
   };
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => t.obraId === parseInt(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
 
   const calcularCiclo = (t) => {
     const tipo = t.tipoFolha || "quinzenal";
@@ -14605,7 +14605,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
         <div style="text-align:right;font-size:9pt"><b>${empresa.razaoSocial}</b><br>CNPJ: ${empresa.cnpj}<br>${empresa.responsavel}</div>
       </div>
       <h1>FOLHA QUINZENAL DE PAGAMENTO</h1>
-      <div class="periodo"><b>Período:</b> ${periodo} (${quinzena}ª quinzena de ${meses[mes]}/${ano}) ${obraId !== "todas" ? `| <b>Obra:</b> ${obras.find(o => o.id === parseInt(obraId))?.nome}` : ""}</div>
+      <div class="periodo"><b>Período:</b> ${periodo} (${quinzena}ª quinzena de ${meses[mes]}/${ano}) ${obraId !== "todas" ? `| <b>Obra:</b> ${obras.find(o => String(o.id) === String(obraId))?.nome}` : ""}</div>
       <table>
         <tr>
           <th class="num" style="width:4%">Nº</th>
@@ -14648,7 +14648,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
       ${(() => {
         // Combustível da quinzena
         const abastQuinz = (abastecimentos || []).filter(a => {
-          if (obraId !== "todas" && a.obraId !== parseInt(obraId)) return false;
+          if (obraId !== "todas" && String(a.obraId) !== String(obraId)) return false;
           try {
             const [d, m, y] = (a.data || "").split("/");
             const dia = parseInt(d);
@@ -14951,7 +14951,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
           });
           onSalvarFolha({
             id: Date.now(), mes, ano, quinzena, periodo,
-            obraId: obraId === "todas" ? null : parseInt(obraId),
+            obraId: obraId === "todas" ? null : obraId,
             itens, totalLiquido: totalFolha, totalAdiant: totalAdiantQuinzena,
             ts: Date.now(),
           });
@@ -15032,13 +15032,13 @@ function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSolicitar }
 
   const enviar = () => {
     if (!trabId || !obraDestino) return;
-    const t = trabalhadores.find(x => x.id === parseInt(trabId));
+    const t = trabalhadores.find(x => String(x.id) === String(trabId));
     onSolicitar({
       id: Date.now(),
-      trabId: parseInt(trabId),
+      trabId: trabId,
       trabNome: t?.nome,
       obraOrigem: t?.obraId,
-      obraDestino: parseInt(obraDestino),
+      obraDestino: obraDestino,
       tipo, motivo,
       solicitante: usuario?.nome,
       status: "Aguardando",
@@ -15297,7 +15297,7 @@ function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, onBack, o
   const lista = (movEquip || []).filter(m => {
     if (aba === "ativas") return m.status === "Aguardando" || m.status === "Aprovado" || m.status === "Em trânsito";
     return m.status === "Devolvido" || m.status === "Concluído" || m.status === "Negado";
-  }).filter(m => filtroObra === "todas" || m.obraOrigemId === parseInt(filtroObra) || m.obraDestinoId === parseInt(filtroObra));
+  }).filter(m => filtroObra === "todas" || String(m.obraOrigemId) === String(filtroObra) || String(m.obraDestinoId) === String(filtroObra));
 
   const aguardando = (movEquip || []).filter(m => m.status === "Aguardando").length;
   const aprovadas = (movEquip || []).filter(m => m.status === "Aprovado").length;
@@ -15663,7 +15663,7 @@ function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, onRemove
   const ICONS = ["🔨", "🪓", "⛏️", "🧰", "🪛", "🚿", "🛒", "🪣", "🧱", "📐", "🪜", "🔗"];
   const SUGEST = ["Inchada", "Enxadão", "Carrinho de mão", "Pá", "Picareta", "Marreta", "Martelo", "Talhadeira", "Trena", "Nível", "Prumo", "Linha", "Colher de pedreiro", "Desempenadeira", "Régua"];
 
-  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => f.obraId === parseInt(filtroObra));
+  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => String(f.obraId) === String(filtroObra));
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", quantidade: 1, obraId: "", estado: "Bom", icon: "🔨" }); setModal(true); };
   const abrirEdit = (f) => { setEditandoId(f.id); setForm(f); setModal(true); };
@@ -15983,7 +15983,7 @@ function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrabalhador
     : usuarios.filter(u => u.perfil === "encarregado" && u.tel);
 
   const filtrados = lista.filter(p => {
-    const passaObra = filtroObra === "todas" || p.obraId === parseInt(filtroObra);
+    const passaObra = filtroObra === "todas" || String(p.obraId) === String(filtroObra);
     const passaBusca = !busca || p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.cargo || "").toLowerCase().includes(busca.toLowerCase());
     return passaObra && passaBusca;
   });
