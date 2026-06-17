@@ -14566,128 +14566,81 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
   const trabComMov = trabFiltro.filter(t => { const c = calcular(t); return c.diasPagos > 0 || c.adiantDesconto > 0; });
 
   const exportarPDF = () => {
-    const periodo = `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
-    const html = `<html><head><title>Folha de Pagamento — ${meses[mes]}/${ano} (${quinzena}ª)</title>
-      <style>
-        ${KM_PDF_PAGE_CSS}
-        @page { size: A4 landscape; margin: 10mm; }
-        @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-        body { font-family: Arial; color: #1a1a1a; font-size: 9pt; margin: 0 auto; max-width: 277mm; box-sizing: border-box; padding: 4mm; }
-        h1, h2, h3 { page-break-after: avoid; break-after: avoid; }
-        table { page-break-inside: auto; break-inside: auto; }
-        tr { page-break-inside: avoid; break-inside: avoid; }
-        thead { display: table-header-group; }
-        tfoot { display: table-footer-group; }
-        .head { background: #004080; color: #fff; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; page-break-inside: avoid; }
-        .logo { font-size: 18pt; font-weight: 900; letter-spacing: -0.5px; }
-        .logo span { color: #C0A040; }
-        h1 { color: #004080; text-align: center; font-size: 14pt; margin: 12px 0 4px; }
-        .periodo { text-align: center; color: #666; font-size: 10pt; margin-bottom: 12px; }
-        table { width: 100%; border-collapse: collapse; font-size: 8.5pt; table-layout: auto; }
-        th { background: #004080; color: #fff; padding: 6px; border: 1px solid #003060; text-align: left; white-space: nowrap; }
-        td { padding: 5px 6px; border: 1px solid #ccc; vertical-align: top; overflow-wrap: break-word; word-break: normal; }
-        /* Coluna do NOME (1ª): NÃO quebra, se alarga ao texto */
-        th:first-child, td:first-child { white-space: nowrap; min-width: 110px; }
-        /* Coluna do CARGO (2ª): NÃO quebra */
-        th:nth-child(2), td:nth-child(2) { white-space: nowrap; min-width: 80px; }
-        /* Números nunca quebram */
-        td.num, td.right { white-space: nowrap; }
-        /* Texto longo: classe .td-wrap */
-        td.td-wrap { white-space: normal; overflow-wrap: break-word; word-break: normal; }
-        tr:nth-child(even) td { background: #f8fafc; }
-        .num { text-align: center; font-variant-numeric: tabular-nums; }
-        .right { text-align: right; }
-        .total { background: #f0fdf4 !important; font-weight: 900; color: #1a7a3a; font-size: 10pt; }
-        .footer { margin-top: 16px; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ddd; padding-top: 8px; }
-      </style></head><body>
-      <div class="head">
-        <div><div class="logo">KM<span>ZERO</span></div><div style="font-size:7pt;letter-spacing:2px;opacity:0.8">GESTÃO DE OBRAS</div></div>
-        <div style="text-align:right;font-size:9pt"><b>${empresa.razaoSocial}</b><br>CNPJ: ${empresa.cnpj}<br>${empresa.responsavel}</div>
+    const ehCiclo = tipoRegime === "ciclo";
+    const fmt = (v) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fbr = (iso) => { if (!iso) return "—"; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a}`; };
+    const lista = trabComMov;
+    const periodoTxt = ehCiclo ? "Por ciclo do colaborador (seg–sex)"
+      : `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
+    const obraNome = obraId === "todas" ? "Todas as obras" : (obras.find(o => String(o.id) === String(obraId))?.nome || "—");
+    const totBruto = lista.reduce((s, t) => s + calcular(t).bruto, 0);
+    const totAdiant = lista.reduce((s, t) => s + calcular(t).adiantDesconto, 0);
+    const totLiq = lista.reduce((s, t) => s + calcular(t).liquido, 0);
+    const colPeriodo = ehCiclo ? `<th>Período</th>` : "";
+    const colspanTotal = ehCiclo ? 9 : 8;
+    const rows = lista.map((t, i) => {
+      const c = calcular(t);
+      const obra = obras.find(o => String(o.id) === String(t.obraId));
+      const periodoCell = ehCiclo ? `<td style="white-space:nowrap">${fbr(c.periodoIni)} a ${fbr(c.periodoFim)}</td>` : "";
+      return `<tr>
+        <td class="num">${i + 1}</td>
+        <td><b>${t.nome}</b></td>
+        <td>${t.cargo || "—"}</td>
+        <td>${obra?.nome?.substring(0, 22) || "—"}</td>
+        ${periodoCell}
+        <td class="num">${fmt(c.diaria)}</td>
+        <td class="num ok">${c.presentes}</td>
+        <td class="num warn">${c.atestados || "—"}</td>
+        <td class="num crit">${c.faltas || "—"}</td>
+        <td class="num"><b>${c.diasPagos}</b></td>
+        <td class="num">${fmt(c.bruto)}</td>
+        <td class="num">${c.adiantDesconto > 0 ? "−" + fmt(c.adiantDesconto) : "—"}</td>
+        <td class="num liq">${fmt(c.liquido)}</td>
+      </tr>`;
+    }).join("");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Folha de Pagamento — KMZERO</title>
+    <style>
+      @page{size:A4 landscape;margin:0;}
+      *{box-sizing:border-box;} body{margin:0;font-family:Arial,"Segoe UI",sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .page{width:297mm;min-height:210mm;padding:14mm 18mm 16mm 20mm;position:relative;}
+      .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #C9A227;padding-bottom:6px;}
+      .logo{font-size:20pt;font-weight:900;color:#14253F;letter-spacing:-.5px;line-height:1;}
+      .logo span{color:#C9A227;} .logo small{display:block;font-size:6pt;letter-spacing:2px;font-weight:700;}
+      .hd-doc{text-align:right;font-size:8.5pt;color:#14253F;line-height:1.5;} .hd-doc b{font-size:11pt;}
+      h1{color:#14253F;font-size:13pt;margin:10px 0 2px;}
+      .ident{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #c9ced6;font-size:8.5pt;margin:6px 0 10px;}
+      .ident div{padding:5px 8px;border-right:1px solid #c9ced6;} .ident div:last-child{border-right:none;}
+      .ident k{display:block;color:#777;font-size:7pt;text-transform:uppercase;letter-spacing:.5px;} .ident b{font-size:9pt;}
+      table{width:100%;border-collapse:collapse;font-size:8.5pt;}
+      th{background:#14253F;color:#fff;text-align:left;padding:5px 7px;border:1px solid #14253F;white-space:nowrap;}
+      td{padding:4px 7px;border:1px solid #c9ced6;} .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+      .ok{color:#2E7D32;font-weight:700;} .warn{color:#E08A00;font-weight:700;} .crit{color:#C0392B;font-weight:700;} .liq{color:#2E7D32;font-weight:800;}
+      tr:nth-child(even) td{background:#f8fafc;}
+      tr.total td{font-weight:800;color:#14253F;background:#eef2f8;border-top:2px solid #14253F;}
+      .cap{font-size:8pt;color:#666;margin:5px 0;}
+      .ft{position:absolute;left:20mm;right:18mm;bottom:9mm;border-top:1px solid #C9A227;padding-top:4px;display:flex;justify-content:space-between;font-size:7.5pt;color:#14253F;}
+      @media print{tr{page-break-inside:avoid;} thead{display:table-header-group;}}
+    </style></head><body><div class="page">
+      <div class="hd"><div class="logo">KM<span>ZERO</span><small>ENGENHARIA &amp; ARQUITETURA</small></div>
+      <div class="hd-doc"><b>FOLHA DE PAGAMENTO</b><br>KMZ-PL-001<br>${ehCiclo ? "Por Ciclo" : "Regime " + tipoRegime}</div></div>
+      <h1>Folha de Pagamento${ehCiclo ? " — Por Ciclo" : ""}</h1>
+      <div class="ident">
+        <div><k>Empresa</k><b>${empresa.razaoSocial || empresa.nomeFantasia || "KM"}</b></div>
+        <div><k>CNPJ</k><b>${empresa.cnpj || "—"}</b></div>
+        <div><k>Obra</k><b>${obraNome}</b></div>
+        <div><k>Período</k><b>${periodoTxt}</b></div>
       </div>
-      <h1>FOLHA QUINZENAL DE PAGAMENTO</h1>
-      <div class="periodo"><b>Período:</b> ${periodo} (${quinzena}ª quinzena de ${meses[mes]}/${ano}) ${obraId !== "todas" ? `| <b>Obra:</b> ${obras.find(o => String(o.id) === String(obraId))?.nome}` : ""}</div>
       <table>
-        <tr>
-          <th class="num" style="width:4%">Nº</th>
-          <th>Nome</th>
-          <th style="width:14%">Cargo</th>
-          <th style="width:9%">Obra</th>
-          <th class="num" style="width:5%">Pres.</th>
-          <th class="num" style="width:5%">Atest.</th>
-          <th class="num" style="width:5%">Falta</th>
-          <th class="num" style="width:6%">Dias Pagos</th>
-          <th class="right" style="width:8%">Diária</th>
-          <th class="right" style="width:9%">Bruto</th>
-          <th class="right" style="width:9%">Adiantamento</th>
-          <th class="right" style="width:11%">Líquido</th>
-        </tr>
-        ${trabComMov.map((t, i) => {
-          const c = calcular(t);
-          const obra = obras.find(o => o.id === t.obraId);
-          return `<tr>
-            <td class="num">${i + 1}</td>
-            <td><b>${t.nome}</b></td>
-            <td>${t.cargo}</td>
-            <td>${obra?.nome?.substring(0, 25) || "—"}</td>
-            <td class="num" style="color:#2aa84f;font-weight:700">${c.presentes}</td>
-            <td class="num" style="color:#e87722;font-weight:700">${c.atestados}</td>
-            <td class="num" style="color:#d63b3b;font-weight:700">${c.faltas}</td>
-            <td class="num" style="font-weight:700">${c.diasPagos}</td>
-            <td class="right">R$ ${c.diaria.toFixed(2)}</td>
-            <td class="right">R$ ${c.bruto.toFixed(2)}</td>
-            <td class="right" style="color:#ea580c">${c.adiantDesconto > 0 ? "−R$ " + c.adiantDesconto.toFixed(2) : "—"}</td>
-            <td class="right" style="color:#1a7a3a;font-weight:800">R$ ${c.liquido.toFixed(2)}</td>
-          </tr>`;
-        }).join("")}
-        <tr class="total">
-          <td colspan="11" class="right"><b>TOTAL DA QUINZENA</b></td>
-          <td class="right">R$ ${totalFolha.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
-        </tr>
+        <tr><th class="num">Nº</th><th>Nome</th><th>Cargo</th><th>Obra</th>${colPeriodo}<th class="num">Diária</th><th class="num">Pres.</th><th class="num">Atest.</th><th class="num">Falta</th><th class="num">Dias pagos</th><th class="num">Bruto (R$)</th><th class="num">Adiant.</th><th class="num">Líquido (R$)</th></tr>
+        ${rows}
+        <tr class="total"><td colspan="${colspanTotal}">TOTAL DA FOLHA</td><td class="num">${fmt(totBruto)}</td><td class="num">${totAdiant > 0 ? "−" + fmt(totAdiant) : "—"}</td><td class="num">${fmt(totLiq)}</td></tr>
       </table>
-
-      ${(() => {
-        // Combustível da quinzena
-        const abastQuinz = (abastecimentos || []).filter(a => {
-          if (obraId !== "todas" && String(a.obraId) !== String(obraId)) return false;
-          try {
-            const [d, m, y] = (a.data || "").split("/");
-            const dia = parseInt(d);
-            return parseInt(m) - 1 === mes && parseInt(y) === ano && dia >= dia1 && dia <= dia2;
-          } catch { return false; }
-        });
-        if (abastQuinz.length === 0) return "";
-        const totalComb = abastQuinz.reduce((s, a) => s + (parseFloat(a.valor) || 0), 0);
-        const totalLitros = abastQuinz.reduce((s, a) => s + (parseFloat(a.litros) || 0), 0);
-        return `
-        <h2 style="page-break-before:auto;margin-top:20px;background:#0f2151;color:#fff;padding:8px 12px;font-size:11pt;">⛽ COMBUSTÍVEL DA QUINZENA — ${abastQuinz.length} abastecimento(s)</h2>
-        <table>
-          <tr><th>Veículo</th><th>Data</th><th>Posto</th><th class="right">Litros</th><th class="right">R$/L</th><th class="right">Valor</th></tr>
-          ${abastQuinz.sort((a,b) => (a.data > b.data ? 1 : -1)).map(a => {
-            const ativo = ativos.find(x => x.id === a.ativoId);
-            const lpu = a.litros > 0 ? (a.valor / a.litros).toFixed(2) : "—";
-            return `<tr>
-              <td><b>${ativo?.nome || "—"}</b>${ativo?.placa ? " (" + ativo.placa + ")" : ""}</td>
-              <td>${a.data}</td>
-              <td>${a.posto || "—"}</td>
-              <td class="right">${(parseFloat(a.litros) || 0).toFixed(1)}</td>
-              <td class="right">R$ ${lpu}</td>
-              <td class="right"><b>R$ ${(parseFloat(a.valor) || 0).toFixed(2)}</b></td>
-            </tr>`;
-          }).join("")}
-          <tr class="total">
-            <td colspan="3" class="right"><b>TOTAL COMBUSTÍVEL</b></td>
-            <td class="right"><b>${totalLitros.toFixed(1)}L</b></td>
-            <td></td>
-            <td class="right"><b>R$ ${totalComb.toFixed(2)}</b></td>
-          </tr>
-        </table>
-        `;
-      })()}
-
-      <div class="footer">${empresa.razaoSocial} • Gerado em ${new Date().toLocaleString("pt-BR")} • Sistema KMZERO</div>
-      <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
-      </body></html>`;
-    abrirOuBaixarHTML(html, `Folha-${quinzena}aQ-${meses[mes]}-${ano}.html`);
+      <div class="cap">Pres. = dias presentes · Atest. = atestados (pagos conforme cadastro) · Falta não paga · cor semântica nos dados, marca só na moldura.${ehCiclo ? " Período por ciclo de cada colaborador (seg–sex), a partir do último pagamento." : ""}</div>
+      <div class="ft"><span>${empresa.razaoSocial || "KM"}</span><span>KMZ-PL-001 · Validado pelo KMZERO</span><span>Emitido em ${new Date().toLocaleDateString("pt-BR")}</span></div>
+    </div>
+    <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
+    </body></html>`;
+    abrirOuBaixarHTML(html, `Folha-KMZERO-${ehCiclo ? "ciclo" : tipoRegime}-${new Date().toISOString().slice(0, 10)}.html`);
   };
 
   return (
@@ -15009,6 +14962,7 @@ function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, ab
               })}
               {trabFiltro.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "#aaa" }}>Nenhum trabalhador.</div>}
             </div>
+          <Btn label="📄 EXPORTAR FOLHA EM PDF" color={GOLD} onClick={exportarPDF} />
           </>
         )}
       </div>
