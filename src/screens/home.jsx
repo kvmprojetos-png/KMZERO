@@ -1,3 +1,4 @@
+import { TabelaResumoEquipe } from "./equipe.jsx";
 import { gerarSolicitacaoPedidoPDF } from "./suprimentos.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
