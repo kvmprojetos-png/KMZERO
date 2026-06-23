@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Perfil do usuario: apenas o proprio usuario autenticado
+    match /usuarios/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Dados da empresa: apenas usuarios vinculados a esta empresa
+    match /empresas/{empresaId}/{document=**} {
+      allow read, write: if request.auth != null
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.empresaId == empresaId;
+
+      // Permite criacao do doc raiz da empresa durante o registro
+      allow create: if request.auth != null;
+    }
+  }
+}

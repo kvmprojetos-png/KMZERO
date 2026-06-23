@@ -1,17 +1,27 @@
-export const FILE_DB_NAME = "kmzero_files";
+import { getEmpresaId } from "./store.js";
+
 export const FILE_DB_VERSION = 1;
 export const FILE_STORE_NAME = "anexos";
 
+export function getFileDBName() {
+  const eid = getEmpresaId();
+  return eid ? `${eid}_files` : "kmzero_files";
+}
+
 let _dbInstance = null;
+let _dbName = null;
 
 export function openFileDB() {
-  if (_dbInstance) return Promise.resolve(_dbInstance);
+  const dbName = getFileDBName();
+  if (_dbInstance && _dbName === dbName) return Promise.resolve(_dbInstance);
+  if (_dbInstance) { try { _dbInstance.close(); } catch(e) {} _dbInstance = null; }
+  _dbName = dbName;
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
       reject(new Error("IndexedDB não disponível neste navegador"));
       return;
     }
-    const req = indexedDB.open(FILE_DB_NAME, FILE_DB_VERSION);
+    const req = indexedDB.open(dbName, FILE_DB_VERSION);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => { _dbInstance = req.result; resolve(req.result); };
     req.onupgradeneeded = (e) => {
@@ -114,16 +124,14 @@ export function formatarTamanhoBytes(bytes) {
 export function iconePorTipoArquivo(mime, nome) {
   const n = (nome || "").toLowerCase();
   const m = (mime || "").toLowerCase();
-  if (m.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp)$/.test(n)) return "🖼️";
-  if (m === "application/pdf" || n.endsWith(".pdf")) return "📕";
-  if (m.includes("spreadsheet") || m.includes("excel") || /\.(xlsx|xls|csv|ods)$/.test(n)) return "📊";
-  if (m.includes("word") || m.includes("document") || /\.(docx|doc|odt|rtf)$/.test(n)) return "📝";
-  if (m.includes("presentation") || /\.(pptx|ppt|odp)$/.test(n)) return "📈";
-  if (m.startsWith("video/") || /\.(mp4|mov|avi|mkv|webm)$/.test(n)) return "🎬";
-  if (m.startsWith("audio/") || /\.(mp3|wav|m4a|ogg)$/.test(n)) return "🎵";
-  if (/\.(zip|rar|7z|tar|gz)$/.test(n)) return "🗜️";
-  if (/\.(dwg|dxf|rvt|ifc)$/.test(n)) return "📐";
-  return "📄";
+  if (m.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp)$/.test(n)) return "\u{1F5BC}️";
+  if (m === "application/pdf" || n.endsWith(".pdf")) return "\u{1F4D5}";
+  if (m.includes("spreadsheet") || m.includes("excel") || /\.(xlsx|xls|csv|ods)$/.test(n)) return "\u{1F4CA}";
+  if (m.includes("word") || m.includes("document") || /\.(docx|doc|odt|rtf)$/.test(n)) return "\u{1F4DD}";
+  if (m.includes("presentation") || /\.(pptx|ppt|odp)$/.test(n)) return "\u{1F4C8}";
+  if (m.startsWith("video/") || /\.(mp4|mov|avi|mkv|webm)$/.test(n)) return "\u{1F3AC}";
+  if (m.startsWith("audio/") || /\.(mp3|wav|m4a|ogg)$/.test(n)) return "\u{1F3B5}";
+  if (/\.(zip|rar|7z|tar|gz)$/.test(n)) return "\u{1F5DC}️";
+  if (/\.(dwg|dxf|rvt|ifc)$/.test(n)) return "\u{1F4D0}";
+  return "\u{1F4C4}";
 }
-
-/* ── CARREGAR BIBLIOTECAS PDF DINAMICAMENTE ── */

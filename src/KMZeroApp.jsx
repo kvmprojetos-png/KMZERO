@@ -1,29 +1,28 @@
 import { LINKS_PADRAO } from "./screens/equipe.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "./firebase.js";
-import { getApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
-import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
+import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual, criarContaFirebase } from "./firebase.js";
 
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
-import { EMPRESA_ID, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "./lib/store.js";
-import { FILE_DB_NAME, FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
+import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, buscarEmpresaIdDoUsuario, registrarEmpresa, registrarUsuarioEmpresa, store } from "./lib/store.js";
+import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
-import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, DEFAULT_USUARIOS, EMPRESA_PADRAO, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
+import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "./components/ui.jsx";
 
 /* ── Telas separadas por domínio ── */
 import { TelaPerfilPIN, TelaPIN, TelaLogin, TelaMinhaConta, TelaAcessosApp } from "./screens/auth.jsx";
+import { TelaRegistro } from "./screens/registro.jsx";
 import { TelaHome, TelaPainelGestor, CategoriaCard, TelaDashboard, TelaRelatorio, TelaRelatorioConsolidado, TelaAlertas, gerarAlertas } from "./screens/home.jsx";
 import { TelaObras, TelaObraDetalhe, TelaMapa } from "./screens/obras.jsx";
+import { TelaClientes } from "./screens/clientes.jsx";
 import { TelaEquipe, TelaFicha, TelaTrabalhadorDetalhe, CalendarioPresenca, TabelaResumoEquipe, TelaRH, TelaContatos, TelaExames, TelaFerias, TelaAdiantamentos, gerarFichaCadastralPDF } from "./screens/equipe.jsx";
 import { FluxoEncarregado, TelaFolha, TelaFolhaQuinzenal, TelaHistFolha, TelaCalendario, TelaDiario } from "./screens/presenca.jsx";
 import { TelaMaterial, TelaPedidos, TelaPedidoDetalhe, TelaFornecedores, TelaRecebimento, gerarSolicitacaoPedidoPDF } from "./screens/suprimentos.jsx";
 import { TelaEquip, TelaEquipamentosGestao, TelaFrota, TelaAtivos, TelaFerramentas, TelaManutencao, TelaMovEquip, TelaMovEquipDetalhe, TelaSolicitarMov, TelaMovPessoalDetalhe, TelaAprovarMov } from "./screens/equipamentos.jsx";
-import { TelaCustos, TelaDespesasAvulsas } from "./screens/financeiro.jsx";
+import { TelaCustos, TelaDespesasAvulsas, TelaPagamentos } from "./screens/financeiro.jsx";
 import { TelaRDO, gerarPDFRDORabnt, TelaCronograma, TelaCronogramaPro, CurvaSChart, calcularKPIsCronograma, detectarInconsistenciasCronograma, calcularPctPrevistoEtapa, gerarPontosCurvaS, TelaProdutividade } from "./screens/rdo.jsx";
 import { TelaFotos, TelaGaleria, TelaAnexosObra, TelaMensagens, TelaLinks } from "./screens/midia.jsx";
 import { TelaConfigEmpresa, TelaEscritorio, TelaAjuda, TelaBackup, TelaGerarSimulacao, TelaDiagnostico, TelaZerarTudo } from "./screens/sistema.jsx";
@@ -73,10 +72,11 @@ export default function App() {
     });
   };
 
-  const [usuarios, setUsuarios]   = useState(DEFAULT_USUARIOS);
-  const [obras, setObras]         = useState(DEFAULT_OBRAS);
-  const [trabalhadores, setTrab]  = useState(DEFAULT_TRABALHADORES);
-  const [equips, setEquips]       = useState(DEFAULT_EQUIPS);
+  const [empresaIdState, setEmpresaIdState] = useState(null);
+  const [usuarios, setUsuarios]   = useState([]);
+  const [obras, setObras]         = useState([]);
+  const [trabalhadores, setTrab]  = useState([]);
+  const [equips, setEquips]       = useState([]);
   const [pedidos, setPedidos]     = useState([]);
 
   // ── SYNC PEDIDOS (Fase 2): lançador cria na obra, gestor vê de qualquer cidade ──
@@ -127,7 +127,7 @@ export default function App() {
     });
   }, [usuario?.firebaseUid]);
   const [diario, setDiario]       = useState([]);
-  const [ativos, setAtivos]       = useState(DEFAULT_ATIVOS);
+  const [ativos, setAtivos]       = useState([]);
   const [abastecimentos, setAbast]= useState([]);
   const [ferias, setFerias]       = useState([]);
   const [rdosEmitidos, setRdos]   = useState([]);
@@ -159,12 +159,12 @@ export default function App() {
       });
     });
   }, [usuario?.firebaseUid]);
-  const [empresa, setEmpresa]     = useState(EMPRESA_PADRAO);
+  const [empresa, setEmpresa]     = useState({});
   const [produtividade, setProd]  = useState([]);
   const [recebimentos, setReceb]  = useState([]);
   const [movimentacoes, setMov]   = useState([]);
   const [ferramentas, setFerr]    = useState([]);
-  const [links, setLinks]         = useState(LINKS_PADRAO);
+  const [links, setLinks]         = useState([]);
   const [adiantamentos, setAdiant]= useState([]);
   const [manutencoes, setManut]   = useState([]);
   const [folhasSalvas, setFolhasSalvas] = useState([]);
@@ -223,7 +223,8 @@ export default function App() {
       });
     });
   }, [usuario?.firebaseUid]);
-  const [fornecedores, setFornecedores] = useState(DEFAULT_FORNECEDORES);
+  const [fornecedores, setFornecedores] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
   const obraAtual = usuario?.obraId ? obras.find(o => o.id === usuario.obraId) || obras[0] : obras[0];
@@ -231,6 +232,11 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      const cachedEmpresaId = localStorage.getItem("_kmzero_empresaId");
+      if (cachedEmpresaId) {
+        setEmpresaId(cachedEmpresaId);
+        setEmpresaIdState(cachedEmpresaId);
+      }
       const obras_   = await store.get("obras");
       const trab_    = await store.get("trabalhadores");
       const equips_  = await store.get("equips");
@@ -257,6 +263,7 @@ export default function App() {
       const despAv_  = await store.get("despesasAvulsas");
       const fotos_   = await store.get("fotosObras");
       const forn_    = await store.get("fornecedores");
+      const clientes_ = await store.get("clientes");
       const userLogado = await store.get("usuarioLogado");
       // Normaliza obraId/trabId gravados como texto por versões antigas (consertava TODOS os filtros)
       const normIds = (arr) => Array.isArray(arr) ? arr.map(x => {
@@ -293,7 +300,12 @@ export default function App() {
       if (despAv_)  setDespesasAvulsas(normIds(despAv_));
       if (fotos_) setFotosObras(normIds(fotos_));
       if (forn_)    setFornecedores(forn_);
+      if (clientes_) setClientes(normIds(clientes_));
       if (userLogado) {
+        if (userLogado.empresaId) {
+          setEmpresaId(userLogado.empresaId);
+          setEmpresaIdState(userLogado.empresaId);
+        }
         setUsuario(userLogado);
         setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
       }
@@ -332,6 +344,7 @@ export default function App() {
   useEffect(() => { if (!carregando) store.set("despesasAvulsas", despesasAvulsas); }, [despesasAvulsas, carregando]);
   useEffect(() => { if (!carregando) store.set("fotosObras", fotosObras); }, [fotosObras, carregando]);
   useEffect(() => { if (!carregando) store.set("fornecedores", fornecedores); }, [fornecedores, carregando]);
+  useEffect(() => { if (!carregando) store.set("clientes", clientes); }, [clientes, carregando]);
 
   // Gestor corrige a presença de qualquer dia (acerta a folha) — local + nuvem
   const editarPresencaDia = (dataISO, trabId, status) => {
@@ -385,9 +398,15 @@ export default function App() {
     if (dados.despesasAvulsas) setDespesasAvulsas(dados.despesasAvulsas);
     if (dados.fotosObras) setFotosObras(dados.fotosObras);
     if (dados.fornecedores) setFornecedores(dados.fornecedores);
+    if (dados.clientes) setClientes(dados.clientes);
   };
 
   const login = (u) => {
+    if (u.empresaId) {
+      setEmpresaId(u.empresaId);
+      setEmpresaIdState(u.empresaId);
+      localStorage.setItem("_kmzero_empresaId", u.empresaId);
+    }
     setUsuario(u);
     store.set("usuarioLogado", u);
     if (u.perfil === "gestor") setTela("gestor");
@@ -412,12 +431,14 @@ export default function App() {
   const logout = async () => {
     try { await logoutFirebase(); } catch (e) {}
     setUsuario(null);
+    setEmpresaIdState(null);
+    setEmpresaId(null);
     store.set("usuarioLogado", null);
     setTela("login");
   };
   const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
 
-  const todoEstado = { obras, trabalhadores, equips, pedidos, historico, usuarios, mensagens, diario, ativos, abastecimentos, ferias, rdosEmitidos, empresa, produtividade, recebimentos, movimentacoes, ferramentas, links, adiantamentos, manutencoes, folhasSalvas, cronogramas, movEquip, despesasAvulsas, fotosObras, fornecedores };
+  const todoEstado = { obras, trabalhadores, equips, pedidos, historico, usuarios, mensagens, diario, ativos, abastecimentos, ferias, rdosEmitidos, empresa, produtividade, recebimentos, movimentacoes, ferramentas, links, adiantamentos, manutencoes, folhasSalvas, cronogramas, movEquip, despesasAvulsas, fotosObras, fornecedores, clientes };
 
   // Aprovar movimentação: se for "definitivo" muda obra do trabalhador
   const salvarManutencao = (m) => {
@@ -488,11 +509,11 @@ export default function App() {
 
   // 🔒 SEGURANÇA: telas restritas ao gestor (encarregado não tem acesso)
   const TELAS_GESTOR = new Set([
-    "gestor", "obras", "cronograma", "cronograma_pro", "equipe", "trab_detalhe", "fichas",
+    "gestor", "obras", "cronograma", "cronograma_pro", "clientes", "equipe", "trab_detalhe", "fichas",
     "ativos", "frota", "manutencoes", "equipamentos_gestao", "ferramentas_gestao",
     "custos", "folha", "folha_mensal", "historico", "adiantamentos", "movimentacoes",
     "dashboard", "diagnostico", "consolidado", "mapa", "calendario", "alertas",
-    "fornecedores", "empresa", "minha_conta", "ajuda", "acessos", "backup", "gerar_simulacao", "zerar_tudo",
+    "fornecedores", "clientes", "empresa", "minha_conta", "ajuda", "acessos", "backup", "gerar_simulacao", "zerar_tudo",
     "aso_aniversarios", "ferias", "contatos_emergencia", "links", "produtividade_gestor",
     "pedidos", "pedido_detalhe", "despesas_avulsas", "mov_pess_detalhe",
     "recebimentos_gestor", "comissionamento"
@@ -523,7 +544,8 @@ export default function App() {
 
   const render = () => {
     switch (tela) {
-      case "login":      return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} />;
+      case "login":      return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRegistro={() => setTela("registro")} />;
+      case "registro":   return <TelaRegistro onBack={() => setTela("login")} onRegistrado={login} />;
       case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} onNav={setTela} onLogout={logout} />;
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
       case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={criarPedidoSync} />;
@@ -533,7 +555,7 @@ export default function App() {
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
       case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={salvarFotoObraSync} />;
       case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
-      case "obras":      return <TelaObras obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
+      case "obras":      return <TelaObras usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "mov_equip":  return <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} onVerDetalhe={m => { setMovEquipSel(m); setTela("mov_equip_detalhe"); }} />;
@@ -580,6 +602,7 @@ export default function App() {
       case "pedidos":    return <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} usuario={usuario} fornecedores={fornecedores} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} onCriar={criarPedidoSync} />;
       case "pedido_detalhe": return pedidoSelecionado ? <TelaPedidoDetalhe pedido={pedidos.find(x => x.id === pedidoSelecionado.id) || pedidoSelecionado} obras={obras} empresa={empresa} onBack={voltar} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} onEditar={editarPedidoSync} /> : <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} />;
       case "mapa":       return <TelaMapa obras={obras} trabalhadores={trabalhadores} onBack={voltar} onEditar={() => setTela("obras")} />;
+      case "clientes":  return <TelaClientes clientes={clientes} onBack={voltar} onAdd={c => setClientes(cs => [...cs, c])} onEditar={c => setClientes(cs => cs.map(x => x.id === c.id ? c : x))} onRemover={id => setClientes(cs => cs.filter(x => x.id !== id))} />;
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} usuario={usuario} onBack={voltar} onEditar={editarTrabalhador} onEditarPresenca={editarPresencaDia} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={enviarMensagemSync} onMarcarLida={marcarLidaSync} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
@@ -587,6 +610,7 @@ export default function App() {
       case "equip_gestao":return <TelaEquipamentosGestao obras={obras} equips={equips} onBack={voltar} onAdd={eq => setEquips(es => [...es, eq])} onEditar={eq => setEquips(es => es.map(x => x.id === eq.id ? eq : x))} onRemover={id => setEquips(es => es.filter(e => e.id !== id))} />;
       case "ativos":     return <TelaAtivos obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onAdd={a => setAtivos(as => [...as, a])} onEditar={a => setAtivos(as => as.map(x => x.id === a.id ? a : x))} onRemover={id => setAtivos(as => as.filter(a => a.id !== id))} onAbastecer={a => setAbast(abs => [a, ...abs])} />;
       case "frota":      return <TelaFrota obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
+      case "pagamentos": return <TelaPagamentos obras={obras} onBack={voltar} onEditarObra={o => setObras(os => os.map(x => x.id === o.id ? o : x))} />;
       case "custos":     return <TelaCustos obras={obras} trabalhadores={trabalhadores} historico={historico} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} despesasAvulsas={despesasAvulsas} onBack={voltar} />;
       case "despesas":   return <TelaDespesasAvulsas obras={obras} despesas={despesasAvulsas} onBack={voltar} onAdd={d => setDespesasAvulsas(arr => [d, ...arr])} onEditar={d => setDespesasAvulsas(arr => arr.map(x => x.id === d.id ? d : x))} onRemover={id => setDespesasAvulsas(arr => arr.filter(x => x.id !== id))} />;
       case "ferias":     return <TelaFerias obras={obras} trabalhadores={trabalhadores} ferias={ferias} onBack={voltar} onAdd={f => setFerias(fs => [...fs, f])} onRemove={id => setFerias(fs => fs.filter(f => f.id !== id))} />;
@@ -612,7 +636,7 @@ export default function App() {
       case "contatos":      return <TelaContatos obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onVerTrabalhador={verTrabalhador} />;
       case "adiantamentos": return <TelaAdiantamentos obras={obras} trabalhadores={trabalhadores} adiantamentos={adiantamentos} onBack={voltar} onAdd={a => setAdiant(ads => [a, ...ads])} onRemove={id => setAdiant(ads => ads.filter(a => a.id !== id))} />;
       case "backup":     return <TelaBackup todoEstado={todoEstado} onRestaurar={restaurarBackup} onBack={voltar} />;
-      case "anexos_obra": return obraAnexos ? <TelaAnexosObra obra={obraAnexos} usuario={usuario} onBack={voltar} /> : <TelaObras obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} />;
+      case "anexos_obra": return obraAnexos ? <TelaAnexosObra obra={obraAnexos} usuario={usuario} onBack={voltar} /> : <TelaObras usuarios={usuarios} obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} />;
 
       case "zerar_tudo": return <TelaZerarTudo
         onBack={voltar}
@@ -637,8 +661,8 @@ export default function App() {
         }}
         onResetTotal={() => {
           try {
-            // Limpa TUDO do localStorage (não só do kmzero, mas pelo prefixo)
-            const keys = Object.keys(localStorage).filter(k => k.startsWith("kmzero_"));
+            const prefix = empresaIdState ? empresaIdState + "_" : "kmzero_";
+            const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
             keys.forEach(k => localStorage.removeItem(k));
 
             // Avisa e recarrega — o useEffect inicial vai carregar os defaults limpos
@@ -670,7 +694,7 @@ export default function App() {
           voltar();
         });
       }} onBack={voltar} />;
-      default:           return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} />;
+      default:           return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRegistro={() => setTela("registro")} />;
     }
   };
 
@@ -765,7 +789,7 @@ export default function App() {
               animation: "kmSplashTagline 1.8s ease-out forwards",
               opacity: 0,
             }}>
-              KM Consultoria · Engenharia Civil
+              Gestao Inteligente de Obras
             </div>
           </div>
 

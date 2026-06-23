@@ -5,8 +5,10 @@ export const Badge = ({ label, color, small }) => (
   <span style={{ background: color, color: "#fff", borderRadius: 20, padding: small ? "3px 9px" : "5px 13px", fontSize: small ? 11 : 13, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>
 );
 
-export const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx, danger }) => (
+export const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx, danger, ...rest }) => (
   <button
+    {...rest}
+    type={rest.type || "button"}
     onClick={onClick}
     disabled={disabled}
     style={css({
@@ -63,7 +65,7 @@ export function EmptyState({ icon = "📦", titulo, subtitulo, botaoLabel, onBot
         }}>{subtitulo}</div>
       )}
       {botaoLabel && onBotao && (
-        <button onClick={onBotao} style={{
+        <button type="button" onClick={onBotao} style={{
           background: cor,
           color: "#fff",
           border: "none",
@@ -88,6 +90,7 @@ export function KMHeader({ title, sub, onBack, right }) {
       <div style={{ display: "flex", alignItems: "center", paddingTop: 12, paddingBottom: 6, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
         {onBack && (
           <button
+            type="button"
             onClick={onBack}
             aria-label="Voltar"
             style={{
@@ -114,7 +117,7 @@ export function KMHeader({ title, sub, onBack, right }) {
             ‹
           </button>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
           <div><span style={{ fontWeight: 900, fontSize: 22, color: "#fff", letterSpacing: -1 }}>KM</span><span style={{ fontWeight: 900, fontSize: 22, color: GOLD, letterSpacing: -1 }}>ZERO</span></div>
           <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: 2.5, marginTop: -2 }}>GESTÃO DE OBRAS</div>
         </div>
@@ -219,7 +222,7 @@ export function Modal({ show, title, children, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, padding: 20, width: "100%", maxWidth: 400, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", WebkitOverflowScrolling: "touch" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, position: "sticky", top: -20, background: "#fff", padding: "16px 0 12px 0", marginTop: -20, borderBottom: "1px solid #eee", zIndex: 1 }}>
           <div style={{ fontWeight: 800, color: NAVY, fontSize: 16 }}>{title}</div>
-          <button onClick={onClose} style={{ background: "#f3f4f6", border: "none", fontSize: 18, cursor: "pointer", color: "#666", width: 32, height: 32, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>✕</button>
+          <button type="button" onClick={onClose} style={{ background: "#f3f4f6", border: "none", fontSize: 18, cursor: "pointer", color: "#666", width: 32, height: 32, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>✕</button>
         </div>
         <div style={{ paddingTop: 4 }}>
           {children}

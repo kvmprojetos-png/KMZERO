@@ -3,25 +3,28 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
-import { EMPRESA_ID, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
-import { FILE_DB_NAME, FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
+import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
+import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
-import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, DEFAULT_USUARIOS, EMPRESA_PADRAO, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
+import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
 
-export function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
+export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
   const [modal, setModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [obraSelecionada, setObraSelecionada] = useState(null);
-  const [form, setForm] = useState({ nome: "", local: "", status: "Ativa", tipo: "Edificação" });
+  const [form, setForm] = useState({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", local: "", status: "Ativa", tipo: "Edificação" }); setModal(true); };
-  const abrirEdit = (o) => { setEditandoId(o.id); setForm(o); setModal(true); };
+  const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" }); setModal(true); };
+  const abrirEdit = (o) => { setEditandoId(o.id); setForm({ ...o, clienteId: o.clienteId || "", cliente: o.cliente || "", clienteDoc: o.clienteDoc || "" }); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.local) return;
-    if (editandoId) onEditar({ ...form, id: editandoId });
-    else onAdd({ id: Date.now(), ...form });
+    const apontadorId = form.apontadorId ? (isNaN(Number(form.apontadorId)) ? form.apontadorId : Number(form.apontadorId)) : "";
+    const clienteId = form.clienteId ? (isNaN(Number(form.clienteId)) ? form.clienteId : Number(form.clienteId)) : "";
+    const dados = { ...form, apontadorId, clienteId };
+    if (editandoId) onEditar({ ...dados, id: editandoId });
+    else onAdd({ id: Date.now(), ...dados });
     setModal(false);
   };
 
@@ -29,6 +32,8 @@ export function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, p
   if (obraSelecionada) {
     return <TelaObraDetalhe
       obra={obraSelecionada}
+      usuarios={usuarios}
+      clientes={clientes}
       trabalhadores={trabalhadores}
       ativos={ativos}
       equips={equips}
@@ -70,11 +75,14 @@ export function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, p
           const cron = (cronogramas || {})[o.id] || [];
           const progresso = cron.length > 0 ? Math.round(cron.reduce((s, e) => s + (e.progresso || 0), 0) / cron.length) : 0;
           return (
-            <div key={o.id} onClick={() => setObraSelecionada(o)} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 10, borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}`, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
+            <div key={o.id} data-test={`obra-card-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 10, borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}`, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, color: NAVY, fontSize: 15 }}>{o.nome}</div>
                   <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>📍 {o.local}</div>
+                  {o.apontadorId && (
+                    <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>👷 Apontador: {usuarios.find(u => u.id === o.apontadorId)?.nome || "Não encontrado"}</div>
+                  )}
                   {progresso > 0 && (
                     <div style={{ marginTop: 8, marginBottom: 4 }}>
                       <div style={{ height: 5, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
@@ -96,7 +104,7 @@ export function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, p
             </div>
           );
         })}
-        <Btn label="➕ Nova Obra" color={NAVY} onClick={abrirNovo} />
+        <Btn data-test="nova-obra" label="➕ Nova Obra" color={NAVY} onClick={abrirNovo} />
       </div>
       <KMFooter />
       <Modal show={modal} title={editandoId ? "Editar Obra" : "Nova Obra"} onClose={() => setModal(false)}>
@@ -132,6 +140,37 @@ export function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, p
         <select value={form.tipo || "Edificação"} onChange={e => set("tipo", e.target.value)} style={selS}>
           <option>Edificação</option><option>Pavimentação</option><option>Drenagem</option><option>Reforma</option><option>Outra</option>
         </select>
+
+        <label style={labelS}>👷 Apontador</label>
+        <select value={form.apontadorId || ""} onChange={e => set("apontadorId", e.target.value)} style={selS}>
+          <option value="">Selecionar apontador</option>
+          {usuarios.filter(u => u.perfil !== "gestor").map(u => (
+            <option key={u.id} value={u.id}>{u.nome}{u.cargo ? ` • ${u.cargo}` : ""}</option>
+          ))}
+        </select>
+
+        <label style={labelS}>👤 Cliente</label>
+        <select data-test="select-cliente-obras" value={form.clienteId || ""} onChange={e => {
+          const value = e.target.value;
+          const clienteId = value ? (isNaN(Number(value)) ? value : Number(value)) : "";
+          const cliente = clientes.find(c => c.id === clienteId);
+          if (cliente) {
+            setForm(f => ({ ...f, clienteId, cliente: cliente.nome || "", clienteDoc: cliente.documento || "" }));
+          } else {
+            set("clienteId", clienteId);
+          }
+        }} style={selS}>
+          <option value="">Selecionar cliente</option>
+          {clientes.map(c => (
+            <option key={c.id} value={c.id}>{c.nome}{c.cidade ? ` • ${c.cidade}` : ""}</option>
+          ))}
+        </select>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <button data-test="gerenciar-clientes" onClick={() => onNav && onNav("clientes")} style={{ flex: 1, background: "#eef2ff", border: "1px solid #c7d2fe", color: NAVY, borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontWeight: 700 }}>Gerenciar clientes</button>
+          <div style={{ flex: 2, background: "#f8fafc", borderRadius: 10, padding: 10, border: "1px solid #e2e8f0", fontSize: 11, color: "#475569" }}>
+            Se o cliente não existir, crie-o em Clientes e depois selecione aqui. Caso queira manter um nome livre, deixe em branco e preencha o campo abaixo.
+          </div>
+        </div>
 
         {/* ════ CONTRATO DA OBRA ════ */}
         <div style={{ background: "#fff7e6", border: `1px solid ${GOLD}30`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
@@ -222,7 +261,9 @@ export function TelaObras({ obras, trabalhadores, ativos, equips, ferramentas, p
    DETALHE DA OBRA — tudo relacionado
 ════════════════════════════════════ */
 
-export function TelaObraDetalhe({ obra, trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onEditar, onNav }) {
+export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onEditar, onNav }) {
+  const apontador = usuarios.find(u => u.id === obra.apontadorId);
+  const cliente = clientes.find(c => String(c.id) === String(obra.clienteId));
   const trabObra = trabalhadores.filter(t => t.obraId === obra.id);
   const ativosObra = (ativos || []).filter(a => a.obraId === obra.id);
   const equipsObra = (equips || []).filter(e => e.obraId === obra.id);
@@ -321,9 +362,14 @@ export function TelaObraDetalhe({ obra, trabalhadores, ativos, equips, ferrament
             <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", marginBottom: 6 }}>
               R$ {parseFloat(obra.valorContrato).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </div>
-            {obra.cliente && (
+            {apontador && (
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginBottom: 6 }}>
-                👤 <b>{obra.cliente}</b>{obra.clienteDoc && <span style={{ opacity: 0.7 }}> · {obra.clienteDoc}</span>}
+                👷 <b>{apontador.nome}</b>{apontador.cargo ? ` · ${apontador.cargo}` : ""}
+              </div>
+            )}
+            {(cliente || obra.cliente) && (
+              <div data-test="obra-cliente" style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginBottom: 6 }}>
+                👤 <b>{cliente ? cliente.nome : obra.cliente}</b>{(cliente?.documento || obra.clienteDoc) && <span style={{ opacity: 0.7 }}> · {cliente?.documento || obra.clienteDoc}</span>}
               </div>
             )}
             {(obra.dataInicioContrato || obra.dataFimContrato) && (

@@ -298,6 +298,9 @@ export function gerarDadosMes30Dias() {
     { nome: "Tinta Acrílica Branca", unid: "lata 18L", marca: "Suvinil", catg: "Tintas" },
     { nome: "Argamassa AC-II", unid: "saco", marca: "Quartzolit", catg: "Cimentos" },
     { nome: "Cal Hidratada", unid: "saco", marca: "Itaú", catg: "Cimentos" },
+    { nome: "Tubo PVC 75mm", unid: "barra", marca: "Tigre", catg: "Hidráulica" },
+    { nome: "Cabo PP 2,5mm²", unid: "metro", marca: "Prysmian", catg: "Elétrica" },
+    { nome: "Telha Fibrocimento", unid: "un", marca: "Eternit", catg: "Cobertura" },
   ];
   const despesasModelo = [
     { categoria: "PIPA d'água", descricao: "Pipa 8.000L para concretagem", valor: 280 },
@@ -1788,37 +1791,31 @@ MATERIAIS_BANCO_DETALHADO.forEach(m => { MATERIAL_INFO[m.nome] = m; });
 export const EQUIP_COLOR = { "Em Uso": BLUE, "Quebrada": RED, "Disponível": GREEN };
 export const STATUS_COLOR = { "Presente": GREEN, "Falta": RED, "Atestado": ORANGE };
 
-export const DEFAULT_USUARIOS = [
-  { id: 1, nome: "Kleber Vieira Martins", email: "kleber@km.com",   senha: "123", pin: "", biometriaAtiva: false, perfil: "gestor",      obraId: null, tel: "(28) 99925-8172" },
-];
-
-export const EMPRESA_PADRAO = {
-  razaoSocial: "KM CONSULTORIA, ASSESSORIA E SERVICOS DE ENGENHARIA LTDA",
-  nomeFantasia: "KM SERVICOS",
-  cnpj: "60.368.233/0001-73",
+export const EMPRESA_TEMPLATE = {
+  razaoSocial: "",
+  nomeFantasia: "",
+  cnpj: "",
   inscEstadual: "",
-  porte: "ME",
-  natureza: "Sociedade Empresária Limitada",
-  atividadePrincipal: "71.12-0-00 - Serviços de engenharia",
-  dataAbertura: "11/04/2025",
-  responsavel: "Kleber Vieira Martins",
-  email: "kvmprojetos@gmail.com",
-  telefone: "(28) 99925-8172",
-  registro: "CREA-ES",
-  // Endereço completo
-  logradouro: "R Pastor da Silva Colares",
-  numero: "148",
+  porte: "",
+  natureza: "",
+  atividadePrincipal: "",
+  dataAbertura: "",
+  responsavel: "",
+  email: "",
+  telefone: "",
+  registro: "",
+  logradouro: "",
+  numero: "",
   complemento: "",
-  bairro: "Guararema",
-  cidade: "Alegre",
-  uf: "ES",
-  cep: "29.500-000",
-  endereco: "R Pastor da Silva Colares, 148 - Guararema, Alegre - ES, 29.500-000",
-  instagram: "km_engenharias",
-  // Alimentação (valores configuráveis)
-  valorCafeManha: 13,
+  bairro: "",
+  cidade: "",
+  uf: "",
+  cep: "",
+  endereco: "",
+  instagram: "",
+  valorCafeManha: 0,
   valorCafeTarde: 0,
-  valorMarmita: 18,
+  valorMarmita: 0,
   valorLanche: 0,
 };
 

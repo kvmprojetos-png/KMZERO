@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword as fbUpdatePassword } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword as fbUpdatePassword } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -79,6 +79,16 @@ function traduzErroFirebase(codigo) {
             "auth/requires-recent-login": "Por seguranca, faca login novamente para realizar esta operacao.",
      };
      return traducoes[codigo] || "Nao foi possivel concluir a operacao.";
+}
+
+export async function criarContaFirebase(email, senha) {
+     try {
+            const cred = await createUserWithEmailAndPassword(auth, email, senha);
+            return { ok: true, user: cred.user };
+     } catch (e) {
+            const msg = traduzErroFirebase(e.code);
+            return { ok: false, erro: msg, codigo: e.code };
+     }
 }
 
 export { auth, firebaseApp, db };

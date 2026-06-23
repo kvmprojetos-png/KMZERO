@@ -36,7 +36,11 @@ npm run preview
 
 App pode ser instalado como aplicativo nativo no celular ou desktop.
 
-## 👤 Responsável Técnico
+## � Documentação Técnica
+
+- [Dossiê Técnico KMZero](./docs/DOSSIE_TECNICO_KMZERO.md)
+
+## �👤 Responsável Técnico
 
 **Eng. Kleber Vieira Martins**
 CREA-ES

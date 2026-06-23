@@ -4,10 +4,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
-import { EMPRESA_ID, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
-import { FILE_DB_NAME, FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
+import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
+import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
-import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, DEFAULT_USUARIOS, EMPRESA_PADRAO, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
+import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
 
 export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, onRemover }) {
@@ -373,6 +373,109 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
         <div style={{ background: "#fffaeb", borderRadius: 12, padding: "10px 14px", fontSize: 11, color: "#8b6f00", marginTop: 8 }}>
           💡 Custo de mão de obra = diária × dias trabalhados (presença + atestado). Custos de materiais estimados em R$ 100/pedido aprovado. Despesas avulsas vêm do registro manual.
         </div>
+      </div>
+      <KMFooter />
+    </div>
+  );
+}
+
+export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const obra = obras.find(o => o.id === obraId) || {};
+  const [form, setForm] = useState({
+    cliente: obra.cliente || "",
+    clienteDoc: obra.clienteDoc || "",
+    valorContrato: obra.valorContrato || "",
+    dataInicioContrato: obra.dataInicioContrato || "",
+    dataFimContrato: obra.dataFimContrato || "",
+    formaPagContrato: obra.formaPagContrato || "À vista",
+    obsContrato: obra.obsContrato || "",
+  });
+  const [alterado, setAlterado] = useState(false);
+  const set = (k, v) => {
+    setForm(f => ({ ...f, [k]: v }));
+    setAlterado(true);
+  };
+
+  useEffect(() => {
+    const atual = obras.find(o => o.id === obraId) || {};
+    setForm({
+      cliente: atual.cliente || "",
+      clienteDoc: atual.clienteDoc || "",
+      valorContrato: atual.valorContrato || "",
+      dataInicioContrato: atual.dataInicioContrato || "",
+      dataFimContrato: atual.dataFimContrato || "",
+      formaPagContrato: atual.formaPagContrato || "À vista",
+      obsContrato: atual.obsContrato || "",
+    });
+    setAlterado(false);
+  }, [obraId, obras]);
+
+  const salvar = () => {
+    if (!obraId) return;
+    const dados = {
+      ...obra,
+      ...form,
+      valorContrato: form.valorContrato || "",
+    };
+    onEditarObra(dados);
+    setAlterado(false);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      <KMHeader title="Pagamentos" sub="Gestão de contratos e condições" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+        <label style={labelS}>Obra</label>
+        <select value={obraId} onChange={e => setObraId(e.target.value ? parseInt(e.target.value) : "")} style={selS}>
+          <option value="">Selecione uma obra</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+        </select>
+
+        {obraId ? (
+          <div style={{ marginTop: 14, background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+            <label style={labelS}>Cliente / Contratante</label>
+            <input value={form.cliente} onChange={e => set("cliente", e.target.value)} placeholder="Nome do cliente" style={inputS} />
+
+            <label style={labelS}>CNPJ / CPF</label>
+            <input value={form.clienteDoc} onChange={e => set("clienteDoc", e.target.value)} placeholder="00.000.000/0000-00" style={inputS} />
+
+            <label style={labelS}>Valor do Contrato (R$)</label>
+            <input value={form.valorContrato} onChange={e => set("valorContrato", e.target.value)} type="number" step="0.01" placeholder="0.00" style={inputS} />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label style={labelS}>Data início</label>
+                <input value={form.dataInicioContrato} onChange={e => set("dataInicioContrato", e.target.value)} type="date" style={dateS} />
+              </div>
+              <div>
+                <label style={labelS}>Data fim</label>
+                <input value={form.dataFimContrato} onChange={e => set("dataFimContrato", e.target.value)} type="date" style={dateS} />
+              </div>
+            </div>
+
+            <label style={labelS}>Forma de Pagamento</label>
+            <select value={form.formaPagContrato} onChange={e => set("formaPagContrato", e.target.value)} style={selS}>
+              <option>À vista</option>
+              <option>Parcelado em medições</option>
+              <option>Empreitada total</option>
+              <option>Por etapas</option>
+              <option>Mensal</option>
+              <option>Outra</option>
+            </select>
+
+            <label style={labelS}>Observações do contrato</label>
+            <textarea value={form.obsContrato} onChange={e => set("obsContrato", e.target.value)} rows={3} placeholder="Cláusulas, retenções, encargos..." style={{ ...inputS, resize: "vertical", fontFamily: "inherit" }} />
+
+            <button onClick={salvar} disabled={!alterado} style={{ width: "100%", marginTop: 14, padding: 12, background: alterado ? GREEN : "#d1d5db", color: "#fff", border: "none", borderRadius: 12, fontWeight: 700, cursor: alterado ? "pointer" : "not-allowed" }}>
+              {alterado ? "Salvar alterações" : "Sem alterações"}
+            </button>
+          </div>
+        ) : (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 20, textAlign: "center", color: "#666", marginTop: 14 }}>
+            Selecione uma obra para editar as condições de pagamento.
+          </div>
+        )}
       </div>
       <KMFooter />
     </div>

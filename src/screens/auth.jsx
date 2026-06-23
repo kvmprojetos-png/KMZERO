@@ -3,10 +3,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
-import { EMPRESA_ID, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
-import { FILE_DB_NAME, FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
+import { setEmpresaId, getEmpresaId, buscarEmpresaIdDoUsuario, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
+import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
-import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, DEFAULT_USUARIOS, EMPRESA_PADRAO, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
+import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
 
 export function TelaPerfilPIN({ usuario, onBack, onAtualizar }) {
@@ -360,7 +360,7 @@ export function TelaPIN({ usuario, modo, onSucesso, onCancelar, onCriarPIN }) {
 const emailAuthKM = (e) => { const v = String(e || "").trim().toLowerCase(); return v.includes("@") ? v : v + "@kmzero.app"; };
 
 
-export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadastrar }) {
+export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadastrar, onRegistro }) {
   const [tipo, setTipo] = useState("encarregado");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -390,13 +390,18 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
     }
     setCarregando(true);
 
-    // Tenta primeiro autenticar via Firebase (login real com senha criptografada)
     const r = await loginFirebase(emailGestor.trim(), senhaGestor);
     if (r.ok) {
-      // Sucesso no Firebase: busca o usuário gestor correspondente no cadastro local
+      const empresaId = await buscarEmpresaIdDoUsuario(r.user.uid);
+      if (!empresaId) {
+        setCarregando(false);
+        setErro("Conta sem empresa vinculada. Faca o cadastro primeiro.");
+        return;
+      }
+      setEmpresaId(empresaId);
+
       let u = usuarios.find(x => x.email.toLowerCase() === r.user.email.toLowerCase() && x.perfil === "gestor");
       if (!u) {
-        // Caso ainda não exista cadastro local para este email, cria um perfil de gestor padrão
         u = {
           id: r.user.uid,
           nome: "Gestor",
@@ -407,18 +412,8 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
         };
       }
       setCarregando(false);
-      onLogin({ ...u, firebaseUid: r.user.uid, ultimoLogin: Date.now() });
+      onLogin({ ...u, firebaseUid: r.user.uid, empresaId, ultimoLogin: Date.now() });
       return;
-    }
-
-    // Se o erro foi de email não cadastrado no Firebase, tenta o sistema antigo como fallback
-    if (r.codigo === "auth/user-not-found" || r.codigo === "auth/invalid-credential") {
-      const u = usuarios.find(u => u.email.toLowerCase() === emailGestor.toLowerCase().trim() && u.senha === senhaGestor && u.perfil === "gestor");
-      if (u) {
-        setCarregando(false);
-        onLogin(u);
-        return;
-      }
     }
 
     setCarregando(false);
@@ -427,39 +422,44 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
 
   const entrarPrimeiroAcesso = async () => {
     setErro("");
-    const u = usuarios.find(u => u.email.toLowerCase() === emailPrim.toLowerCase().trim() && u.senha === senhaPrim && u.perfil === "encarregado");
+    const u = usuarios.find(u => u.email.toLowerCase() === emailPrim.toLowerCase().trim() && u.senha === senhaPrim && u.perfil !== "gestor");
     if (!u) return setErro("Acesso não encontrado. Confirme com o gestor o e-mail e senha cadastrados.");
     setCarregando(true);
-    // Autentica no Firebase (necessário pro sync seguro na nuvem)
     const r = await loginFirebase(emailAuthKM(u.email), senhaPrim);
-    setCarregando(false);
     if (r.ok) {
-      onLogin({ ...u, firebaseUid: r.user.uid, ultimoLogin: Date.now() });
+      const empresaId = await buscarEmpresaIdDoUsuario(r.user.uid);
+      if (empresaId) setEmpresaId(empresaId);
+      const cachedEid = empresaId || u.empresaId || localStorage.getItem("_kmzero_empresaId");
+      setCarregando(false);
+      onLogin({ ...u, firebaseUid: r.user.uid, empresaId: cachedEid, ultimoLogin: Date.now() });
       return;
     }
     if (r.codigo === "auth/network-request-failed") {
-      // Sem internet: entra local (offline-first); sync volta no próximo login online
-      onLogin({ ...u, ultimoLogin: Date.now() });
+      const cachedEid = u.empresaId || localStorage.getItem("_kmzero_empresaId");
+      if (cachedEid) setEmpresaId(cachedEid);
+      setCarregando(false);
+      onLogin({ ...u, empresaId: cachedEid, ultimoLogin: Date.now() });
       return;
     }
+    setCarregando(false);
     setErro(r.erro || "Não foi possível autenticar. Tente novamente.");
   };
 
   const entrarComPIN = (u) => {
-    // Se for gestor, manda para a tela de senha (autenticação Firebase obrigatória)
     if (u.perfil === "gestor") {
       setEmailGestor(u.email || "");
       setTelaInterna("gestor");
       return;
     }
-    // Encarregado: precisa de sessão Firebase real no aparelho (sync seguro)
     const fbUser = usuarioAtual();
     if (!fbUser || fbUser.isAnonymous) {
       setEmailPrim(u.email || "");
       setTelaInterna("primeiro_acesso");
       return;
     }
-    onLogin({ ...u, firebaseUid: u.firebaseUid || fbUser.uid, ultimoLogin: Date.now() });
+    const cachedEid = u.empresaId || localStorage.getItem("_kmzero_empresaId");
+    if (cachedEid) setEmpresaId(cachedEid);
+    onLogin({ ...u, firebaseUid: u.firebaseUid || fbUser.uid, empresaId: cachedEid, ultimoLogin: Date.now() });
   };
 
   if (modoPIN && usuarioSelecionado) {
@@ -693,7 +693,7 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
           </div>
           <div className="km-linha-dourada" style={{ height: 2, width: 60, background: GOLD, margin: "10px auto", borderRadius: 2 }} />
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontStyle: "italic" }}>
-            KM Consultoria · Engenharia Civil
+            Gestao Inteligente de Obras
           </div>
         </div>
 
@@ -732,18 +732,18 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
 
             {/* LISTA DE ENCARREGADOS — perfis cadastrados pelo gestor */}
             {(() => {
-              const encarregados = usuarios.filter(u => u.perfil === "encarregado");
-              if (encarregados.length === 0) {
+              const lancadores = usuarios.filter(u => u.perfil !== "gestor");
+              if (lancadores.length === 0) {
                 return (
                   <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 14, marginBottom: 12, fontSize: 11, color: "rgba(255,255,255,0.7)", textAlign: "center", lineHeight: 1.6, border: "1px dashed rgba(255,255,255,0.15)" }}>
-                    👷 Nenhum encarregado cadastrado ainda.<br/>
-                    O gestor pode cadastrar em <b>👥 Equipe → + Adicionar</b>
+                    👷 Nenhum lançador cadastrado ainda.<br/>
+                    O gestor pode cadastrar em <b>👥 Acessos do App → + Adicionar</b>
                   </div>
                 );
               }
               return (
                 <div style={{ marginBottom: 14 }}>
-                  {encarregados.map(u => {
+                  {lancadores.map(u => {
                     const obra = obras.find(o => o.id === u.obraId);
                     const cores = ["#0891b2", "#7c3aed", "#16a34a", "#dc2626", "#e87722", "#0284c7", "#9333ea"];
                     const cor = cores[u.id % cores.length];
@@ -810,14 +810,42 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
             }}>
               <div style={{ width: 38, height: 38, borderRadius: 19, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff", flexShrink: 0 }}>🏢</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 800 }}>Sou o Gestor</div>
-                <div style={{ fontSize: 10, opacity: 0.8, marginTop: 1 }}>Kleber · KM Consultoria</div>
+                <div style={{ fontSize: 14, fontWeight: 800 }}>Entrar como Gestor</div>
+                <div style={{ fontSize: 10, opacity: 0.8, marginTop: 1 }}>Acesso com e-mail e senha</div>
               </div>
               <span style={{ opacity: 0.7 }}>›</span>
             </button>
 
+            {/* Botão: Criar empresa */}
+            {onRegistro && (
+              <button onClick={onRegistro} style={{
+                width: "100%",
+                padding: "14px 18px",
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.25)",
+                background: "rgba(255,255,255,0.08)",
+                backdropFilter: "blur(10px)",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+                marginBottom: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                textAlign: "left",
+              }}>
+                <div style={{ width: 38, height: 38, borderRadius: 19, background: GREEN, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff", flexShrink: 0 }}>+</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Criar minha empresa</div>
+                  <div style={{ fontSize: 10, opacity: 0.65, marginTop: 1 }}>Cadastro gratuito</div>
+                </div>
+                <span style={{ opacity: 0.5 }}>›</span>
+              </button>
+            )}
+
             <div style={{ marginTop: 24, padding: 14, background: "rgba(255,255,255,0.05)", borderRadius: 12, fontSize: 11, color: "rgba(255,255,255,0.6)", textAlign: "center", lineHeight: 1.6 }}>
-              💡 Equipe sem acesso? Peça pro gestor cadastrar você na <b>👥 Equipe</b>
+              Equipe sem acesso? Peca pro gestor cadastrar voce na Equipe.
             </div>
           </div>
         )}
@@ -1027,7 +1055,7 @@ export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRem
 
   const cores = ["#0891b2", "#7c3aed", "#16a34a", "#dc2626", "#e87722", "#0284c7", "#9333ea", "#0d9488"];
   const gestores = usuarios.filter(u => u.perfil === "gestor");
-  const lancadores = usuarios.filter(u => u.perfil === "encarregado");
+  const lancadores = usuarios.filter(u => u.perfil !== "gestor");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
