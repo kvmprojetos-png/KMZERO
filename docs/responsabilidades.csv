@@ -1,0 +1,18 @@
+Processo,Diretoria / Gestão,Engenharia / Coordenação,Orçamento / Planejamento,Suprimentos / Compras,Financeiro / Administrativo,Mestre de Obras / Produção,Cliente / Incorporadora,Comercial / Relacionamento
+Cadastro (clientes, obras, fornecedores),A,C,R,C,I,I,I,C
+Planejamento físico-financeiro,A,C,R,C,I,I,I,C
+Orçamento da obra,A,C,R,C,I,I,I,C
+Curva ABC / composição de custos,A,C,R,C,I,I,I,C
+Solicitação de compra (requisição interna),I,C,A,C,C,R,I,I
+Cotação de fornecedores,I,C,C,R,I,I,I,C
+Mapa de cotação / comparação,I,C,A,R,I,I,I,C
+Ordem de compra,A,C,C,R,A,I,I,I
+Recebimento de materiais (obra),I,C,C,A,I,R,I,I
+Medições (avancamento / faturamento),I,C,A,C,I,R,I,C
+Contas a pagar,C,C,C,I,A,I,I,I
+Contas a receber / faturamento,I,C,A,C,A,I,I,C
+Fluxo de caixa,A,C,C,C,A,I,I,C
+Estoque de insumos,I,C,C,R,I,I,I,C
+Relatórios gerenciais (KPIs, custos, progresso),A,C,R,C,C,I,I,C
+Portal do cliente (documentos / contratos),A,C,C,C,I,I,I,R
+App móvel / apontamentos de campo,I,C,C,C,I,R,I,C
