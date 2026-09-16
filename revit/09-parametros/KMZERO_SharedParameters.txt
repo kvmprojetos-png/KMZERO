@@ -1,0 +1,44 @@
+# This is a Revit shared parameter file.
+# Do not edit manually.
+*META	VERSION	MINVERSION
+META	2	1
+*GROUP	ID	NAME
+GROUP	1	KMZ_01_Identificacao
+GROUP	2	KMZ_02_Dimensional
+GROUP	3	KMZ_03_Materiais
+GROUP	4	KMZ_04_Orcamento
+GROUP	5	KMZ_05_Documentacao
+GROUP	6	KMZ_06_Projeto
+*PARAM	GUID	NAME	DATATYPE	DATACATEGORY	GROUP	VISIBLE	DESCRIPTION	USERMODIFIABLE	HIDEWHENNOVALUE
+PARAM	a5b5a463-e78e-4b6e-81a9-c9d6bcb4502a	KMZ_Codigo	TEXT		1	1	Codigo da linha de familia KMZERO. Formato KMZ-<AMB>-<NNN>. Ex.: KMZ-BAN-001.	1	0
+PARAM	f3fbe961-3f1c-4513-b9ad-e48ac6712628	KMZ_Ambiente	TEXT		1	1	Ambiente KMZERO a que a familia pertence. Ver modulo 08, item 8.2.	1	0
+PARAM	040e5f64-ba7f-4423-826e-e9768c0b3a64	KMZ_Familia_Nivel	TEXT		1	1	Nivel da biblioteca: L1 Tecnico, L2 Projeto ou L3 Premium.	1	0
+PARAM	c6a9306c-d1fa-4b49-b6b3-10c7d5cc0697	KMZ_Kit	TEXT		1	1	Kit a que o item pertence: BASICO, CONFORTO ou PREMIUM.	1	0
+PARAM	c3fb2007-8e5e-4008-a4b9-6afebbf013d1	KMZ_Revisao	TEXT		1	1	Revisao da familia. Formato Rev.NN.	1	0
+PARAM	1108fd3e-34e8-4899-9c84-121bd0e77aef	KMZ_Fabricante_Ref	TEXT		1	1	Fabricante e modelo de referencia, quando houver.	1	0
+PARAM	4eb27bc0-76b8-493d-956e-526f0dbf4f30	KMZ_Largura_Modulo	LENGTH		2	1	Largura nominal do modulo.	1	0
+PARAM	2b2aef27-cc4b-41a9-aa70-58f8dc314df7	KMZ_Altura_Modulo	LENGTH		2	1	Altura nominal do modulo.	1	0
+PARAM	6f7e767b-7b65-4834-9e7d-b3c6a510ec56	KMZ_Profundidade_Modulo	LENGTH		2	1	Profundidade nominal do modulo.	1	0
+PARAM	98fa36c4-8001-4772-a36f-b3a1297f6486	KMZ_Altura_Instalacao	LENGTH		2	1	Altura de instalacao medida do piso acabado a face de referencia.	1	0
+PARAM	1fdc7cc1-f8fa-4239-bdec-e3e28a16c046	KMZ_Espessura_Painel	LENGTH		2	1	Espessura do painel estrutural ou do vidro.	1	0
+PARAM	20689284-f155-4459-931e-d6e5c7f903d9	KMZ_Material_Principal	MATERIAL		3	1	Material predominante. Nomenclatura KMZ_<Classe>_<Descricao>_<Acabamento>.	1	0
+PARAM	7c5a9a72-98e8-440d-8233-be604d5c2c11	KMZ_Material_Secundario	MATERIAL		3	1	Material complementar.	1	0
+PARAM	3b737ca4-54b2-470a-853c-55aae500ae99	KMZ_Acabamento	TEXT		3	1	Acabamento aplicado. Ex.: BP, Laca, Laminado, Polido, Fosco.	1	0
+PARAM	0ab9a62c-9b86-4a6d-9039-5d4aa383a24d	KMZ_Cor_Referencia	TEXT		3	1	Referencia de cor do fabricante ou codigo interno KMZERO.	1	0
+PARAM	709309bf-df03-4d43-b3cf-82cfe35e1f35	KMZ_Uso_Externo	YESNO		3	1	Sim quando o item e apto a area externa ou semiaberta.	1	0
+PARAM	845b6499-b756-4bff-bed9-122210cf8609	KMZ_Codigo_Servico	TEXT		4	1	Codigo do servico na base de precos adotada.	1	0
+PARAM	41c84de5-7c02-43b3-afef-24e01a51d4ba	KMZ_Base_Preco	TEXT		4	1	Base de precos: SINAPI, SICRO, DER, COTACAO ou COMPOSICAO.	1	0
+PARAM	b7a9c4de-55ca-4761-ad20-da6c99d894d0	KMZ_Etapa_Obra	TEXT		4	1	Etapa do cronograma da obra no sistema KMZERO.	1	0
+PARAM	378d23a9-1d5f-4980-aa8f-9ca9a4330a2c	KMZ_Quantificar	YESNO		4	1	Sim para itens de projeto. Nao para decoracao e objetos de cena.	1	0
+PARAM	783506a6-b82d-4d71-bd70-8d662085ecb2	KMZ_Custo_Unitario_Ref	CURRENCY		4	1	Custo unitario de referencia. Data-base obrigatoria em KMZ_Observacao.	1	0
+PARAM	57f7ba07-62ec-4cb4-a097-e27476b67c57	KMZ_Incluir_Lista_Materiais	YESNO		5	1	Sim quando o item deve aparecer na lista de materiais da prancha.	1	0
+PARAM	398822be-d283-4872-8352-e6b5cd6469d7	KMZ_Nivel_Detalhe_Doc	TEXT		5	1	Nivel de detalhe exigido na documentacao do item.	1	0
+PARAM	3db0b4ad-a28a-4db4-afa9-0905432d4886	KMZ_Observacao	MULTILINETEXT		5	1	Observacoes tecnicas, data-base de custo e pendencias do item.	1	0
+PARAM	12be5e7b-01fd-42dc-a1e6-fba5364d7c4c	KMZ_Numero_Prancha	TEXT		6	1	Numero da prancha. Formato <DISC>-<NN>.	1	0
+PARAM	bed3c238-3afc-4586-9f0e-ff2995bf43ee	KMZ_Revisao_Prancha	TEXT		6	1	Revisao da prancha. Formato Rev.NN.	1	0
+PARAM	fcf6f0c5-1965-4bbe-8dff-87bb356bd7a7	KMZ_Status_Documento	TEXT		6	1	Lista fechada: PRELIMINAR, PARA APROVACAO, APROVADO, PARA EXECUCAO, COMO CONSTRUIDO, CANCELADO.	1	0
+PARAM	f779d987-39d0-4b4a-9a52-7a06a6c4cbf3	KMZ_Responsavel_Tecnico	TEXT		6	1	Nome do responsavel tecnico.	1	0
+PARAM	3ed05555-c73b-45c2-aa89-2fceb87a116f	KMZ_CREA_CAU	TEXT		6	1	Registro profissional do responsavel tecnico.	1	0
+PARAM	4840902e-c305-4d3f-9c12-e1692b321fd7	KMZ_Cliente	TEXT		6	1	Nome do cliente.	1	0
+PARAM	766cfd99-40ec-429f-8fb4-4dc5701adc61	KMZ_Obra	TEXT		6	1	Identificador da obra. Deve coincidir com o cadastro de obras do sistema KMZERO.	1	0
+PARAM	4718d047-3c6c-4074-a49f-6a1a6e775051	KMZ_Disciplina	TEXT		6	1	Disciplina da prancha: ARQ, INT, APR.	1	0

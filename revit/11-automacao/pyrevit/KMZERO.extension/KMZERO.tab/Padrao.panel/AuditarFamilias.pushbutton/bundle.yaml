@@ -1,0 +1,6 @@
+title: "Auditar\nFamílias"
+tooltip: >
+  Confere as famílias carregadas contra o padrão KMZERO
+  (KMZ-ARQ-BIM-001, módulos 05, 08 e 09).
+  SOMENTE LEITURA — não altera o modelo.
+author: KMZERO Arquitetura

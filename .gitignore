@@ -1,2 +1,13 @@
 node_modules
 dist/
+
+# Python
+__pycache__/
+*.pyc
+
+# Binarios Revit — nao versionar no Git (ver revit/10-template-rte/)
+*.rte
+*.rvt
+*.rfa
+*.rft
+*.rvt.????.????

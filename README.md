@@ -36,11 +36,12 @@ npm run preview
 
 App pode ser instalado como aplicativo nativo no celular ou desktop.
 
-## � Documentação Técnica
+## 📚 Documentação Técnica
 
 - [Dossiê Técnico KMZero](./docs/DOSSIE_TECNICO_KMZERO.md)
+- [Padrões BIM/Revit — KMZERO Arquitetura (Working Standard Rev.00)](./revit/README.md)
 
-## �👤 Responsável Técnico
+## 👤 Responsável Técnico
 
 **Eng. Kleber Vieira Martins**
 CREA-ES
