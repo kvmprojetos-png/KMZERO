@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Carimbo Revit KMZERO</title>
+<meta name="description" content="Especificação técnica do carimbo padrão KMZERO para pranchas Revit (A0–A4).">
+<style>
+  :root{
+    --navy:#14253F; --ouro:#C9A227;
+    --ok:#2E7D32; --atencao:#E08A00; --critico:#C0392B; --base:#6B7280;
+    --tinta:#000; --regua:#C8CDD6; --fundo-cel:#F4F6F9;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#525659;}
+  body{font-family:Arial,"Liberation Sans","Segoe UI",sans-serif;color:var(--tinta);}
+
+  .folha{
+    width:210mm; height:297mm; background:#fff; margin:0 auto 8mm;
+    padding:20mm 20mm 20mm 25mm; display:flex; flex-direction:column;
+  }
+
+  /* ---- zona 1: cabecalho ---- */
+  .cabecalho{display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:1.6mm solid var(--ouro); padding-bottom:2mm;}
+  .marca{font-size:18pt; font-weight:700; letter-spacing:.5pt; color:var(--navy);}
+  .marca em{font-style:normal; color:var(--ouro);}
+  .cabecalho .meta{text-align:right; font-size:8.5pt; line-height:1.35; color:var(--navy);}
+  .cabecalho .meta strong{display:block; font-size:10pt;}
+
+  /* ---- zona 2: identificacao + status ---- */
+  h1{font-size:15pt; color:var(--navy); margin:5mm 0 3mm; line-height:1.2;}
+  .identificacao{display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+    border:.3mm solid var(--regua); font-size:8pt;}
+  .identificacao div{padding:1.8mm 2mm; border-right:.3mm solid var(--regua);}
+  .identificacao div:last-child{border-right:0;}
+  .identificacao span{display:block; font-size:6.8pt; letter-spacing:.4pt;
+    text-transform:uppercase; color:var(--base); margin-bottom:.8mm;}
+  .identificacao b{font-size:9pt; color:var(--navy);}
+  .selo{display:inline-block; padding:.6mm 2mm; border-radius:1mm;
+    background:var(--atencao); color:#fff; font-size:8pt; font-weight:700;}
+
+  /* ---- zona 4: conteudo ---- */
+  main{flex:1; padding-top:5mm; font-size:10.5pt; line-height:1.4;
+    text-align:justify; hyphens:auto;}
+  main p{margin:0 0 2.5mm;}
+  h2{font-size:11pt; color:var(--navy); margin:4.5mm 0 2mm;
+    border-bottom:.3mm solid var(--ouro); padding-bottom:1mm;}
+  h3{font-size:9.5pt; color:var(--navy); margin:3.5mm 0 1.5mm;}
+  ul,ol{margin:0 0 2.5mm; padding-left:6mm;}
+  li{margin-bottom:1mm;}
+  code{font-family:"Courier New",monospace; font-size:9.5pt;
+    background:var(--fundo-cel); padding:0 .8mm;}
+
+  table{width:100%; border-collapse:collapse; font-size:8.5pt; margin:0 0 3mm;}
+  caption{caption-side:top; text-align:left; font-size:8pt; font-weight:700;
+    color:var(--navy); padding-bottom:1.2mm;}
+  th{background:var(--navy); color:#fff; font-weight:700; text-align:left;
+    padding:1.5mm 2mm; font-size:7.8pt; letter-spacing:.3pt;}
+  td{padding:1.4mm 2mm; border-bottom:.25mm solid var(--regua); vertical-align:top;}
+  td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  tbody tr:nth-child(even) td{background:var(--fundo-cel);}
+  tfoot td{font-weight:700; color:var(--navy); border-top:.6mm solid var(--navy);
+    border-bottom:0; background:#fff;}
+  .fonte{font-size:8pt; color:var(--base); margin:-1.5mm 0 3mm;}
+
+  .nota{border-left:1.2mm solid var(--atencao); background:#FDF6E9;
+    padding:2mm 3mm; margin:0 0 3mm; font-size:9pt; text-align:left;}
+  .nota.critico{border-left-color:var(--critico); background:#FBEDEB;}
+  .nota.ok{border-left-color:var(--ok); background:#EDF5EE;}
+  .nota b{display:block; font-size:7.5pt; text-transform:uppercase;
+    letter-spacing:.5pt; margin-bottom:.8mm;}
+  .nota b.a{color:var(--atencao);} .nota b.c{color:var(--critico);} .nota b.o{color:var(--ok);}
+
+  .figura{border:.3mm solid var(--regua); padding:3mm; margin:0 0 2mm; background:#fff;}
+  .legenda{font-size:8pt; color:var(--base); margin:0 0 3mm;}
+
+  /* ---- desenho do carimbo ---- */
+  .croqui{width:100%; height:auto; display:block;}
+  .croqui .cota{font:2.6px Arial,sans-serif; fill:var(--base);}
+  .croqui .rot{font:2.4px Arial,sans-serif; fill:var(--navy);}
+  .croqui .tit{font:3.2px Arial,sans-serif; fill:var(--navy); font-weight:bold;}
+
+  /* ---- zona 5: carimbo de aprovacao ---- */
+  .aprovacao{display:grid; grid-template-columns:repeat(3,1fr);
+    border:.3mm solid var(--navy); margin-top:4mm; font-size:8pt;}
+  .aprovacao div{padding:2mm; border-right:.3mm solid var(--navy); min-height:20mm;}
+  .aprovacao div:last-child{border-right:0;}
+  .aprovacao span{display:block; font-size:6.8pt; text-transform:uppercase;
+    letter-spacing:.4pt; color:var(--base);}
+  .assinatura{border-bottom:.3mm solid var(--tinta); height:9mm; margin:1mm 0 1mm;}
+
+  /* ---- zona 6: rodape ---- */
+  .rodape{display:flex; justify-content:space-between; font-size:7.5pt;
+    color:var(--base); border-top:.3mm solid var(--ouro); padding-top:1.5mm; margin-top:4mm;}
+
+  @page{size:A4 portrait; margin:0;}
+  @media print{
+    body{background:#fff;}
+    /* 296.6mm, nao 297: sobra sub-pixel gera pagina em branco no motor de impressao */
+    .folha{margin:0; height:296.6mm; overflow:hidden;}
+    .folha + .folha{page-break-before:always;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ FOLHA 1 ============================ -->
+<div class="folha">
+  <div class="cabecalho">
+    <div class="marca">KM<em>ZERO</em></div>
+    <div class="meta"><strong>ESPECIFICAÇÃO TÉCNICA</strong>KMZ-ET-001 &middot; Rev. A</div>
+  </div>
+
+  <h1>Carimbo e moldura de prancha para Revit<br>Formatos A0 a A4</h1>
+
+  <div class="identificacao">
+    <div><span>Obra / Contrato</span><b>Padrão corporativo</b></div>
+    <div><span>Documento Nº</span><b>KMZ-ET-001</b></div>
+    <div><span>Emissão</span><b>16/09/2026</b></div>
+    <div><span>Status</span><span class="selo">Para Aprovação</span></div>
+  </div>
+
+  <main>
+    <table>
+      <caption>Controle de revisões</caption>
+      <thead><tr><th style="width:9%">Rev</th><th style="width:16%">Data</th>
+        <th>Descrição</th><th style="width:16%">Elaborou</th>
+        <th style="width:16%">Verificou</th><th style="width:16%">Aprovou</th></tr></thead>
+      <tbody><tr><td>A</td><td>16/09/2026</td><td>Emissão preliminar para aprovação interna</td>
+        <td>—</td><td>—</td><td>—</td></tr></tbody>
+    </table>
+    <p class="fonte">Letra (A, B, C) = preliminar &middot; número (0, 1, 2) = a partir da 1ª emissão formal. Nunca misturar os dois esquemas num mesmo item.</p>
+
+    <h2>1. Escopo e delimitação</h2>
+    <p>Este documento especifica a moldura e o carimbo das <b>pranchas</b> KMZERO produzidas em Revit, nos formatos A0 a A4. Aplica-se à família de bloco de carimbo (<i>title block</i>) e à configuração de revisões do projeto-modelo.</p>
+
+    <div class="nota critico">
+      <b class="c">Delimitação — não confundir com o padrão de documentos</b>
+      O padrão KMZERO de documentos técnicos rege <b>documentos de texto</b> (relatório, memorial, especificação, laudo, RDO) em A4, com margem de encadernação de 25 mm e corpo justificado 11–12 pt. Prancha é <b>desenho técnico</b> e não herda nada disso: não há corpo de texto corrido, margem de encadernação de texto, numeração “Página X de N”, nem componentes de relatório (Curva S, KPI, matriz de riscos). O que atravessa de um padrão ao outro é apenas a <b>camada de marca</b> e a <b>governança de revisão e status</b>.
+    </div>
+
+    <h2>2. Formatos e margens</h2>
+    <table>
+      <caption>Tabela 1 — Formatos de prancha e área útil</caption>
+      <thead><tr><th>Formato</th><th class="num">Largura</th><th class="num">Altura</th>
+        <th class="num">Marg. esq.</th><th class="num">Demais</th><th class="num">Área útil</th></tr></thead>
+      <tbody>
+        <tr><td>A0 paisagem</td><td class="num">1189</td><td class="num">841</td><td class="num">20</td><td class="num">10</td><td class="num">1159 × 821</td></tr>
+        <tr><td>A1 paisagem</td><td class="num">841</td><td class="num">594</td><td class="num">20</td><td class="num">10</td><td class="num">811 × 574</td></tr>
+        <tr><td>A2 paisagem</td><td class="num">594</td><td class="num">420</td><td class="num">20</td><td class="num">10</td><td class="num">564 × 400</td></tr>
+        <tr><td>A3 paisagem</td><td class="num">420</td><td class="num">297</td><td class="num">20</td><td class="num">10</td><td class="num">390 × 277</td></tr>
+        <tr><td>A4 paisagem</td><td class="num">297</td><td class="num">210</td><td class="num">20</td><td class="num">10</td><td class="num">267 × 190</td></tr>
+        <tr><td>A4 retrato</td><td class="num">210</td><td class="num">297</td><td class="num">20</td><td class="num">10</td><td class="num">180 × 277</td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="5">Carimbo (idêntico em todos os formatos)</td><td class="num">175 × 65</td></tr></tfoot>
+    </table>
+    <p class="fonte">Dimensões em milímetros. A margem esquerda maior é a borda de arquivamento.</p>
+
+    <div class="nota">
+      <b class="a">Parâmetro a verificar</b>
+      As margens 20/10 mm vêm do padrão interno KMZERO, que as atribui à NBR 16752. <b>Não foi possível conferir o texto da norma</b> na elaboração deste documento. Antes da emissão formal (Rev. 0), confirmar 20/10 mm contra a norma vigente — parte dos escritórios adota 25 mm na borda de arquivamento.
+    </div>
+
+    <h3>2.1 Por que 175 mm</h3>
+    <p>A largura do carimbo foi fixada em 175 mm por ser o maior valor redondo que cabe na área útil do <b>menor</b> formato previsto, o A4 retrato (180 mm úteis, 5 mm de folga). Com isso o mesmo bloco de carimbo serve A0 a A4 sem redesenho e sem escala — o leitor encontra os campos sempre na mesma posição relativa ao canto inferior direito.</p>
+  </main>
+
+  <div class="rodape">
+    <span>Padrão corporativo KMZERO</span><span>KMZ-ET-001 Rev. A</span><span>Página 1 de 2</span>
+  </div>
+</div>
+
+<!-- ============================ FOLHA 2 ============================ -->
+<div class="folha">
+  <div class="cabecalho">
+    <div class="marca">KM<em>ZERO</em></div>
+    <div class="meta"><strong>ESPECIFICAÇÃO TÉCNICA</strong>KMZ-ET-001 &middot; Rev. A</div>
+  </div>
+
+  <main style="padding-top:5mm">
+    <h2>3. Geometria do carimbo</h2>
+    <div class="figura">
+      <svg class="croqui" viewBox="-8 -8 191 118" xmlns="http://www.w3.org/2000/svg">
+        <g fill="none" stroke="#14253F" stroke-width=".5">
+          <rect x="0" y="37" width="175" height="65"/>
+        </g>
+        <g fill="none" stroke="#C8CDD6" stroke-width=".25">
+          <line x1="0" y1="53" x2="175" y2="53"/><line x1="0" y1="64" x2="175" y2="64"/>
+          <line x1="0" y1="90" x2="175" y2="90"/>
+          <line x1="55" y1="37" x2="55" y2="53"/><line x1="120" y1="53" x2="120" y2="64"/>
+          <line x1="40" y1="64" x2="40" y2="90"/><line x1="80" y1="64" x2="80" y2="90"/>
+          <line x1="120" y1="64" x2="120" y2="90"/>
+          <line x1="55" y1="90" x2="55" y2="102"/><line x1="85" y1="90" x2="85" y2="102"/>
+          <line x1="105" y1="90" x2="105" y2="102"/><line x1="135" y1="90" x2="135" y2="102"/>
+        </g>
+        <line x1="0" y1="53" x2="175" y2="53" stroke="#C9A227" stroke-width="1"/>
+        <rect x="4" y="40" width="47" height="10" fill="none" stroke="#C9A227" stroke-width=".3"/>
+        <text class="tit" x="9" y="47">KM</text><text class="tit" x="19" y="47" fill="#C9A227">ZERO</text>
+        <g class="rot">
+          <text x="57" y="42">NOME DA PRANCHA</text>
+          <text x="2" y="58">OBRA / CONTRATO</text><text x="122" y="58">STATUS</text>
+          <text x="2" y="69">ELABOROU</text><text x="42" y="69">VERIFICOU</text>
+          <text x="82" y="69">APROVOU</text><text x="122" y="69">RESP. TÉCNICO / CREA</text>
+          <text x="2" y="95">DOCUMENTO Nº</text><text x="57" y="95">DATA</text>
+          <text x="87" y="95">REV</text><text x="107" y="95">ESCALA</text><text x="137" y="95">FOLHA</text>
+        </g>
+        <g fill="none" stroke="#C8CDD6" stroke-width=".25" stroke-dasharray="1.5 1">
+          <rect x="0" y="0" width="175" height="37"/>
+          <line x1="0" y1="30" x2="175" y2="30"/>
+          <line x1="15" y1="0" x2="15" y2="37"/><line x1="40" y1="0" x2="40" y2="37"/>
+          <line x1="105" y1="0" x2="105" y2="37"/><line x1="128" y1="0" x2="128" y2="37"/>
+          <line x1="151" y1="0" x2="151" y2="37"/>
+        </g>
+        <g class="rot">
+          <text x="2" y="35">REV</text><text x="17" y="35">DATA</text><text x="42" y="35">DESCRIÇÃO</text>
+          <text x="107" y="35">ELABOROU</text><text x="130" y="35">VERIFICOU</text><text x="153" y="35">APROVOU</text>
+        </g>
+        <text class="cota" x="70" y="-3">175</text>
+        <g stroke="#6B7280" stroke-width=".2">
+          <line x1="0" y1="-5" x2="175" y2="-5"/>
+          <line x1="180" y1="37" x2="180" y2="102"/><line x1="180" y1="0" x2="180" y2="37"/>
+        </g>
+        <text class="cota" x="182" y="72">65</text><text class="cota" x="182" y="20">37</text>
+        <text class="cota" x="2" y="-3" fill="#C9A227">tabela de revisões (cresce p/ cima)</text>
+      </svg>
+    </div>
+    <p class="legenda">Figura 1 — Carimbo 175 × 65 mm com a zona reservada à tabela de revisões. Cotas em mm, escala livre. Fonte: KMZERO, 16/09/2026.</p>
+
+    <table>
+      <caption>Tabela 2 — Divisão interna (mm)</caption>
+      <thead><tr><th>Faixa</th><th class="num">Altura</th><th>Células (largura)</th></tr></thead>
+      <tbody>
+        <tr><td>1 — Identificação</td><td class="num">16</td><td>Logo (55) · Nome da prancha (120)</td></tr>
+        <tr><td>2 — Obra e status</td><td class="num">11</td><td>Obra/Contrato (120) · Status (55)</td></tr>
+        <tr><td>3 — Aprovação</td><td class="num">26</td><td>Elaborou (40) · Verificou (40) · Aprovou (40) · RT/CREA (55)</td></tr>
+        <tr><td>4 — Códigos</td><td class="num">12</td><td>Documento Nº (55) · Data (30) · Rev (20) · Escala (30) · Folha (40)</td></tr>
+        <tr><td>Revisões</td><td class="num">7 + 6/linha</td><td>Rev (15) · Data (25) · Descrição (65) · Elab. (23) · Verif. (23) · Aprov. (24)</td></tr>
+      </tbody>
+      <tfoot><tr><td>Total carimbo</td><td class="num">65</td><td>Largura 175 em todas as faixas</td></tr></tfoot>
+    </table>
+
+    <h2>4. Cores e traço</h2>
+    <table>
+      <caption>Tabela 3 — Paleta</caption>
+      <thead><tr><th>Uso</th><th>Hex</th><th>Onde</th></tr></thead>
+      <tbody>
+        <tr><td>Navy (marca)</td><td><code>#14253F</code></td><td>Moldura, contorno do carimbo, títulos</td></tr>
+        <tr><td>Dourado (marca)</td><td><code>#C9A227</code></td><td>Filete sob a identificação, wordmark</td></tr>
+        <tr><td>Cinza régua</td><td><code>#C8CDD6</code></td><td>Divisões internas do carimbo</td></tr>
+      </tbody>
+    </table>
+    <div class="nota ok">
+      <b class="o">Regra herdada do padrão de documentos</b>
+      Marca vive só na moldura. O dourado <b>nunca</b> entra em dado — ele já é a cor universal de atenção. Numa prancha isso significa: nenhuma linha de desenho, cota, hachura ou tag em navy ou dourado.
+    </div>
+
+    <h3>4.1 Espessuras</h3>
+    <ul>
+      <li>Borda externa do papel — 0,25 mm</li>
+      <li>Quadro interno (moldura) — 0,70 mm</li>
+      <li>Contorno do carimbo — 0,50 mm</li>
+      <li>Divisões internas e tabela de revisões — 0,25 mm</li>
+      <li>Texto: rótulo fixo 2,5 mm · conteúdo 3,5 mm · nome da prancha 5,0 mm</li>
+    </ul>
+
+    <h2>5. Mapeamento para parâmetros do Revit</h2>
+    <table>
+      <caption>Tabela 4 — Campo do carimbo → parâmetro</caption>
+      <thead><tr><th>Campo</th><th>Parâmetro</th><th style="width:26%">Origem</th></tr></thead>
+      <tbody>
+        <tr><td>Documento Nº</td><td>Número da Prancha</td><td>nativo</td></tr>
+        <tr><td>Nome da prancha</td><td>Nome da Prancha</td><td>nativo</td></tr>
+        <tr><td>Data</td><td>Data de Emissão da Prancha</td><td>nativo</td></tr>
+        <tr><td>Elaborou</td><td>Desenhado Por</td><td>nativo</td></tr>
+        <tr><td>Verificou</td><td>Verificado Por</td><td>nativo</td></tr>
+        <tr><td>Aprovou</td><td>Aprovado Por</td><td>nativo</td></tr>
+        <tr><td>Obra / Contrato</td><td>Nome do Projeto</td><td>Informações do Projeto</td></tr>
+        <tr><td>Rev / Data / Descrição</td><td>Tabela de Revisões</td><td>componente nativo</td></tr>
+        <tr><td>Status</td><td><code>KMZ_Status</code> (texto)</td><td><b>compartilhado</b></td></tr>
+        <tr><td>Resp. Técnico</td><td><code>KMZ_RespTecnico</code> (texto)</td><td><b>compartilhado</b></td></tr>
+        <tr><td>CREA</td><td><code>KMZ_CREA</code> (texto)</td><td><b>compartilhado</b></td></tr>
+        <tr><td>Escala</td><td>Escala da Vista / manual</td><td>nativo</td></tr>
+      </tbody>
+    </table>
+    <p class="fonte">Nomes nativos conforme a interface em português do Revit; variam na interface em inglês. Confirmar na versão em uso antes de amarrar a família.</p>
+
+    <h2>6. Procedimento no Editor de Famílias</h2>
+    <ol>
+      <li>Criar os parâmetros compartilhados <code>KMZ_Status</code>, <code>KMZ_RespTecnico</code> e <code>KMZ_CREA</code> num único arquivo <code>.txt</code> de parâmetros compartilhados, grupo <b>KMZERO</b>.</li>
+      <li>Novo &rarr; Família &rarr; Bloco de Carimbo, um por formato. Ajustar o tamanho da folha conforme a Tabela 1.</li>
+      <li>Inserir &rarr; Importar CAD &rarr; o <code>.dxf</code> do formato correspondente. Unidade <b>milímetro</b>, posicionamento <b>Origem para origem</b>, escala 1:1.</li>
+      <li>Traçar a moldura e o carimbo sobre a importação com linhas nativas, aplicando as espessuras do item 4.1.</li>
+      <li>Substituir cada texto do DXF por um <b>Rótulo</b> ligado ao parâmetro da Tabela 4. Rótulo, não texto — texto não preenche.</li>
+      <li>Inserir a <b>Tabela de Revisões</b> nativa na zona reservada, com as larguras de coluna da Tabela 2.</li>
+      <li><b>Excluir a importação CAD</b> antes de salvar. Ela é guia de traçado, não conteúdo.</li>
+      <li>Criar os dois tipos da família: <b>Marca</b> (navy + dourado) e <b>Órgão</b> (escala de cinza, sem cor de marca).</li>
+      <li>Carregar no projeto-modelo e configurar a Sequência de Revisão: alfabética (A, B, C) para preliminar, numérica (0, 1, 2) a partir da 1ª emissão formal.</li>
+    </ol>
+
+    <div class="nota critico">
+      <b class="c">Erro que anula o trabalho</b>
+      Importar o DXF e deixá-lo na família, ou converter o carimbo em imagem. Nos dois casos os campos viram geometria morta: não preenchem, a tabela de revisões não atualiza e o carimbo perde a razão de existir.
+    </div>
+
+    <h2>7. Arquivos que acompanham</h2>
+    <table>
+      <thead><tr><th>Arquivo</th><th>Conteúdo</th></tr></thead>
+      <tbody>
+        <tr><td><code>dxf/KMZ-PRANCHA-A0…A4.dxf</code></td><td>Moldura + carimbo + zona de revisões, escala 1:1</td></tr>
+        <tr><td><code>dxf/KMZ-CARIMBO.dxf</code></td><td>Só o carimbo (175 × 102), para reaproveitamento</td></tr>
+        <tr><td><code>gerar_pranchas_dxf.py</code></td><td>Gerador — altere as constantes e rode de novo</td></tr>
+      </tbody>
+    </table>
+    <p>Camadas do DXF: <code>KMZ-FOLHA</code>, <code>KMZ-MOLDURA</code>, <code>KMZ-CARIMBO</code>, <code>KMZ-CARIMBO-DIV</code>, <code>KMZ-REVISOES</code>, <code>KMZ-ROTULO</code>, <code>KMZ-MARCA</code>. Rótulos gravados sem acento: DXF R12 não carrega codificação de caracteres.</p>
+
+    <div class="aprovacao">
+      <div><span>Elaborou</span><div class="assinatura"></div>Data: ___/___/______</div>
+      <div><span>Verificou</span><div class="assinatura"></div>Data: ___/___/______</div>
+      <div><span>Aprovou — Responsável Técnico</span><div class="assinatura"></div>CREA: ______________</div>
+    </div>
+  </main>
+
+  <div class="rodape">
+    <span>Padrão corporativo KMZERO</span><span>KMZ-ET-001 Rev. A</span><span>Página 2 de 2</span>
+  </div>
+</div>
+
+</body>
+</html>
