@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// KMZERO — Regras do Storage (fotos das obras)
+// Caminho usado pelo app: empresas/{empresaId}/fotosObras/{id}.jpg
+// Publicar com:  npm run firebase:deploy-regras
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /empresas/{empresaId}/{caminho=**} {
+      // Baixar uma foto específica: qualquer usuário logado (a URL de download já tem token)
+      allow get: if request.auth != null;
+      // Nunca listar pastas (evita varrer fotos de outras empresas)
+      allow list: if false;
+      // Enviar: logado, só imagem, até 10 MB
+      allow create, update: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+  }
+}

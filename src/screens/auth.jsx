@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
+import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual, emailParaAuth } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
-import { setEmpresaId, getEmpresaId, buscarEmpresaIdDoUsuario, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
+import { setEmpresaId, getEmpresaId, buscarEmpresaIdDoUsuario, carregarPerfilNuvem, criarAcessoLancador, atualizarPerfilNuvem, definirAcessoAtivo, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
@@ -357,7 +357,17 @@ export function TelaPIN({ usuario, modo, onSucesso, onCancelar, onCriarPIN }) {
 }
 
 // Encarregados usam "usuário" (sem @); o Firebase Auth exige email — mapeia p/ email interno
-const emailAuthKM = (e) => { const v = String(e || "").trim().toLowerCase(); return v.includes("@") ? v : v + "@kmzero.app"; };
+const emailAuthKM = emailParaAuth;
+
+// Aplica sobre o registro local o que está no perfil da nuvem (usuarios/{uid}) — a nuvem manda
+const aplicarPerfilNuvem = (u, p) => !p ? u : ({
+  ...u,
+  nome: p.nome || u.nome || "Equipe",
+  perfil: p.perfil || u.perfil || "encarregado",
+  cargo: p.cargo || u.cargo || "Encarregado",
+  obraId: (p.obraId !== undefined && p.obraId !== null) ? p.obraId : (u.obraId ?? null),
+  tel: p.tel || u.tel || "",
+});
 
 
 export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadastrar, onRegistro }) {
@@ -377,7 +387,7 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
   // Busca último usuário logado pra mostrar de cara o PIN
   const [ultimoUsuario, setUltimoUsuario] = useState(null);
   useEffect(() => {
-    const u = usuarios.find(x => x.ultimoLogin);
+    const u = usuarios.filter(x => x.ultimoLogin).sort((a, b) => (b.ultimoLogin || 0) - (a.ultimoLogin || 0))[0];
     if (u) setUltimoUsuario(u);
   }, [usuarios]);
 
@@ -390,26 +400,34 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
     }
     setCarregando(true);
 
-    const r = await loginFirebase(emailGestor.trim(), senhaGestor);
+    const r = await loginFirebase(emailAuthKM(emailGestor), senhaGestor);
     if (r.ok) {
-      const empresaId = await buscarEmpresaIdDoUsuario(r.user.uid);
+      // O perfil na nuvem (usuarios/{uid}) diz a empresa e se é gestor ou equipe
+      const p = await carregarPerfilNuvem(r.user.uid);
+      if (!p.ok) { setCarregando(false); setErro(p.erro); return; }
+      const perfilNuvem = p.perfil;
+      const empresaId = perfilNuvem?.empresaId || null;
       if (!empresaId) {
         setCarregando(false);
-        setErro("Conta sem empresa vinculada. Faca o cadastro primeiro.");
+        setErro("Conta sem empresa vinculada. Faca o cadastro primeiro (Criar minha empresa).");
+        return;
+      }
+      if (perfilNuvem.ativo === false) {
+        setCarregando(false);
+        setErro("Este acesso foi desativado pelo gestor da empresa.");
         return;
       }
       setEmpresaId(empresaId);
 
-      let u = usuarios.find(x => x.email.toLowerCase() === r.user.email.toLowerCase() && x.perfil === "gestor");
-      if (!u) {
-        u = {
-          id: r.user.uid,
-          nome: "Gestor",
-          email: r.user.email,
-          perfil: "gestor",
-          ativo: true,
-          firebaseUid: r.user.uid,
-        };
+      const emailLogado = (r.user.email || emailGestor).trim().toLowerCase();
+      const ehGestor = (perfilNuvem.perfil || "gestor") === "gestor";
+      let u = usuarios.find(x => (x.email || "").toLowerCase() === emailLogado && (ehGestor ? x.perfil === "gestor" : x.perfil !== "gestor"));
+      if (ehGestor) {
+        if (!u) u = { id: r.user.uid, nome: perfilNuvem.nome || "Gestor", email: emailLogado, perfil: "gestor", ativo: true, pin: "", biometriaAtiva: false };
+        else if ((!u.nome || u.nome === "Gestor") && perfilNuvem.nome) u = { ...u, nome: perfilNuvem.nome };
+      } else {
+        // Alguém da equipe entrou pela tela do gestor: entra como equipe mesmo (sem virar gestor)
+        u = aplicarPerfilNuvem(u || { id: Date.now(), email: emailLogado, pin: "", biometriaAtiva: false }, perfilNuvem);
       }
       setCarregando(false);
       onLogin({ ...u, firebaseUid: r.user.uid, empresaId, ultimoLogin: Date.now() });
@@ -422,27 +440,43 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
 
   const entrarPrimeiroAcesso = async () => {
     setErro("");
-    const u = usuarios.find(u => u.email.toLowerCase() === emailPrim.toLowerCase().trim() && u.senha === senhaPrim && u.perfil !== "gestor");
-    if (!u) return setErro("Acesso não encontrado. Confirme com o gestor o e-mail e senha cadastrados.");
+    const emailDigitado = emailPrim.trim().toLowerCase();
+    if (!emailDigitado || !senhaPrim) return setErro("Preencha o e-mail e a senha que o gestor te passou.");
+    // Registro local (se este aparelho já conhece a pessoa) — opcional, a nuvem é a referência
+    const uLocal = usuarios.find(u => (u.email || "").toLowerCase() === emailDigitado && u.perfil !== "gestor") || null;
     setCarregando(true);
-    const r = await loginFirebase(emailAuthKM(u.email), senhaPrim);
+    const r = await loginFirebase(emailAuthKM(emailDigitado), senhaPrim);
     if (r.ok) {
-      const empresaId = await buscarEmpresaIdDoUsuario(r.user.uid);
+      const p = await carregarPerfilNuvem(r.user.uid);
+      if (!p.ok) { setCarregando(false); setErro(p.erro); return; }
+      if (!p.perfil) {
+        setCarregando(false);
+        setErro("Sua conta existe, mas não está vinculada a nenhuma empresa. Peça ao gestor para recriar seu acesso em Sistema → Acessos do App.");
+        return;
+      }
+      if (p.perfil.ativo === false) { setCarregando(false); setErro("Este acesso foi desativado pelo gestor."); return; }
+      const empresaId = p.perfil.empresaId || uLocal?.empresaId || localStorage.getItem("_kmzero_empresaId");
       if (empresaId) setEmpresaId(empresaId);
-      const cachedEid = empresaId || u.empresaId || localStorage.getItem("_kmzero_empresaId");
+      const base = uLocal || { id: Date.now(), email: emailDigitado, pin: "", biometriaAtiva: false };
       setCarregando(false);
-      onLogin({ ...u, firebaseUid: r.user.uid, empresaId: cachedEid, ultimoLogin: Date.now() });
+      onLogin({ ...aplicarPerfilNuvem(base, p.perfil), firebaseUid: r.user.uid, empresaId, ultimoLogin: Date.now() });
       return;
     }
     if (r.codigo === "auth/network-request-failed") {
-      const cachedEid = u.empresaId || localStorage.getItem("_kmzero_empresaId");
-      if (cachedEid) setEmpresaId(cachedEid);
+      // Sem internet: só entra se este aparelho já conhece o acesso (cadastrado aqui pelo gestor)
+      if (uLocal && uLocal.senha === senhaPrim) {
+        const cachedEid = uLocal.empresaId || localStorage.getItem("_kmzero_empresaId");
+        if (cachedEid) setEmpresaId(cachedEid);
+        setCarregando(false);
+        onLogin({ ...uLocal, empresaId: cachedEid, ultimoLogin: Date.now() });
+        return;
+      }
       setCarregando(false);
-      onLogin({ ...u, empresaId: cachedEid, ultimoLogin: Date.now() });
+      setErro("Sem conexão. O primeiro acesso precisa de internet.");
       return;
     }
     setCarregando(false);
-    setErro(r.erro || "Não foi possível autenticar. Tente novamente.");
+    setErro(r.erro || "Não foi possível autenticar. Confira o e-mail e a senha que o gestor te passou.");
   };
 
   const entrarComPIN = (u) => {
@@ -735,9 +769,19 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
               const lancadores = usuarios.filter(u => u.perfil !== "gestor");
               if (lancadores.length === 0) {
                 return (
-                  <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 14, marginBottom: 12, fontSize: 11, color: "rgba(255,255,255,0.7)", textAlign: "center", lineHeight: 1.6, border: "1px dashed rgba(255,255,255,0.15)" }}>
-                    👷 Nenhum lançador cadastrado ainda.<br/>
-                    O gestor pode cadastrar em <b>👥 Acessos do App → + Adicionar</b>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 14, marginBottom: 10, fontSize: 11, color: "rgba(255,255,255,0.7)", textAlign: "center", lineHeight: 1.6, border: "1px dashed rgba(255,255,255,0.15)" }}>
+                      👷 Nenhum perfil da equipe salvo neste aparelho.<br/>
+                      Se o gestor já te passou e-mail e senha, use o botão abaixo.
+                    </div>
+                    <button onClick={() => { setErro(""); setTelaInterna("primeiro_acesso"); }} className="km-btn-glow" style={{ width: "100%", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(56,189,248,0.5)", background: "rgba(56,189,248,0.18)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, textAlign: "left" }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 19, background: BLUE, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👷</div>
+                      <div style={{ flex: 1 }}>
+                        <div>Primeiro acesso da equipe</div>
+                        <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 600, marginTop: 1 }}>Entrar com o e-mail e a senha que o gestor passou</div>
+                      </div>
+                      <span style={{ opacity: 0.7 }}>›</span>
+                    </button>
                   </div>
                 );
               }
@@ -782,6 +826,12 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
                 </div>
               );
             })()}
+
+            {usuarios.some(u => u.perfil !== "gestor") && (
+              <button onClick={() => { setErro(""); setTelaInterna("primeiro_acesso"); }} style={{ width: "100%", padding: 8, background: "transparent", border: "none", color: "rgba(255,255,255,0.7)", fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+                👷 Não estou na lista — primeiro acesso com e-mail e senha
+              </button>
+            )}
 
             {/* Divisor */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 10px", color: "rgba(255,255,255,0.4)", fontSize: 10, fontWeight: 600, letterSpacing: 1 }}>
@@ -845,7 +895,7 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
             )}
 
             <div style={{ marginTop: 24, padding: 14, background: "rgba(255,255,255,0.05)", borderRadius: 12, fontSize: 11, color: "rgba(255,255,255,0.6)", textAlign: "center", lineHeight: 1.6 }}>
-              Equipe sem acesso? Peca pro gestor cadastrar voce na Equipe.
+              Equipe sem acesso? Peca pro gestor criar seu acesso em <b>Sistema → Acessos do App</b>.
             </div>
           </div>
         )}
@@ -966,7 +1016,7 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
             </button>
 
             <div style={{ marginTop: 14, fontSize: 10, color: "rgba(255,255,255,0.5)", textAlign: "center", lineHeight: 1.5 }}>
-              Não tem acesso? Pede pro gestor te cadastrar em <b>👥 Equipe → + Adicionar</b>
+              Não tem acesso? Pede pro gestor te cadastrar em <b>⚙️ Sistema → 🔑 Acessos do App</b>
             </div>
           </div>
         )}
@@ -983,10 +1033,11 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
 export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRemover }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
+  const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
     nome: "",
     email: "",
-    senha: "123",
+    senha: "",
     cargo: "Encarregado",
     obraId: "",
     perfil: "encarregado",
@@ -997,7 +1048,7 @@ export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRem
 
   const abrirNovo = () => {
     setEditando(null);
-    setForm({ nome: "", email: "", senha: "123", cargo: "Encarregado", obraId: "", perfil: "encarregado", tel: "" });
+    setForm({ nome: "", email: "", senha: "", cargo: "Encarregado", obraId: "", perfil: "encarregado", tel: "" });
     setModal(true);
   };
 
@@ -1006,7 +1057,7 @@ export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRem
     setForm({
       nome: u.nome || "",
       email: u.email || "",
-      senha: u.senha || "123",
+      senha: u.senha || "",
       cargo: u.cargo || "Encarregado",
       obraId: u.obraId || "",
       perfil: u.perfil || "encarregado",
@@ -1015,40 +1066,64 @@ export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRem
     setModal(true);
   };
 
-  const salvar = () => {
+  // Cria/atualiza o acesso no aparelho E na nuvem (conta Firebase + perfil usuarios/{uid}).
+  // Com a conta na nuvem a pessoa entra em qualquer celular pelo "Primeiro acesso da equipe".
+  const salvar = async () => {
+    if (salvando) return;
     if (!form.nome.trim()) { alert("⚠️ Informe o nome"); return; }
     if (!form.email.trim()) { alert("⚠️ Informe o e-mail"); return; }
-    if (!form.senha.trim()) { alert("⚠️ Informe a senha"); return; }
+    const precisaSenha = !editando || !editando.firebaseUid;
+    if (precisaSenha && !form.senha.trim()) { alert("⚠️ Informe a senha"); return; }
+    if (precisaSenha && form.senha.trim().length < 6) { alert("⚠️ A senha precisa ter pelo menos 6 caracteres (exigência do login na nuvem)."); return; }
     if (form.perfil !== "gestor" && !form.obraId) { alert("⚠️ Selecione a obra deste acesso.\n\nSem obra vinculada, o encarregado não vê a equipe nem os pedidos certos."); return; }
+    const obraId = form.obraId ? parseInt(form.obraId) : null;
+    const emailNorm = form.email.toLowerCase().trim();
 
-    if (editando) {
-      // Edição
-      onEditar({ ...editando, ...form, obraId: form.obraId ? parseInt(form.obraId) : null });
-      alert(`✅ Acesso atualizado!\n\n${form.nome}\n📧 ${form.email}\n🔑 ${form.senha}`);
-    } else {
-      // Novo
-      const jaExiste = usuarios.find(u => u.email.toLowerCase() === form.email.toLowerCase().trim());
-      if (jaExiste) { alert("⚠️ Já existe um acesso com esse e-mail"); return; }
-      const novo = {
-        id: Date.now(),
-        nome: form.nome.trim(),
-        email: form.email.toLowerCase().trim(),
-        senha: form.senha,
-        cargo: form.cargo,
-        obraId: form.obraId ? parseInt(form.obraId) : null,
-        perfil: form.perfil,
-        tel: form.tel,
-        pin: "",
-        biometriaAtiva: false,
-      };
-      onAdd(novo);
-      alert(`✅ Acesso criado!\n\n👤 ${novo.nome}\n📧 ${novo.email}\n🔑 Senha: ${novo.senha}\n\nPasse esses dados pra pessoa.\nAo abrir o app, ela toca no perfil dela.`);
+    setSalvando(true);
+    try {
+      if (editando) {
+        let firebaseUid = editando.firebaseUid || null;
+        if (!firebaseUid && editando.perfil !== "gestor") {
+          // Acesso antigo (criado antes da nuvem): cria a conta agora
+          const r = await criarAcessoLancador({ email: emailNorm, senha: form.senha.trim(), nome: form.nome.trim(), cargo: form.cargo, obraId, perfil: form.perfil, tel: form.tel });
+          if (!r.ok) { alert("❌ Não foi possível criar a conta na nuvem:\n\n" + r.erro); return; }
+          firebaseUid = r.uid;
+        } else if (firebaseUid && editando.perfil !== "gestor") {
+          const ok = await atualizarPerfilNuvem(firebaseUid, { nome: form.nome.trim(), cargo: form.cargo, obraId, tel: form.tel, perfil: form.perfil, ativo: true });
+          if (!ok) alert("⚠️ Salvo no aparelho, mas não deu para atualizar o perfil na nuvem. Verifique a conexão e salve de novo.");
+        }
+        onEditar({ ...editando, ...form, email: emailNorm, obraId, firebaseUid: firebaseUid || editando.firebaseUid });
+        alert(`✅ Acesso atualizado!\n\n${form.nome}\n📧 ${emailNorm}${firebaseUid ? "\n☁️ Conta na nuvem ativa" : ""}`);
+      } else {
+        const jaExiste = usuarios.find(u => (u.email || "").toLowerCase() === emailNorm);
+        if (jaExiste) { alert("⚠️ Já existe um acesso com esse e-mail"); return; }
+        const r = await criarAcessoLancador({ email: emailNorm, senha: form.senha.trim(), nome: form.nome.trim(), cargo: form.cargo, obraId, perfil: form.perfil, tel: form.tel });
+        if (!r.ok) { alert("❌ Não foi possível criar o acesso:\n\n" + r.erro); return; }
+        const novo = {
+          id: Date.now(),
+          nome: form.nome.trim(),
+          email: emailNorm,
+          senha: form.senha.trim(),
+          cargo: form.cargo,
+          obraId,
+          perfil: form.perfil,
+          tel: form.tel,
+          pin: "",
+          biometriaAtiva: false,
+          firebaseUid: r.uid,
+        };
+        onAdd(novo);
+        alert(`✅ Acesso criado!\n\n👤 ${novo.nome}\n📧 ${novo.email}\n🔑 Senha: ${novo.senha}\n\nPasse esses dados pra pessoa.\nNo celular dela: abrir o app → "Primeiro acesso da equipe" → e-mail e senha.`);
+      }
+      setModal(false);
+    } finally {
+      setSalvando(false);
     }
-    setModal(false);
   };
 
   const remover = (u) => {
-    confirmar(`⚠️ Remover acesso de ${u.nome}?\n\nA pessoa NÃO conseguirá mais entrar no app.\n(Dados de presença, RDOs, etc continuam preservados)`, () => {
+    confirmar(`⚠️ Remover acesso de ${u.nome}?\n\nA pessoa NÃO conseguirá mais entrar no app (em nenhum aparelho).\n(Dados de presença, RDOs, etc continuam preservados)`, () => {
+      if (u.firebaseUid && u.perfil !== "gestor") definirAcessoAtivo(u.firebaseUid, false);
       onRemover(u.id);
     });
   };
@@ -1134,7 +1209,10 @@ export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRem
                 </div>
                 <div style={{ background: "#f9fafb", borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 10, color: "#666", fontFamily: "monospace" }}>
                   📧 {u.email}<br/>
-                  🔑 Senha: <b>{u.senha}</b>
+                  🔑 Senha: <b>{u.senha || "(definida na nuvem)"}</b><br/>
+                  {u.firebaseUid
+                    ? <span style={{ color: "#15803d" }}>☁️ Conta na nuvem ativa — entra em qualquer celular</span>
+                    : <span style={{ color: "#b45309" }}>⚠️ Sem conta na nuvem — toque em Editar e salve para criar</span>}
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={() => abrirEdicao(u)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 8, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✏️ Editar</button>
@@ -1175,17 +1253,19 @@ export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRem
           <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, marginBottom: 8 }}>🔐 Dados de Acesso</div>
 
           <label style={labelS}>📧 E-mail (login)</label>
-          <input value={form.email} onChange={e => set("email", e.target.value)} type="email" placeholder="exemplo@gmail.com" autoComplete="off" style={inputS} />
+          <input value={form.email} onChange={e => set("email", e.target.value)} type="email" placeholder="exemplo@gmail.com" autoComplete="off" disabled={!!(editando && editando.firebaseUid)} style={{ ...inputS, opacity: editando && editando.firebaseUid ? 0.6 : 1 }} />
 
-          <label style={labelS}>🔑 Senha temporária</label>
-          <input value={form.senha} onChange={e => set("senha", e.target.value)} placeholder="123" autoComplete="off" style={inputS} />
+          <label style={labelS}>🔑 Senha (mínimo 6 caracteres)</label>
+          <input value={form.senha} onChange={e => set("senha", e.target.value)} placeholder="ex: obra2026" autoComplete="off" disabled={!!(editando && editando.firebaseUid)} style={{ ...inputS, opacity: editando && editando.firebaseUid ? 0.6 : 1 }} />
 
           <div style={{ fontSize: 10, color: "#0c4a6e", lineHeight: 1.5 }}>
-            💡 Anote pra passar pra pessoa. Ao abrir o app, ela vai aparecer na lista de perfis.
+            {editando && editando.firebaseUid
+              ? "🔒 E-mail e senha ficam na nuvem e não mudam por aqui. Se a pessoa esqueceu a senha, exclua este acesso e crie outro."
+              : "💡 Anote pra passar pra pessoa. Ela entra em qualquer celular: abrir o app → \"Primeiro acesso da equipe\"."}
           </div>
         </div>
 
-        <Btn label={editando ? "💾 SALVAR ALTERAÇÕES" : "➕ CRIAR ACESSO"} color={GREEN} onClick={salvar} />
+        <Btn label={salvando ? "⏳ SALVANDO NA NUVEM..." : editando ? "💾 SALVAR ALTERAÇÕES" : "➕ CRIAR ACESSO"} color={GREEN} onClick={salvar} disabled={salvando} />
 
         {editando && (
           <button onClick={() => { setModal(false); remover(editando); }} style={{ width: "100%", marginTop: 8, padding: 12, background: "#fee2e2", color: RED, border: `2px solid ${RED}`, borderRadius: 10, fontWeight: 800, cursor: "pointer", fontSize: 12 }}>

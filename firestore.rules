@@ -1,20 +1,114 @@
 rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KMZERO — Regras do Firestore (multiempresa / SaaS)
+//
+// Modelo de dados:
+//   usuarios/{uid}                     perfil de cada login (empresaId, perfil, ativo...)
+//   empresas/{empresaId}               cadastro da empresa (gestorUid = quem criou)
+//   empresas/{empresaId}/acessos/*     lista de acessos do app (só o gestor lê/escreve)
+//   empresas/{empresaId}/{colecao}/*   obras, trabalhadores, pedidos, rdos, presencas...
+//
+// Princípio: cada usuário só enxerga a empresa gravada no SEU perfil.
+// Publicar com:  npm run firebase:deploy-regras
+// ─────────────────────────────────────────────────────────────────────────────
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Perfil do usuario: apenas o proprio usuario autenticado
-    match /usuarios/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function logado() {
+      return request.auth != null;
+    }
+    function caminhoPerfil() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    }
+    function temPerfil() {
+      return logado() && exists(caminhoPerfil());
+    }
+    function perfil() {
+      return get(caminhoPerfil()).data;
+    }
+    // Perfil existe e não foi desativado pelo gestor
+    function perfilAtivo() {
+      return temPerfil() && perfil().get('ativo', true) != false;
+    }
+    function minhaEmpresa() {
+      return perfil().empresaId;
+    }
+    function souGestor() {
+      return perfilAtivo() && perfil().perfil == 'gestor';
+    }
+    function souDaEmpresa(empresaId) {
+      return perfilAtivo() && minhaEmpresa() == empresaId;
+    }
+    // A empresa já existe e foi criada por quem está logado (usado no cadastro do gestor)
+    function empresaCriadaPorMim(empresaId) {
+      return exists(/databases/$(database)/documents/empresas/$(empresaId))
+        && get(/databases/$(database)/documents/empresas/$(empresaId)).data.gestorUid == request.auth.uid;
     }
 
-    // Dados da empresa: apenas usuarios vinculados a esta empresa
-    match /empresas/{empresaId}/{document=**} {
-      allow read, write: if request.auth != null
-        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
-        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.empresaId == empresaId;
+    // ── Perfis de login ─────────────────────────────────────────────────────
+    match /usuarios/{uid} {
+      // Ler: o próprio usuário, ou o gestor da mesma empresa
+      allow get: if logado() && (
+        request.auth.uid == uid
+        || (souGestor() && resource.data.empresaId == minhaEmpresa())
+      );
+      allow list: if false;
 
-      // Permite criacao do doc raiz da empresa durante o registro
-      allow create: if request.auth != null;
+      // Criar:
+      //  (a) gestor concluindo o cadastro da própria empresa (empresa já criada por ele)
+      //  (b) gestor criando o acesso de um lançador (encarregado/apontador) da sua empresa
+      allow create: if logado() && (
+        (request.auth.uid == uid
+          && request.resource.data.perfil == 'gestor'
+          && empresaCriadaPorMim(request.resource.data.empresaId))
+        || (souGestor()
+          && uid != request.auth.uid
+          && request.resource.data.empresaId == minhaEmpresa()
+          && request.resource.data.perfil != 'gestor')
+      );
+
+      // Atualizar:
+      //  - gestor edita qualquer perfil da sua empresa (sem mudar a empresa)
+      //  - o próprio usuário edita dados simples (não muda empresa, perfil nem ativo)
+      allow update: if logado() && (
+        (souGestor()
+          && resource.data.empresaId == minhaEmpresa()
+          && request.resource.data.empresaId == resource.data.empresaId)
+        || (request.auth.uid == uid
+          && request.resource.data.empresaId == resource.data.empresaId
+          && request.resource.data.perfil == resource.data.perfil
+          && request.resource.data.get('ativo', true) == resource.data.get('ativo', true))
+      );
+
+      // Apagar: o próprio (direito de exclusão) ou o gestor da empresa
+      allow delete: if logado() && (
+        request.auth.uid == uid
+        || (souGestor() && resource.data.empresaId == minhaEmpresa())
+      );
+    }
+
+    // ── Empresas ────────────────────────────────────────────────────────────
+    match /empresas/{empresaId} {
+      // Qualquer usuário logado pode criar a SUA empresa (cadastro)
+      allow create: if logado() && request.resource.data.gestorUid == request.auth.uid;
+      allow get: if logado() && souDaEmpresa(empresaId);
+      allow list: if false;
+      // Só o gestor edita o cadastro da empresa (e não pode trocar o dono)
+      allow update: if logado() && souGestor() && minhaEmpresa() == empresaId
+        && request.resource.data.gestorUid == resource.data.gestorUid;
+      allow delete: if logado() && souGestor() && minhaEmpresa() == empresaId
+        && resource.data.gestorUid == request.auth.uid;
+
+      // Lista de acessos do app (contém dados sensíveis): só o gestor
+      match /acessos/{docId} {
+        allow read, write: if logado() && souGestor() && minhaEmpresa() == empresaId;
+      }
+
+      // Todos os demais dados da empresa: qualquer usuário ativo DA empresa
+      match /{colecao}/{docId} {
+        allow read, write: if logado() && colecao != 'acessos' && souDaEmpresa(empresaId);
+      }
     }
   }
 }

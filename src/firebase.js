@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword as fbUpdatePassword } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -91,4 +91,45 @@ export async function criarContaFirebase(email, senha) {
      }
 }
 
-export { auth, firebaseApp, db };
+/* ── E-mail de autenticação ───────────────────────────────────────────────
+   Lançadores podem ser cadastrados só com "usuário" (sem @). O Firebase Auth
+   exige e-mail, então mapeamos para um e-mail interno do app. */
+export function emailParaAuth(e) {
+     const v = String(e || "").trim().toLowerCase();
+     return v.includes("@") ? v : v + "@kmzero.app";
+}
+
+/* ── App secundário: cria a conta do lançador SEM derrubar a sessão do gestor ──
+   createUserWithEmailAndPassword faz login automático na instância onde é
+   chamado; por isso usamos uma 2ª instância do Firebase só para isso. */
+let _appSecundario = null;
+function appSecundario() {
+     if (_appSecundario) return _appSecundario;
+     _appSecundario = getApps().find(a => a.name === "kmzero-secundario") || initializeApp(firebaseConfig, "kmzero-secundario");
+     return _appSecundario;
+}
+
+export async function criarContaSecundaria(email, senha) {
+     const secAuth = getAuth(appSecundario());
+     try {
+            const cred = await createUserWithEmailAndPassword(secAuth, email, senha);
+            const uid = cred.user.uid;
+            try { await signOut(secAuth); } catch {}
+            return { ok: true, uid, jaExistia: false };
+     } catch (e) {
+            if (e.code === "auth/email-already-in-use") {
+                     // A conta já existe (ex.: tentativa anterior que parou no meio). Se a senha bater, reaproveita.
+                     try {
+                            const cred = await signInWithEmailAndPassword(secAuth, email, senha);
+                            const uid = cred.user.uid;
+                            try { await signOut(secAuth); } catch {}
+                            return { ok: true, uid, jaExistia: true };
+                     } catch {
+                            return { ok: false, erro: "Este e-mail ja tem conta com outra senha. Use outro e-mail ou peca para a pessoa recuperar a senha.", codigo: e.code };
+                     }
+            }
+            return { ok: false, erro: traduzErroFirebase(e.code), codigo: e.code };
+     }
+}
+
+export { auth, firebaseApp, db, firebaseConfig };

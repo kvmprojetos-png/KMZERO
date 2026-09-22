@@ -11,6 +11,7 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "./components/ui.jsx";
+import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
 
 /* ── Telas separadas por domínio ── */
 import { TelaPerfilPIN, TelaPIN, TelaLogin, TelaMinhaConta, TelaAcessosApp } from "./screens/auth.jsx";
@@ -346,6 +347,57 @@ export default function App() {
   useEffect(() => { if (!carregando) store.set("fornecedores", fornecedores); }, [fornecedores, carregando]);
   useEffect(() => { if (!carregando) store.set("clientes", clientes); }, [clientes, carregando]);
 
+  // ── SYNC MULTIAPARELHO ─────────────────────────────────────────────────────
+  // Cadastros e lançamentos espelhados em empresas/{empresaId}/{colecao}.
+  // O gestor cadastra a obra no escritório e o encarregado vê no celular; o que
+  // o encarregado lança na obra aparece pro gestor. (pedidos, mensagens, RDOs,
+  // presenças e fotos já tinham sync próprio acima — continuam iguais.)
+  const syncAtivo = !carregando && !!usuario?.firebaseUid && !!empresaIdState;
+  const syncGestor = syncAtivo && usuario?.perfil === "gestor";
+  useSyncColecao("obras",           obras,           setObras,           syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("trabalhadores",   trabalhadores,   setTrab,            syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("equips",          equips,          setEquips,          syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("acessos",         usuarios,        setUsuarios,        syncGestor, { ordenar: porIdAsc }); // só gestor (tem senha temporária)
+  useSyncColecao("fornecedores",    fornecedores,    setFornecedores,    syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("clientes",        clientes,        setClientes,        syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("ativos",          ativos,          setAtivos,          syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("ferramentas",     ferramentas,     setFerr,            syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("links",           links,           setLinks,           syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("ferias",          ferias,          setFerias,          syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("manutencoes",     manutencoes,     setManut,           syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("diario",          diario,          setDiario,          syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("abastecimentos",  abastecimentos,  setAbast,           syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("adiantamentos",   adiantamentos,   setAdiant,          syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("movimentacoes",   movimentacoes,   setMov,             syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("movEquip",        movEquip,        setMovEquip,        syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("despesasAvulsas", despesasAvulsas, setDespesasAvulsas, syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("recebimentos",    recebimentos,    setReceb,           syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("produtividade",   produtividade,   setProd,            syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("folhasSalvas",    folhasSalvas,    setFolhasSalvas,    syncAtivo, { ordenar: porIdDesc });
+
+  // Empresa (objeto único → 1 doc "empresa" na coleção config). Vazia não sobe, pra não apagar a de outro aparelho.
+  const empresaArr = useMemo(() => Object.keys(empresa || {}).length ? [{ id: "empresa", ...empresa }] : [], [empresa]);
+  const setEmpresaArr = useCallback(fn => setEmpresa(e => {
+    const arr = Object.keys(e || {}).length ? [{ id: "empresa", ...e }] : [];
+    const novo = typeof fn === "function" ? fn(arr) : fn;
+    if (novo === arr) return e;
+    const docEmp = (novo || []).find(x => String(x.id) === "empresa");
+    if (!docEmp) return e;
+    const { id, ...resto } = docEmp;
+    return resto;
+  }), []);
+  useSyncColecao("config", empresaArr, setEmpresaArr, syncAtivo);
+
+  // Cronogramas (objeto por obra → 1 doc por obra)
+  const cronogramasArr = useMemo(() => Object.entries(cronogramas || {}).map(([obraId, etapas]) => ({ id: obraId, obraId, etapas: etapas || [] })), [cronogramas]);
+  const setCronogramasArr = useCallback(fn => setCronog(c => {
+    const arr = Object.entries(c || {}).map(([obraId, etapas]) => ({ id: obraId, obraId, etapas: etapas || [] }));
+    const novo = typeof fn === "function" ? fn(arr) : fn;
+    if (novo === arr) return c;
+    return Object.fromEntries((novo || []).map(x => [String(x.id), x.etapas || []]));
+  }), []);
+  useSyncColecao("cronogramas", cronogramasArr, setCronogramasArr, syncAtivo);
+
   // Gestor corrige a presença de qualquer dia (acerta a folha) — local + nuvem
   const editarPresencaDia = (dataISO, trabId, status) => {
     setHistorico(h => {
@@ -408,6 +460,12 @@ export default function App() {
       localStorage.setItem("_kmzero_empresaId", u.empresaId);
     }
     setUsuario(u);
+    // Guarda/atualiza o perfil na lista deste aparelho (pra próxima vez entrar por PIN / "Continuar como")
+    setUsuarios(us => {
+      const idx = us.findIndex(x => String(x.id) === String(u.id) || (u.firebaseUid && x.firebaseUid === u.firebaseUid && x.perfil === u.perfil));
+      if (idx === -1) return [...us, u];
+      return us.map((x, i) => i === idx ? { ...x, ...u } : x);
+    });
     store.set("usuarioLogado", u);
     if (u.perfil === "gestor") setTela("gestor");
     else setTela("home");
