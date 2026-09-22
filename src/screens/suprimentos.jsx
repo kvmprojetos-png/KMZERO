@@ -314,25 +314,31 @@ export async function carimbarFoto(dataUrl, info) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
+      // Reduz para no máximo 1600 px no lado maior: cabe com folga no limite do Storage (10 MB)
+      // e no armazenamento do celular, sem perder utilidade para foto de obra.
+      const LADO_MAX = 1600;
+      const escala = Math.min(1, LADO_MAX / Math.max(img.width, img.height));
+      const W = Math.max(1, Math.round(img.width * escala));
+      const H = Math.max(1, Math.round(img.height * escala));
       const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = W;
+      canvas.height = H;
       const ctx = canvas.getContext("2d");
 
-      // Desenha imagem original
-      ctx.drawImage(img, 0, 0);
+      // Desenha imagem (já redimensionada)
+      ctx.drawImage(img, 0, 0, W, H);
 
       // Tamanho do rodapé proporcional à imagem
-      const fontePx = Math.max(16, Math.round(img.width / 50));
+      const fontePx = Math.max(16, Math.round(W / 50));
       const padding = Math.round(fontePx * 0.7);
       const linhaAltura = Math.round(fontePx * 1.4);
       const rodapeAltura = linhaAltura * 3 + padding * 2;
       const margemBottom = Math.round(fontePx * 0.4);
 
       // Posiciona rodapé no canto inferior esquerdo (com margem)
-      const rodapeY = img.height - rodapeAltura - margemBottom;
+      const rodapeY = H - rodapeAltura - margemBottom;
       const rodapeX = margemBottom;
-      const rodapeLargura = img.width - margemBottom * 2;
+      const rodapeLargura = W - margemBottom * 2;
 
       // Sombra/fundo translúcido escuro com gradiente
       const grad = ctx.createLinearGradient(0, rodapeY, 0, rodapeY + rodapeAltura);
@@ -395,7 +401,7 @@ export async function carimbarFoto(dataUrl, info) {
       ctx.fillText(`👷 ${info.autor}`, rodapeX + padding, rodapeY + padding + linhaAltura * 2);
 
       // Converte de volta pra DataURL
-      resolve(canvas.toDataURL("image/jpeg", 0.92));
+      resolve(canvas.toDataURL("image/jpeg", 0.88));
     };
     img.onerror = () => resolve(dataUrl); // fallback: retorna sem carimbo se falhar
     img.src = dataUrl;

@@ -10,20 +10,27 @@ import {
 
    • Recebe em tempo real o que outros aparelhos gravaram (a nuvem vence quando
      o mesmo id existe nos dois lados).
-   • Envia criações, edições e remoções feitas neste aparelho.
+   • Envia criações, edições e remoções feitas neste aparelho. Com o cache
+     persistente do Firestore (src/firebase.js), o que é gravado sem sinal fica
+     na fila e sobe quando a conexão volta.
    • Strings base64 (data:...) NÃO sobem — ficam só no aparelho. Fotos das obras
      têm o próprio fluxo (Storage). Ao receber da nuvem, os anexos locais são
      preservados.
    • Só começa a ENVIAR depois do 1º retorno da nuvem, para nunca subir dado
      antigo por cima de dado novo de outro aparelho.
-   • Guarda no localStorage os ids já vistos na nuvem; assim uma remoção feita
+   • Remoções feitas em outro aparelho só são aplicadas com resposta DO SERVIDOR
+     (meta.fromCache = false). Resposta do cache (sem internet) nunca apaga nada.
+   • Guarda no localStorage os ids já vistos no servidor; assim uma remoção feita
      em outro aparelho enquanto este estava fechado é aplicada na próxima abertura.
+   • O updater passado ao setItens é puro (React pode executá-lo 2x em dev):
+     todo efeito colateral acontece antes, fora dele.
 
    opcoes.ordenar(arr) → função opcional para reordenar depois de receber da nuvem.
    ───────────────────────────────────────────────────────────────────────────── */
 export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
   const { ordenar } = opcoes;
   const nuvemRef = useRef(new Map());        // id → JSON estável do doc como está na nuvem
+  const conhecidosRef = useRef(new Set());   // ids já vistos no servidor (persistido)
   const prontoRef = useRef(false);           // já recebeu o 1º snapshot?
   const idsAnterioresRef = useRef(null);     // ids locais na última passada (detecta remoção)
   const [versaoNuvem, setVersaoNuvem] = useState(0);
@@ -32,43 +39,47 @@ export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
   useEffect(() => {
     if (!ativo) {
       nuvemRef.current = new Map();
+      conhecidosRef.current = new Set();
       prontoRef.current = false;
       idsAnterioresRef.current = null;
       return;
     }
-    const conhecidos = new Set(lerIdsSync(colecao));
-    const parar = observarColecaoNuvem(colecao, docs => {
+    conhecidosRef.current = new Set(lerIdsSync(colecao));
+
+    const parar = observarColecaoNuvem(colecao, (docs, meta) => {
+      const doServidor = !(meta && meta.fromCache);
       const nuvem = new Map();
       docs.forEach(d => { if (d && d.id !== undefined && d.id !== null) nuvem.set(String(d.id), d); });
 
+      // Efeitos colaterais FORA do updater
+      const sumiram = new Set();
+      if (doServidor) {
+        nuvemRef.current.forEach((_, id) => { if (!nuvem.has(id)) sumiram.add(id); });
+        conhecidosRef.current.forEach(id => { if (!nuvem.has(id)) sumiram.add(id); });
+        sumiram.forEach(id => { nuvemRef.current.delete(id); conhecidosRef.current.delete(id); });
+      }
+      const jsonNuvem = new Map();
+      nuvem.forEach((d, id) => {
+        const j = jsonEstavel(semDataUrl(d));
+        jsonNuvem.set(id, j);
+        nuvemRef.current.set(id, j);
+        if (doServidor) conhecidosRef.current.add(id);
+      });
+      if (doServidor) salvarIdsSync(colecao, [...conhecidosRef.current]);
+
+      // Updater puro: só transforma o array
       setItens(loc => {
         const locArr = Array.isArray(loc) ? loc : [];
         const porId = new Map(locArr.map(x => [String(x.id), x]));
         let mudou = false;
-
         nuvem.forEach((docNuvem, id) => {
           const local = porId.get(id);
-          const jsonNuvem = jsonEstavel(semDataUrl(docNuvem));
-          nuvemRef.current.set(id, jsonNuvem);
-          if (!local || jsonEstavel(semDataUrl(local)) !== jsonNuvem) {
+          if (!local || jsonEstavel(semDataUrl(local)) !== jsonNuvem.get(id)) {
             porId.set(id, mesclarAnexosLocais(docNuvem, local));
             mudou = true;
           }
         });
-
-        // Removidos em outro aparelho: já estiveram na nuvem e agora não estão mais
-        const sumiram = new Set();
-        nuvemRef.current.forEach((_, id) => { if (!nuvem.has(id)) sumiram.add(id); });
-        conhecidos.forEach(id => { if (!nuvem.has(id)) sumiram.add(id); });
-        sumiram.forEach(id => {
-          nuvemRef.current.delete(id);
-          conhecidos.delete(id);
-          if (porId.has(id)) { porId.delete(id); mudou = true; }
-        });
-
-        nuvem.forEach((_, id) => conhecidos.add(id));
-        salvarIdsSync(colecao, [...conhecidos]);
-
+        sumiram.forEach(id => { if (porId.has(id)) { porId.delete(id); mudou = true; } });
         if (!mudou) return loc;
         const novo = [...porId.values()];
         return ordenar ? ordenar(novo) : novo;

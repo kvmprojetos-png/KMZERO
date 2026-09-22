@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual, emailParaAuth } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
-import { setEmpresaId, getEmpresaId, buscarEmpresaIdDoUsuario, carregarPerfilNuvem, criarAcessoLancador, atualizarPerfilNuvem, definirAcessoAtivo, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
+import { setEmpresaId, getEmpresaId, buscarEmpresaIdDoUsuario, carregarPerfilNuvem, criarAcessoLancador, atualizarPerfilNuvem, definirAcessoAtivo, aplicarPerfilNuvem, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
@@ -359,18 +359,8 @@ export function TelaPIN({ usuario, modo, onSucesso, onCancelar, onCriarPIN }) {
 // Encarregados usam "usuário" (sem @); o Firebase Auth exige email — mapeia p/ email interno
 const emailAuthKM = emailParaAuth;
 
-// Aplica sobre o registro local o que está no perfil da nuvem (usuarios/{uid}) — a nuvem manda
-const aplicarPerfilNuvem = (u, p) => !p ? u : ({
-  ...u,
-  nome: p.nome || u.nome || "Equipe",
-  perfil: p.perfil || u.perfil || "encarregado",
-  cargo: p.cargo || u.cargo || "Encarregado",
-  obraId: (p.obraId !== undefined && p.obraId !== null) ? p.obraId : (u.obraId ?? null),
-  tel: p.tel || u.tel || "",
-});
 
-
-export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onCadastrar, onRegistro }) {
+export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, onRemoverUsuario, onCadastrar, onRegistro }) {
   const [tipo, setTipo] = useState("encarregado");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -404,15 +394,17 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
     if (r.ok) {
       // O perfil na nuvem (usuarios/{uid}) diz a empresa e se é gestor ou equipe
       const p = await carregarPerfilNuvem(r.user.uid);
-      if (!p.ok) { setCarregando(false); setErro(p.erro); return; }
+      if (!p.ok) { try { await logoutFirebase(); } catch {} setCarregando(false); setErro(p.erro); return; }
       const perfilNuvem = p.perfil;
       const empresaId = perfilNuvem?.empresaId || null;
       if (!empresaId) {
+        try { await logoutFirebase(); } catch {}
         setCarregando(false);
-        setErro("Conta sem empresa vinculada. Faca o cadastro primeiro (Criar minha empresa).");
+        setErro("Sua conta existe, mas o cadastro da empresa não foi concluído. Toque em 'Criar minha empresa' e use este MESMO e-mail e senha para concluir.");
         return;
       }
       if (perfilNuvem.ativo === false) {
+        try { await logoutFirebase(); } catch {}
         setCarregando(false);
         setErro("Este acesso foi desativado pelo gestor da empresa.");
         return;
@@ -448,13 +440,14 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
     const r = await loginFirebase(emailAuthKM(emailDigitado), senhaPrim);
     if (r.ok) {
       const p = await carregarPerfilNuvem(r.user.uid);
-      if (!p.ok) { setCarregando(false); setErro(p.erro); return; }
+      if (!p.ok) { try { await logoutFirebase(); } catch {} setCarregando(false); setErro(p.erro); return; }
       if (!p.perfil) {
+        try { await logoutFirebase(); } catch {}
         setCarregando(false);
         setErro("Sua conta existe, mas não está vinculada a nenhuma empresa. Peça ao gestor para recriar seu acesso em Sistema → Acessos do App.");
         return;
       }
-      if (p.perfil.ativo === false) { setCarregando(false); setErro("Este acesso foi desativado pelo gestor."); return; }
+      if (p.perfil.ativo === false) { try { await logoutFirebase(); } catch {} setCarregando(false); setErro("Este acesso foi desativado pelo gestor."); return; }
       const empresaId = p.perfil.empresaId || uLocal?.empresaId || localStorage.getItem("_kmzero_empresaId");
       if (empresaId) setEmpresaId(empresaId);
       const base = uLocal || { id: Date.now(), email: emailDigitado, pin: "", biometriaAtiva: false };
@@ -493,7 +486,26 @@ export function TelaLogin({ usuarios, obras = [], onLogin, onAtualizarUsuario, o
     }
     const cachedEid = u.empresaId || localStorage.getItem("_kmzero_empresaId");
     if (cachedEid) setEmpresaId(cachedEid);
-    onLogin({ ...u, firebaseUid: u.firebaseUid || fbUser.uid, empresaId: cachedEid, ultimoLogin: Date.now() });
+    if (!u.firebaseUid) {
+      // Registro antigo (sem conta própria na nuvem): entra como antes, com a sessão deste aparelho
+      onLogin({ ...u, firebaseUid: fbUser.uid, empresaId: cachedEid, ultimoLogin: Date.now() });
+      return;
+    }
+    // Confere na nuvem se o acesso ainda vale (gestor pode ter removido) e pega obra/nome atualizados
+    setCarregando(true);
+    carregarPerfilNuvem(u.firebaseUid).then(async p => {
+      setCarregando(false);
+      if (p.ok && (!p.perfil || p.perfil.ativo === false)) {
+        try { await logoutFirebase(); } catch {}
+        if (onRemoverUsuario) onRemoverUsuario(u.id);
+        alert("⛔ Este acesso foi desativado pelo gestor da empresa.");
+        return;
+      }
+      const base = p.ok && p.perfil ? aplicarPerfilNuvem(u, p.perfil) : u; // sem internet: usa o que está no aparelho
+      const eid = (p.ok && p.perfil && p.perfil.empresaId) || cachedEid;
+      if (eid) setEmpresaId(eid);
+      onLogin({ ...base, firebaseUid: u.firebaseUid, empresaId: eid, ultimoLogin: Date.now() });
+    });
   };
 
   if (modoPIN && usuarioSelecionado) {
@@ -1260,9 +1272,17 @@ export function TelaAcessosApp({ usuarios, obras, onBack, onAdd, onEditar, onRem
 
           <div style={{ fontSize: 10, color: "#0c4a6e", lineHeight: 1.5 }}>
             {editando && editando.firebaseUid
-              ? "🔒 E-mail e senha ficam na nuvem e não mudam por aqui. Se a pessoa esqueceu a senha, exclua este acesso e crie outro."
+              ? "🔒 E-mail e senha ficam na nuvem e não mudam por aqui. Se a pessoa esqueceu a senha: e-mail real → use o botão abaixo; login sem e-mail → crie um acesso novo com outro nome de login (ex.: joao2)."
               : "💡 Anote pra passar pra pessoa. Ela entra em qualquer celular: abrir o app → \"Primeiro acesso da equipe\"."}
           </div>
+          {editando && editando.firebaseUid && form.email.includes("@") && !form.email.toLowerCase().trim().endsWith("@kmzero.app") && (
+            <button type="button" onClick={async () => {
+              const r = await recuperarSenha(form.email.trim().toLowerCase());
+              alert(r.ok ? `📧 Link para redefinir a senha enviado para ${form.email.trim()}.\n\nPeça para a pessoa conferir a caixa de entrada e o spam.` : "❌ " + (r.erro || "Não foi possível enviar o link."));
+            }} style={{ width: "100%", marginTop: 8, padding: 10, background: "#fff", color: NAVY, border: `1.5px solid ${BLUE}`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>
+              📧 Enviar link para a pessoa redefinir a senha
+            </button>
+          )}
         </div>
 
         <Btn label={salvando ? "⏳ SALVANDO NA NUVEM..." : editando ? "💾 SALVAR ALTERAÇÕES" : "➕ CRIAR ACESSO"} color={GREEN} onClick={salvar} disabled={salvando} />

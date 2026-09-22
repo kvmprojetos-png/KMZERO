@@ -1,12 +1,12 @@
 import { LINKS_PADRAO } from "./screens/equipe.jsx";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual, criarContaFirebase } from "./firebase.js";
 
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
-import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, buscarEmpresaIdDoUsuario, registrarEmpresa, registrarUsuarioEmpresa, store } from "./lib/store.js";
+import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, buscarEmpresaIdDoUsuario, registrarEmpresa, registrarUsuarioEmpresa, carregarPerfilNuvem, aplicarPerfilNuvem, jsonEstavel, store } from "./lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
@@ -227,13 +227,39 @@ export default function App() {
   const [fornecedores, setFornecedores] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const empresaCarregadaRef = useRef(null); // empresa cujos dados estão em memória (prefixo do localStorage)
 
   const obraAtual = usuario?.obraId ? obras.find(o => o.id === usuario.obraId) || obras[0] : obras[0];
   const presencasHoje = historico[hojeStr()] || {};
 
+  // Confere na nuvem se o acesso ainda vale (gestor pode ter removido) e atualiza obra/nome/cargo
+  const verificarAcessoNuvem = async (u) => {
+    if (!u?.firebaseUid) return;
+    const p = await carregarPerfilNuvem(u.firebaseUid);
+    if (!p.ok) return; // sem internet ou regras: mantém a sessão (offline-first)
+    if (!p.perfil || p.perfil.ativo === false) {
+      try { await logoutFirebase(); } catch {}
+      setUsuarios(us => us.filter(x => String(x.id) !== String(u.id)));
+      store.set("usuarioLogado", null);
+      setUsuario(null);
+      setTelaRaw("login");
+      setTimeout(() => alert("⛔ Seu acesso foi desativado pelo gestor da empresa."), 300);
+      return;
+    }
+    if (u.perfil !== "gestor") {
+      const atualizado = aplicarPerfilNuvem(u, p.perfil);
+      if (jsonEstavel(atualizado) !== jsonEstavel(u)) {
+        setUsuarios(us => us.map(x => String(x.id) === String(u.id) ? { ...x, ...atualizado } : x));
+        setUsuario(atualizado);
+        store.set("usuarioLogado", atualizado);
+      }
+    }
+  };
+
   useEffect(() => {
     (async () => {
       const cachedEmpresaId = localStorage.getItem("_kmzero_empresaId");
+      empresaCarregadaRef.current = cachedEmpresaId || null;
       if (cachedEmpresaId) {
         setEmpresaId(cachedEmpresaId);
         setEmpresaIdState(cachedEmpresaId);
@@ -309,6 +335,7 @@ export default function App() {
         }
         setUsuario(userLogado);
         setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
+        verificarAcessoNuvem(userLogado); // em segundo plano
       }
 
       // ⭐ AUTO-POPULA 30 DIAS apenas se ativado manualmente em Sistema > Gerar 30 dias
@@ -423,37 +450,65 @@ export default function App() {
     setTrab(ts => ts.map(x => x.id === t.id ? t : x));
     setTrabSelecionado(t);
   };
+  // Restaurar backup = MESCLAR: registros do arquivo entram/atualizam (mesmo id vence), nada é apagado.
+  // Com a nuvem ativa, apagar aqui apagaria na empresa inteira — por isso não substitui listas.
+  const mesclarPorId = (atual, novos) => {
+    if (!Array.isArray(novos)) return atual;
+    const m = new Map((Array.isArray(atual) ? atual : []).map(x => [String(x?.id), x]));
+    novos.forEach(x => { if (x && x.id !== undefined && x.id !== null) m.set(String(x.id), x); });
+    return [...m.values()];
+  };
   const restaurarBackup = (dados) => {
-    if (dados.obras) setObras(dados.obras);
-    if (dados.trabalhadores) setTrab(dados.trabalhadores);
-    if (dados.equips) setEquips(dados.equips);
-    if (dados.pedidos) setPedidos(dados.pedidos);
-    if (dados.historico) setHistorico(dados.historico);
-    if (dados.usuarios) setUsuarios(dados.usuarios);
-    if (dados.mensagens) setMensagens(dados.mensagens);
-    if (dados.diario) setDiario(dados.diario);
-    if (dados.ativos) setAtivos(dados.ativos);
-    if (dados.abastecimentos) setAbast(dados.abastecimentos);
-    if (dados.ferias) setFerias(dados.ferias);
-    if (dados.rdosEmitidos) setRdos(dados.rdosEmitidos);
-    if (dados.empresa) setEmpresa(dados.empresa);
-    if (dados.produtividade) setProd(dados.produtividade);
-    if (dados.recebimentos) setReceb(dados.recebimentos);
-    if (dados.movimentacoes) setMov(dados.movimentacoes);
-    if (dados.ferramentas) setFerr(dados.ferramentas);
-    if (dados.links) setLinks(dados.links);
-    if (dados.adiantamentos) setAdiant(dados.adiantamentos);
-    if (dados.manutencoes) setManut(dados.manutencoes);
-    if (dados.folhasSalvas) setFolhasSalvas(dados.folhasSalvas);
-    if (dados.cronogramas) setCronog(dados.cronogramas);
-    if (dados.movEquip) setMovEquip(dados.movEquip);
-    if (dados.despesasAvulsas) setDespesasAvulsas(dados.despesasAvulsas);
-    if (dados.fotosObras) setFotosObras(dados.fotosObras);
-    if (dados.fornecedores) setFornecedores(dados.fornecedores);
-    if (dados.clientes) setClientes(dados.clientes);
+    if (dados.obras) setObras(a => mesclarPorId(a, dados.obras));
+    if (dados.trabalhadores) setTrab(a => mesclarPorId(a, dados.trabalhadores));
+    if (dados.equips) setEquips(a => mesclarPorId(a, dados.equips));
+    if (dados.pedidos) setPedidos(a => mesclarPorId(a, dados.pedidos));
+    if (dados.historico) setHistorico(h => ({ ...h, ...dados.historico }));
+    if (dados.usuarios) setUsuarios(a => mesclarPorId(a, dados.usuarios));
+    if (dados.mensagens) setMensagens(a => mesclarPorId(a, dados.mensagens));
+    if (dados.diario) setDiario(a => mesclarPorId(a, dados.diario));
+    if (dados.ativos) setAtivos(a => mesclarPorId(a, dados.ativos));
+    if (dados.abastecimentos) setAbast(a => mesclarPorId(a, dados.abastecimentos));
+    if (dados.ferias) setFerias(a => mesclarPorId(a, dados.ferias));
+    if (dados.rdosEmitidos) setRdos(a => mesclarPorId(a, dados.rdosEmitidos));
+    if (dados.empresa) setEmpresa(e => ({ ...e, ...dados.empresa }));
+    if (dados.produtividade) setProd(a => mesclarPorId(a, dados.produtividade));
+    if (dados.recebimentos) setReceb(a => mesclarPorId(a, dados.recebimentos));
+    if (dados.movimentacoes) setMov(a => mesclarPorId(a, dados.movimentacoes));
+    if (dados.ferramentas) setFerr(a => mesclarPorId(a, dados.ferramentas));
+    if (dados.links) setLinks(a => mesclarPorId(a, dados.links));
+    if (dados.adiantamentos) setAdiant(a => mesclarPorId(a, dados.adiantamentos));
+    if (dados.manutencoes) setManut(a => mesclarPorId(a, dados.manutencoes));
+    if (dados.folhasSalvas) setFolhasSalvas(a => mesclarPorId(a, dados.folhasSalvas));
+    if (dados.cronogramas) setCronog(c => ({ ...c, ...dados.cronogramas }));
+    if (dados.movEquip) setMovEquip(a => mesclarPorId(a, dados.movEquip));
+    if (dados.despesasAvulsas) setDespesasAvulsas(a => mesclarPorId(a, dados.despesasAvulsas));
+    if (dados.fotosObras) setFotosObras(a => mesclarPorId(a, dados.fotosObras));
+    if (dados.fornecedores) setFornecedores(a => mesclarPorId(a, dados.fornecedores));
+    if (dados.clientes) setClientes(a => mesclarPorId(a, dados.clientes));
   };
 
-  const login = (u) => {
+  const upsertUsuarioLista = (lista, u) => {
+    const arr = Array.isArray(lista) ? lista : [];
+    const idx = arr.findIndex(x => String(x.id) === String(u.id) || (u.firebaseUid && x.firebaseUid === u.firebaseUid && x.perfil === u.perfil));
+    if (idx === -1) return [...arr, u];
+    return arr.map((x, i) => i === idx ? { ...x, ...u } : x);
+  };
+
+  const login = async (u) => {
+    const eidNovo = u.empresaId || null;
+    if (eidNovo !== (empresaCarregadaRef.current || null)) {
+      // Os dados em memória são de outra empresa (ou de antes de existir empresa).
+      // Grava o login no prefixo certo e recarrega, para nunca misturar dados entre empresas.
+      if (eidNovo) localStorage.setItem("_kmzero_empresaId", eidNovo);
+      else localStorage.removeItem("_kmzero_empresaId");
+      setEmpresaId(eidNovo);
+      const lista = await store.get("usuarios");
+      await store.set("usuarios", upsertUsuarioLista(lista, u));
+      await store.set("usuarioLogado", u);
+      window.location.reload();
+      return;
+    }
     if (u.empresaId) {
       setEmpresaId(u.empresaId);
       setEmpresaIdState(u.empresaId);
@@ -461,11 +516,7 @@ export default function App() {
     }
     setUsuario(u);
     // Guarda/atualiza o perfil na lista deste aparelho (pra próxima vez entrar por PIN / "Continuar como")
-    setUsuarios(us => {
-      const idx = us.findIndex(x => String(x.id) === String(u.id) || (u.firebaseUid && x.firebaseUid === u.firebaseUid && x.perfil === u.perfil));
-      if (idx === -1) return [...us, u];
-      return us.map((x, i) => i === idx ? { ...x, ...u } : x);
-    });
+    setUsuarios(us => upsertUsuarioLista(us, u));
     store.set("usuarioLogado", u);
     if (u.perfil === "gestor") setTela("gestor");
     else setTela("home");
@@ -490,9 +541,11 @@ export default function App() {
     try { await logoutFirebase(); } catch (e) {}
     setUsuario(null);
     setEmpresaIdState(null);
-    setEmpresaId(null);
     store.set("usuarioLogado", null);
-    setTela("login");
+    setEmpresaId(null);
+    // Recarrega para limpar TODO o estado em memória (evita levar dados desta empresa
+    // para a nuvem de outra empresa se o próximo login for de outra conta)
+    window.location.reload();
   };
   const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
 
@@ -602,7 +655,7 @@ export default function App() {
 
   const render = () => {
     switch (tela) {
-      case "login":      return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRegistro={() => setTela("registro")} />;
+      case "login":      return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRemoverUsuario={id => setUsuarios(us => us.filter(x => String(x.id) !== String(id)))} onRegistro={() => setTela("registro")} />;
       case "registro":   return <TelaRegistro onBack={() => setTela("login")} onRegistrado={login} />;
       case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} onNav={setTela} onLogout={logout} />;
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
@@ -734,7 +787,7 @@ export default function App() {
       />;
 
       case "gerar_simulacao": return <TelaGerarSimulacao onGerar={() => {
-        confirmar("⚠️ ATENÇÃO!\n\nIsto vai SUBSTITUIR todos os RDOs, pedidos, fotos, despesas, presenças, etc.\n\nUse apenas pra testar o app.\n\nDeseja continuar?", () => {
+        confirmar("⚠️ ATENÇÃO!\n\nIsto vai SUBSTITUIR todos os RDOs, pedidos, fotos, despesas, presenças, etc. por dados FICTÍCIOS.\n\n☁️ Com a nuvem ativa, isso vai para a NUVEM e para TODOS os aparelhos da empresa.\n\nUse apenas numa empresa de teste.\n\nDeseja continuar?", () => {
           const sim = gerarDadosMes30Dias();
           setHistorico(sim.historico);
           setFotosObras(sim.fotosObras);
@@ -752,7 +805,7 @@ export default function App() {
           voltar();
         });
       }} onBack={voltar} />;
-      default:           return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRegistro={() => setTela("registro")} />;
+      default:           return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRemoverUsuario={id => setUsuarios(us => us.filter(x => String(x.id) !== String(id)))} onRegistro={() => setTela("registro")} />;
     }
   };
 

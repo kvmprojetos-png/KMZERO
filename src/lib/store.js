@@ -1,7 +1,7 @@
 import { getApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
-import { criarContaSecundaria, emailParaAuth } from "../firebase.js";
+import { criarContaSecundaria, emailParaAuth, usuarioAtual } from "../firebase.js";
 
 let _empresaId = null;
 
@@ -117,17 +117,30 @@ export async function removerDocNuvem(colecao, id) {
   catch (e) { console.error("removerDocNuvem", colecao, e); return false; }
 }
 
-export function observarColecaoNuvem(colecao, callback) {
+/* callback(docs, meta) — meta.fromCache = true quando a resposta veio do cache local
+   (sem internet), e não do servidor. Quem consome decide o que confiar. */
+export function observarColecaoNuvem(colecao, callback, onErro) {
   const fb = cloudRefs();
   if (!fb || !_empresaId) return () => {};
   try {
     return onSnapshot(
       collection(fb.db, "empresas", _empresaId, colecao),
-      snap => callback(snap.docs.map(d => d.data())),
-      e => console.error("observarColecaoNuvem", colecao, e)
+      { includeMetadataChanges: false },
+      snap => callback(snap.docs.map(d => d.data()), { fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites }),
+      e => { console.error("observarColecaoNuvem", colecao, e); if (onErro) onErro(e); }
     );
   } catch (e) { console.error(e); return () => {}; }
 }
+
+/* Aplica sobre o registro local o que está no perfil da nuvem (usuarios/{uid}) — a nuvem manda */
+export const aplicarPerfilNuvem = (u, p) => !p ? u : ({
+  ...u,
+  nome: p.nome || u.nome || "Equipe",
+  perfil: p.perfil || u.perfil || "encarregado",
+  cargo: p.cargo || u.cargo || "Encarregado",
+  obraId: (p.obraId !== undefined && p.obraId !== null) ? p.obraId : (u.obraId ?? null),
+  tel: p.tel || u.tel || "",
+});
 
 /* ── Funções multi-tenant ── */
 
@@ -155,13 +168,20 @@ export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, em
       criadoEm: Date.now(),
       gestorUid: firebaseUid,
     });
-    await setDoc(doc(fb.db, "usuarios", firebaseUid), {
-      empresaId,
-      nome: nomeGestor,
-      email: emailGestor,
-      perfil: "gestor",
-      criadoEm: Date.now(),
-    });
+    try {
+      await setDoc(doc(fb.db, "usuarios", firebaseUid), {
+        empresaId,
+        nome: nomeGestor,
+        email: emailGestor,
+        perfil: "gestor",
+        ativo: true,
+        criadoEm: Date.now(),
+      });
+    } catch (e) {
+      // Não deixa empresa órfã se o perfil não pôde ser gravado
+      try { await deleteDoc(empresaRef); } catch {}
+      throw e;
+    }
     return empresaId;
   } catch (e) {
     console.error("registrarEmpresa:", e);
@@ -211,6 +231,26 @@ export async function criarAcessoLancador({ email, senha, nome, cargo, obraId, p
   const emailAuth = emailParaAuth(email);
   const conta = await criarContaSecundaria(emailAuth, senha);
   if (!conta.ok) return conta;
+
+  // A conta já existia: garante que não estamos sobrescrevendo o perfil de outra pessoa
+  if (conta.jaExistia) {
+    const eu = usuarioAtual();
+    if (eu && eu.uid === conta.uid) {
+      return { ok: false, erro: "Esse e-mail e senha sao os da SUA conta de gestor. Crie o acesso da equipe com outro e-mail." };
+    }
+    let existente = null;
+    try {
+      const snap = await getDoc(doc(fb.db, "usuarios", conta.uid));
+      existente = snap.exists() ? snap.data() : null;
+    } catch (e) {
+      // Sem permissão de leitura = perfil de outra empresa
+      return { ok: false, erro: "Este login ja pertence a outra empresa. Use outro e-mail." };
+    }
+    if (existente && (existente.empresaId !== _empresaId || existente.perfil === "gestor")) {
+      return { ok: false, erro: "Este login ja pertence a outra conta ou empresa. Use outro e-mail." };
+    }
+  }
+
   try {
     await setDoc(doc(fb.db, "usuarios", conta.uid), semUndefined({
       empresaId: _empresaId,
@@ -221,7 +261,7 @@ export async function criarAcessoLancador({ email, senha, nome, cargo, obraId, p
       tel: tel || "",
       ativo: true,
       criadoEm: Date.now(),
-    }));
+    }), { merge: true });
     return { ok: true, uid: conta.uid, emailAuth, jaExistia: conta.jaExistia };
   } catch (e) {
     console.error("criarAcessoLancador (perfil):", e);

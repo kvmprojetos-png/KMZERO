@@ -56,7 +56,11 @@ Fluxos:
 - **Sistema → Acessos do App → Adicionar** → o gestor cria a conta do encarregado na nuvem.
 - **Primeiro acesso da equipe** (tela de login, em qualquer celular) → e-mail + senha → o app baixa a obra, a equipe e tudo da empresa.
 - Todos os cadastros e lançamentos sincronizam entre os aparelhos em tempo real (`src/lib/cloudSync.js`). Fotos em base64 ficam só no aparelho; fotos de obra sobem pelo Storage.
-- **Remover acesso** desativa a pessoa em todos os aparelhos.
+- **Remover acesso** desativa a pessoa: a nuvem passa a recusar o acesso e o app dela sai sozinho na próxima abertura (com internet).
+- **Senha da equipe**: o gestor não consegue trocar a senha de outra pessoa. Se ela esqueceu: e-mail real → botão "Enviar link para redefinir a senha" em Acessos do App; login sem e-mail (ex.: `joao`) → crie um acesso novo com outro login.
+- **Offline**: o Firestore guarda cache no aparelho. Sem sinal o app continua com os dados já baixados e o que for lançado sobe quando a conexão voltar. Uma resposta vinda do cache nunca apaga nada localmente.
+- **Sair / trocar de empresa** recarrega o app para nunca misturar dados de duas empresas no mesmo aparelho.
+- **Restaurar backup** mescla o arquivo aos dados atuais (mesmo id vence). **Apagar lançamentos** e **Gerar 30 dias** afetam a nuvem e todos os aparelhos da empresa: use só em empresa de teste.
 
 ### Publicar as regras de segurança (obrigatório uma vez)
 

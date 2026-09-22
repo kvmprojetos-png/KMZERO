@@ -97,8 +97,8 @@ service cloud.firestore {
       // Só o gestor edita o cadastro da empresa (e não pode trocar o dono)
       allow update: if logado() && souGestor() && minhaEmpresa() == empresaId
         && request.resource.data.gestorUid == resource.data.gestorUid;
-      allow delete: if logado() && souGestor() && minhaEmpresa() == empresaId
-        && resource.data.gestorUid == request.auth.uid;
+      // Quem criou a empresa pode apagá-la (inclusive para desfazer um cadastro que parou no meio)
+      allow delete: if logado() && resource.data.gestorUid == request.auth.uid;
 
       // Lista de acessos do app (contém dados sensíveis): só o gestor
       match /acessos/{docId} {

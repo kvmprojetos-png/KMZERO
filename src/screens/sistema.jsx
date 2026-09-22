@@ -122,9 +122,9 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
       try {
         const dados = JSON.parse(ev.target.result);
         if (!dados.obras || !dados.trabalhadores) throw new Error("inválido");
-        if (!confirm("Tem certeza? Os dados atuais serão substituídos pelos do arquivo.")) return;
+        if (!confirm("Restaurar este backup?\n\nOs registros do arquivo serão MESCLADOS aos atuais (mesmo id: vale o do arquivo). Nada é apagado.\n\nCom a nuvem ativa, o resultado vale para toda a empresa e todos os aparelhos.")) return;
         onRestaurar(dados);
-        setSucesso("✅ Dados restaurados com sucesso!");
+        setSucesso("✅ Backup mesclado com sucesso!");
       } catch {
         setErro("⚠️ Arquivo inválido. Verifique se é um backup do KMZERO.");
       }
@@ -138,9 +138,9 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
     try {
       const dados = JSON.parse(textoImport);
       if (!dados.obras || !dados.trabalhadores) throw new Error("inválido");
-      if (!confirm("Tem certeza? Os dados atuais serão substituídos.")) return;
+      if (!confirm("Restaurar este backup?\n\nOs registros serão MESCLADOS aos atuais (mesmo id: vale o do backup). Nada é apagado.\n\nCom a nuvem ativa, o resultado vale para toda a empresa e todos os aparelhos.")) return;
       onRestaurar(dados);
-      setSucesso("✅ Dados restaurados!");
+      setSucesso("✅ Backup mesclado!");
       setTextoImport("");
     } catch {
       setErro("⚠️ JSON inválido.");
@@ -192,7 +192,7 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
 
         <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
           <div style={{ fontWeight: 800, color: NAVY, marginBottom: 4, fontSize: 14 }}>📥 Restaurar Backup</div>
-          <div style={{ fontSize: 11, color: ORANGE, marginBottom: 10, fontWeight: 600 }}>⚠️ Cuidado: substitui todos os dados atuais.</div>
+          <div style={{ fontSize: 11, color: ORANGE, marginBottom: 10, fontWeight: 600 }}>⚠️ Mescla o backup aos dados atuais (mesmo id: vale o do backup). Com a nuvem ativa, vale para toda a empresa.</div>
 
           <label style={{ display: "block", padding: 12, borderRadius: 10, border: "1.5px dashed #c5d0e5", background: "#f9fafb", textAlign: "center", cursor: "pointer", fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 8 }}>
             📁 Escolher arquivo .json
@@ -1116,7 +1116,8 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
                 <div style={{ fontWeight: 800, color: "#9a3412", fontSize: 14 }}>Apagar Lançamentos</div>
               </div>
               <div style={{ fontSize: 11, color: "#7c2d12", lineHeight: 1.5, marginBottom: 6 }}>
-                Apaga só os dados de movimento (RDOs, pedidos, fotos, presenças, despesas, etc).
+                Apaga só os dados de movimento (RDOs, pedidos, fotos, presenças, despesas, etc).<br/>
+                <b>Com a nuvem ativa, apaga também na nuvem e nos celulares de toda a equipe.</b>
               </div>
               <div style={{ fontSize: 11, color: "#15803d", lineHeight: 1.5 }}>
                 ✅ Mantém obras, trabalhadores, acessos, empresa, fornecedores

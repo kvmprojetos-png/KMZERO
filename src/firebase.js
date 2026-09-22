@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword as fbUpdatePassword } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 const firebaseConfig = {
      apiKey: "AIzaSyDzyxMJHHktgj8NLg4Rg_FaYv6KevBhtkE",
@@ -13,7 +13,20 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+
+/* Firestore com cache persistente (IndexedDB): o app é offline-first, então
+   (1) sem internet a nuvem responde com os dados já baixados, não com vazio, e
+   (2) gravações feitas sem sinal ficam na fila e sobem quando a conexão volta,
+   mesmo que o app seja fechado no meio. */
+let db;
+try {
+     db = initializeFirestore(firebaseApp, {
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+     });
+} catch (e) {
+     console.warn("Firestore sem cache persistente (usando memoria):", e);
+     db = getFirestore(firebaseApp);
+}
 
 export async function loginFirebase(email, senha) {
      try {

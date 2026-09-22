@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { criarContaFirebase } from "../firebase.js";
-import { setEmpresaId, registrarEmpresa } from "../lib/store.js";
+import { criarContaFirebase, loginFirebase } from "../firebase.js";
+import { setEmpresaId, registrarEmpresa, carregarPerfilNuvem } from "../lib/store.js";
 import { NAVY, GOLD, GREEN, RED, BLUE, labelS, inputS } from "../theme.js";
 import { KMFooter } from "../components/ui.jsx";
 
@@ -50,7 +50,25 @@ export function TelaRegistro({ onBack, onRegistrado }) {
     setCarregando(true);
     setEtapa(3);
 
-    const r = await criarContaFirebase(conta.email.trim(), conta.senha);
+    let r = await criarContaFirebase(conta.email.trim(), conta.senha);
+    if (!r.ok && r.codigo === "auth/email-already-in-use") {
+      // A conta já existe (ex.: cadastro anterior que parou no meio). Se a senha bater, continua com ela.
+      const l = await loginFirebase(conta.email.trim(), conta.senha);
+      if (!l.ok) {
+        setCarregando(false);
+        setEtapa(2);
+        setErro("Este e-mail ja esta cadastrado com outra senha. Volte e use 'Entrar como Gestor' → 'Esqueci minha senha'.");
+        return;
+      }
+      const p = await carregarPerfilNuvem(l.user.uid);
+      if (p.ok && p.perfil && p.perfil.empresaId) {
+        setCarregando(false);
+        setEtapa(2);
+        setErro("Este e-mail ja tem uma empresa cadastrada. Volte e use 'Entrar como Gestor'.");
+        return;
+      }
+      r = { ok: true, user: l.user };
+    }
     if (!r.ok) {
       setCarregando(false);
       setEtapa(2);
@@ -76,7 +94,7 @@ export function TelaRegistro({ onBack, onRegistrado }) {
     if (!empresaId) {
       setCarregando(false);
       setEtapa(2);
-      setErro("Erro ao registrar empresa. Tente novamente.");
+      setErro("Erro ao registrar a empresa na nuvem. Verifique a internet e tente de novo. Se continuar, as regras do Firebase podem nao estar publicadas.");
       return;
     }
 

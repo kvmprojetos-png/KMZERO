@@ -4,7 +4,8 @@
 
    Cria contas TEMPORÁRIAS (gestor, lançador e um intruso de outra empresa),
    simula o cadastro da empresa, a criação do acesso do lançador, a leitura dos
-   dados e confere que o intruso NÃO enxerga nada. No final apaga tudo.
+   dados e confere que o intruso NÃO enxerga nada. No final apaga tudo e avisa
+   se algo não pôde ser apagado.
 
    Uso:   npm run firebase:testar
    Sai com código 1 se alguma verificação falhar.
@@ -52,22 +53,29 @@ const campos = obj => ({ fields: Object.fromEntries(Object.entries(obj).map(([k,
 const gravar = (token, caminho, obj) => http("PATCH", `${FS}/${caminho}`, { token, corpo: campos(obj) });
 const ler = (token, caminho) => http("GET", `${FS}/${caminho}`, { token });
 const apagar = (token, caminho) => http("DELETE", `${FS}/${caminho}`, { token });
+const objStorage = nome => `${ST}?uploadType=media&name=${encodeURIComponent(nome)}`;
+const urlStorage = nome => `${ST}/${encodeURIComponent(nome)}`;
 
 (async () => {
   console.log(`\n🧪 KMZERO — teste do Firebase (${PROJETO})  marca ${marca}\n`);
 
   const senha = `Teste-${marca}!`;
-  const gestor = await criarConta(`teste-gestor-${marca}@example.com`, senha);
-  const lancador = await criarConta(`teste-lancador-${marca}@example.com`, senha);
-  const intruso = await criarConta(`teste-intruso-${marca}@example.com`, senha);
   const eid = `empresa-teste-${marca}`;
   const eidIntruso = `empresa-intruso-${marca}`;
-  let uploadOk = false;
+  const foto = `empresas/${eid}/fotosObras/teste.jpg`;
+  const contas = {};          // criadas dentro do try, apagadas no finally mesmo em falha parcial
+  const limpeza = [];         // [descricao, fn] executados no finally, com status conferido
 
   try {
+    contas.gestor = await criarConta(`teste-gestor-${marca}@example.com`, senha);
+    contas.lancador = await criarConta(`teste-lancador-${marca}@example.com`, senha);
+    contas.intruso = await criarConta(`teste-intruso-${marca}@example.com`, senha);
+    const { gestor, lancador, intruso } = contas;
+
     // 1. Cadastro do gestor (mesma ordem do app: empresa → perfil)
     let r = await gravar(gestor.token, `empresas/${eid}`, { razaoSocial: "Empresa Teste KMZERO", gestorUid: gestor.uid, criadoEm: marca });
     registrar("Gestor cria a própria empresa", 200, r.status);
+    limpeza.push(["empresa de teste", () => apagar(gestor.token, `empresas/${eid}`)]);
     r = await gravar(gestor.token, `usuarios/${gestor.uid}`, { empresaId: eid, nome: "Gestor Teste", perfil: "gestor", ativo: true });
     registrar("Gestor grava o próprio perfil (usuarios/{uid})", 200, r.status, r.status === 403 ? "← REGRAS AINDA NÃO PUBLICADAS" : "");
     r = await ler(gestor.token, `usuarios/${gestor.uid}`);
@@ -76,6 +84,7 @@ const apagar = (token, caminho) => http("DELETE", `${FS}/${caminho}`, { token })
     // 2. Dados da empresa
     r = await gravar(gestor.token, `empresas/${eid}/obras/1`, { id: 1, nome: "Obra Teste" });
     registrar("Gestor grava uma obra", 200, r.status);
+    limpeza.push(["obra de teste", () => apagar(gestor.token, `empresas/${eid}/obras/1`)]);
     r = await ler(gestor.token, `empresas/${eid}/obras/1`);
     registrar("Gestor lê a obra", 200, r.status);
 
@@ -84,6 +93,7 @@ const apagar = (token, caminho) => http("DELETE", `${FS}/${caminho}`, { token })
     registrar("Gestor cria o perfil do lançador", 200, r.status);
     r = await gravar(gestor.token, `empresas/${eid}/acessos/1`, { id: 1, nome: "Lançador Teste", perfil: "encarregado" });
     registrar("Gestor grava a lista de acessos", 200, r.status);
+    limpeza.push(["lista de acessos", () => apagar(gestor.token, `empresas/${eid}/acessos/1`)]);
 
     // 4. Lançador em outro aparelho: lê o próprio perfil e os dados da empresa
     r = await ler(lancador.token, `usuarios/${lancador.uid}`);
@@ -92,6 +102,7 @@ const apagar = (token, caminho) => http("DELETE", `${FS}/${caminho}`, { token })
     registrar("Lançador lê a obra da empresa", 200, r.status);
     r = await gravar(lancador.token, `empresas/${eid}/presencas/2026-01-01_1`, { data: "2026-01-01", trabId: 1, status: "P" });
     registrar("Lançador grava presença", 200, r.status);
+    limpeza.push(["presença de teste", () => apagar(gestor.token, `empresas/${eid}/presencas/2026-01-01_1`)]);
     r = await ler(lancador.token, `empresas/${eid}/acessos/1`);
     registrar("Lançador NÃO lê a lista de acessos (só gestor)", 403, r.status);
     r = await gravar(lancador.token, `usuarios/${lancador.uid}`, { empresaId: eid, nome: "Hacker", perfil: "gestor", ativo: true });
@@ -99,6 +110,7 @@ const apagar = (token, caminho) => http("DELETE", `${FS}/${caminho}`, { token })
 
     // 5. Intruso (conta de outra empresa) não enxerga nada
     await gravar(intruso.token, `empresas/${eidIntruso}`, { razaoSocial: "Intruso", gestorUid: intruso.uid });
+    limpeza.push(["empresa do intruso", () => apagar(intruso.token, `empresas/${eidIntruso}`)]);
     await gravar(intruso.token, `usuarios/${intruso.uid}`, { empresaId: eidIntruso, nome: "Intruso", perfil: "gestor", ativo: true });
     r = await ler(intruso.token, `empresas/${eid}/obras/1`);
     registrar("Intruso NÃO lê obra de outra empresa", 403, r.status);
@@ -109,36 +121,55 @@ const apagar = (token, caminho) => http("DELETE", `${FS}/${caminho}`, { token })
     r = await ler(intruso.token, `usuarios/${gestor.uid}`);
     registrar("Intruso NÃO lê perfil de outra empresa", 403, r.status);
 
-    // 6. Storage (foto de obra)
-    r = await http("POST", `${ST}?uploadType=media&name=${encodeURIComponent(`empresas/${eid}/fotosObras/teste.jpg`)}`, { token: lancador.token, corpo: "fake-jpeg-bytes", tipo: "image/jpeg" });
-    registrar("Lançador envia foto para o Storage", 200, r.status);
-    uploadOk = r.status === 200;
-    r = await http("POST", `${ST}?uploadType=media&name=${encodeURIComponent(`empresas/${eid}/fotosObras/arquivo.exe`)}`, { token: lancador.token, corpo: "MZ", tipo: "application/octet-stream" });
+    // 6. Storage (foto de obra) — isolamento igual ao do Firestore
+    r = await http("POST", objStorage(foto), { token: lancador.token, corpo: "fake-jpeg-bytes", tipo: "image/jpeg" });
+    registrar("Lançador envia foto para o Storage", 200, r.status, r.status === 403 ? "← regras do Storage não publicadas OU conta de serviço cross-service não liberada" : "");
+    if (r.status === 200) limpeza.push(["foto de teste no Storage", () => http("DELETE", urlStorage(foto), { token: gestor.token })]);
+    r = await http("GET", urlStorage(foto), { token: lancador.token });
+    registrar("Lançador lê a própria foto", 200, r.status);
+    r = await http("GET", urlStorage(foto), { token: intruso.token });
+    registrar("Intruso NÃO lê foto de outra empresa", 403, r.status);
+    r = await http("POST", objStorage(`empresas/${eid}/fotosObras/invasao.jpg`), { token: intruso.token, corpo: "x", tipo: "image/jpeg" });
+    registrar("Intruso NÃO envia foto para outra empresa", 403, r.status);
+    r = await http("POST", objStorage(`empresas/${eid}/fotosObras/arquivo.exe`), { token: lancador.token, corpo: "MZ", tipo: "application/octet-stream" });
     registrar("Storage recusa arquivo que não é imagem", 403, r.status);
+    r = await http("DELETE", urlStorage(foto), { token: lancador.token });
+    registrar("Lançador NÃO apaga foto (só gestor)", 403, r.status);
 
-    // 7. Gestor desativa o lançador → perde acesso
+    // 7. Gestor desativa o lançador → perde acesso no Firestore e no Storage
     r = await gravar(gestor.token, `usuarios/${lancador.uid}`, { empresaId: eid, nome: "Lançador Teste", perfil: "encarregado", obraId: 1, ativo: false });
     registrar("Gestor desativa o lançador", 200, r.status);
     r = await ler(lancador.token, `empresas/${eid}/obras/1`);
     registrar("Lançador desativado NÃO lê mais a empresa", 403, r.status);
+    r = await http("POST", objStorage(`empresas/${eid}/fotosObras/depois.jpg`), { token: lancador.token, corpo: "x", tipo: "image/jpeg" });
+    registrar("Lançador desativado NÃO envia mais fotos", 403, r.status);
+    r = await http("GET", urlStorage(foto), { token: lancador.token });
+    registrar("Lançador desativado NÃO baixa mais fotos", 403, r.status);
   } catch (e) {
     console.error("💥 Erro inesperado:", e);
     falhas++;
   } finally {
     console.log("\n🧹 Limpando dados de teste...");
-    if (uploadOk) await http("DELETE", `${ST}/${encodeURIComponent(`empresas/${eid}/fotosObras/teste.jpg`)}`, { token: lancador.token });
-    await apagar(lancador.token, `empresas/${eid}/presencas/2026-01-01_1`);
-    await apagar(gestor.token, `empresas/${eid}/obras/1`);
-    await apagar(gestor.token, `empresas/${eid}/acessos/1`);
-    await apagar(gestor.token, `usuarios/${lancador.uid}`);
-    await apagar(gestor.token, `empresas/${eid}`);
-    await apagar(gestor.token, `usuarios/${gestor.uid}`);
-    await apagar(intruso.token, `empresas/${eidIntruso}`);
-    await apagar(intruso.token, `usuarios/${intruso.uid}`);
-    await apagarConta(gestor.token);
-    await apagarConta(lancador.token);
-    await apagarConta(intruso.token);
-    console.log("   contas e documentos temporários apagados.");
+    const pendentes = [];
+    for (const [desc, fn] of limpeza.reverse()) {
+      try {
+        const r = await fn();
+        if (![200, 204].includes(r.status)) pendentes.push(`${desc} (HTTP ${r.status})`);
+      } catch (e) { pendentes.push(`${desc} (${e.message})`); }
+    }
+    // Perfis por último (as regras dependem deles); o próprio usuário pode apagar o seu
+    if (contas.gestor && contas.lancador) { const r = await apagar(contas.gestor.token, `usuarios/${contas.lancador.uid}`); if (![200].includes(r.status)) pendentes.push(`perfil do lançador (HTTP ${r.status})`); }
+    if (contas.gestor) { const r = await apagar(contas.gestor.token, `usuarios/${contas.gestor.uid}`); if (![200].includes(r.status)) pendentes.push(`perfil do gestor (HTTP ${r.status})`); }
+    if (contas.intruso) { const r = await apagar(contas.intruso.token, `usuarios/${contas.intruso.uid}`); if (![200].includes(r.status)) pendentes.push(`perfil do intruso (HTTP ${r.status})`); }
+    for (const nome of ["gestor", "lancador", "intruso"]) {
+      if (contas[nome]) { const r = await apagarConta(contas[nome].token); if (r.status !== 200) pendentes.push(`conta ${nome} (HTTP ${r.status})`); }
+    }
+    if (pendentes.length) {
+      console.log("   ⚠️ Não foi possível apagar:\n   - " + pendentes.join("\n   - "));
+      console.log(`   (procure por "${marca}" no console do Firebase para limpar à mão)`);
+    } else {
+      console.log("   contas e documentos temporários apagados.");
+    }
   }
 
   const total = resultados.length;
