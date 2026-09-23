@@ -17,3 +17,6 @@ dist-preview/
 *-firebase-adminsdk-*.json
 *service-account*.json
 .env*.local
+
+# Dossiê de marca (capturas geradas localmente; a pasta oficial fica no Desktop)
+/dossie/
