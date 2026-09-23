@@ -488,17 +488,26 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
   for (let i = 0; i < primDia; i++) cells.push(null);
   for (let d = 1; d <= totalDias; d++) cells.push(d);
 
+  // Só entra na conta quem tem ponto lançado no dia: quem ainda não tinha sido
+  // contratado, estava de férias ou em outra obra não pode "puxar" a % para baixo.
+  const resumoDia = (d) => {
+    if (!d) return null;
+    const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const pres = historico[iso] || {};
+    const marcados = trabObra.map(t => pres[t.id]).filter(Boolean);
+    if (!marcados.length) return null;
+    const validos = marcados.filter(s => s !== "Feriado");
+    if (!validos.length) return { feriado: true };
+    const pontos = validos.reduce((s, x) => s + (x === "Presente" ? 1 : x === "Meia" ? 0.5 : 0), 0);
+    return { pontos, total: validos.length, pct: pontos / validos.length };
+  };
   const corDoDia = (d) => {
     if (!d) return "transparent";
-    const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const pres = historico[iso];
-    if (!pres) return "#f0f0f0";
-    const total = trabObra.length;
-    const presentes = trabObra.filter(t => pres[t.id] === "Presente").length;
-    if (total === 0) return "#f0f0f0";
-    const pct = presentes / total;
-    if (pct >= 0.8) return GREEN;
-    if (pct >= 0.5) return ORANGE;
+    const r = resumoDia(d);
+    if (!r) return "#f0f0f0";
+    if (r.feriado) return STATUS_COLOR.Feriado;
+    if (r.pct >= 0.8) return GREEN;
+    if (r.pct >= 0.5) return ORANGE;
     return RED;
   };
 
@@ -515,10 +524,12 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Calendário" sub="Histórico de presenças" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12, maxWidth: 440 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
+        {/* No PC o calendário tem largura limitada e o detalhe do dia fica ao lado; no celular empilha. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ flex: "1 1 300px", maxWidth: 440, background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <button onClick={() => navMes(-1)} style={{ background: LIGHT, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 16 }}>‹</button>
             <div style={{ fontWeight: 800, color: NAVY, fontSize: 14 }}>{meses[mes]} {ano}</div>
@@ -533,29 +544,39 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
                 aspectRatio: "1", border: diaSel === d ? `2px solid ${NAVY}` : "none", borderRadius: 8,
                 background: corDoDia(d), color: !d || corDoDia(d) === "#f0f0f0" ? "#888" : "#fff",
                 fontWeight: 700, fontSize: 13, cursor: d ? "pointer" : "default", opacity: d ? 1 : 0,
-              }}>{d || ""}</button>
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+              }}>
+                <span>{d || ""}</span>
+                {(() => {
+                  const r = resumoDia(d);
+                  if (!r) return null;
+                  return <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.9 }}>{r.feriado ? "Feriado" : `${String(r.pontos).replace(".", ",")}/${r.total}`}</span>;
+                })()}
+              </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 12, marginTop: 12, fontSize: 10, color: "#666", justifyContent: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 12px", marginTop: 12, fontSize: 10, color: "#666", justifyContent: "center" }}>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: GREEN, borderRadius: 2, marginRight: 4 }}></span>≥80%</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: ORANGE, borderRadius: 2, marginRight: 4 }}></span>50-79%</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: RED, borderRadius: 2, marginRight: 4 }}></span>&lt;50%</span>
+            <span><span style={{ display: "inline-block", width: 10, height: 10, background: STATUS_COLOR.Feriado, borderRadius: 2, marginRight: 4 }}></span>Feriado</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#f0f0f0", borderRadius: 2, marginRight: 4 }}></span>Sem dados</span>
           </div>
         </div>
 
         {diaSel && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ flex: "1 1 280px", maxWidth: 440, background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📅 Dia {diaSel}/{mes + 1}/{ano}</div>
             {trabObra.length === 0 && <div style={{ color: "#aaa", fontSize: 13 }}>Sem trabalhadores nesta obra.</div>}
             {trabObra.map(t => (
               <div key={t.id} style={{ display: "flex", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: "1px solid #f0f0f0" }}>
                 <span style={{ flex: 1, fontSize: 13, color: NAVY }}>{t.nome}</span>
-                <Badge label={presenDia[t.id] || "—"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small />
+                <Badge label={presenDia[t.id] || "Sem ponto"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small />
               </div>
             ))}
           </div>
         )}
+        </div>
       </div>
       <KMFooter />
     </div>
@@ -855,6 +876,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
   const [persPagamento, setPersPagamento] = useState(""); // data de pagamento
   // ════ obra ════
   const [obraId, setObraId] = useState("todas");
+  const [equipeFiltro, setEquipeFiltro] = useState("todas"); // "todas" | "1" | "2" | … | "sem"
   const [salvoAviso, setSalvoAviso] = useState(false);
 
   const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -940,7 +962,11 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     }
   };
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
+  // Filtros: obra + equipe de pagamento (Equipe 1, 2… recebem juntas; "sem" = paga à parte)
+  const equipeDe = t => (t.equipe ? String(t.equipe) : "sem");
+  const nomeEquipe = g => (g === "todas" ? "Todas as equipes" : g === "sem" ? "Sem equipe" : `Equipe ${g}`);
+  const daObra = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
+  const trabFiltro = equipeFiltro === "todas" ? daObra : daObra.filter(t => equipeDe(t) === equipeFiltro);
 
   // ════ VALES (adiantamentos) com data dentro do período [ini, fim] (ISO, inclusive), em qualquer regime.
   // Vale que já tem descontadoEm (foi descontado em outra folha arquivada) é ignorado: cada vale desconta uma vez só. ════
@@ -969,7 +995,16 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const ancora = new Date(t.ultimoPagamento + "T12:00:00");
     let presentes = 0, faltas = 0, atestados = 0, feriados = 0, contados = 0;
     let cursor = new Date(ancora), primeiroDiaUtil = null, ultimoDiaUtil = null, guard = 0;
-    while (contados < nUteis && guard < 120) {
+    // Mensal: o ciclo vai do dia seguinte ao último pagamento até o próximo "dia X" do mês
+    // (ficha: diaPagamentoMes). Semanal/quinzenal: 5 ou 10 dias úteis, como antes.
+    let fimMensal = null;
+    if (tipo === "mensal") {
+      const diaPg = Math.min(31, Math.max(1, parseInt(t.diaPagamentoMes, 10) || 5));
+      const noMes = (ano, mes) => new Date(ano, mes, Math.min(diaPg, new Date(ano, mes + 1, 0).getDate()), 12);
+      fimMensal = noMes(ancora.getFullYear(), ancora.getMonth());
+      if (fimMensal <= ancora) fimMensal = noMes(ancora.getFullYear(), ancora.getMonth() + 1);
+    }
+    while ((fimMensal ? cursor < fimMensal : contados < nUteis) && guard < 400) {
       guard++;
       cursor.setDate(cursor.getDate() + 1);
       if (cursor.getDay() === 0 || cursor.getDay() === 6) continue;
@@ -995,7 +1030,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       adiantIds = vales.map(a => a.id);
     }
     const liquido = Math.max(0, bruto - adiantDesconto);
-    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: ultimoDiaUtil };
+    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: fimMensal ? `${fimMensal.getFullYear()}-${String(fimMensal.getMonth() + 1).padStart(2, "0")}-${String(fimMensal.getDate()).padStart(2, "0")}` : ultimoDiaUtil };
   };
 
   const calcular = (t) => {
@@ -1144,11 +1179,12 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     </style></head><body><div class="page">
       <div class="hd"><div class="logo">KM<span>ZERO</span><small>ENGENHARIA &amp; ARQUITETURA</small></div>
       <div class="hd-doc"><b>FOLHA DE PAGAMENTO</b><br>KMZ-PL-001<br>${ehCiclo ? "Por Ciclo" : "Regime " + tipoRegime}</div></div>
-      <h1>Folha de Pagamento${ehCiclo ? " — Por Ciclo" : ""}</h1>
+      <h1>Folha de Pagamento${ehCiclo ? " — Por Ciclo" : ""}${equipeFiltro !== "todas" ? " — " + nomeEquipe(equipeFiltro) : ""}</h1>
       <div class="ident">
         <div><k>Empresa</k><b>${empresa.razaoSocial || empresa.nomeFantasia || "KM"}</b></div>
         <div><k>CNPJ</k><b>${empresa.cnpj || "—"}</b></div>
         <div><k>Obra</k><b>${obraNome}</b></div>
+        <div><k>Equipe</k><b>${nomeEquipe(equipeFiltro)}</b></div>
         <div><k>Período</k><b>${periodoTxt}</b></div>
       </div>
       <table>
@@ -1161,7 +1197,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     </div>
     <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
     </body></html>`;
-    abrirOuBaixarHTML(html, `Folha-KMZERO-${ehCiclo ? "ciclo" : tipoRegime}-${dataLocalIso()}.html`);
+    abrirOuBaixarHTML(html, `Folha-KMZERO-${ehCiclo ? "ciclo" : tipoRegime}${equipeFiltro !== "todas" ? "-" + nomeEquipe(equipeFiltro).replace(/s+/g, "") : ""}-${dataLocalIso()}.html`);
   };
 
   return (
@@ -1367,13 +1403,50 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
           );
         })()}
 
+        {/* Equipe de pagamento: cada equipe recebe num dia — filtra para gerar a folha dela */}
+        {(() => {
+          const grupos = [...new Set(daObra.map(equipeDe))].sort((a, b) => (a === "sem") - (b === "sem") || a.localeCompare(b));
+          if (!grupos.some(g => g !== "sem")) return null;
+          const fmtD = iso => iso ? new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+          // Dia de pagamento da equipe = data mais comum entre os ciclos dos membros
+          const diaDaEquipe = g => {
+            const cont = {};
+            daObra.filter(t => equipeDe(t) === g).forEach(t => { const p = calcularCiclo(t).proxPagamento; if (p) cont[p] = (cont[p] || 0) + 1; });
+            return Object.entries(cont).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+          };
+          const chip = (g, n, sub) => {
+            const ativo = equipeFiltro === g;
+            return (
+              <button key={g} type="button" aria-pressed={ativo} onClick={() => setEquipeFiltro(g)} style={{
+                flex: "1 1 0", minWidth: 96, padding: "8px 10px", borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                background: ativo ? NAVY : "#fff", color: ativo ? "#fff" : NAVY, border: `1.5px solid ${ativo ? NAVY : "#e2e8f0"}`,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 800 }}>{nomeEquipe(g)} <span style={{ fontWeight: 600, opacity: 0.7 }}>· {n}</span></div>
+                {sub && <div style={{ fontSize: 10, opacity: 0.8, marginTop: 1 }}>{sub}</div>}
+              </button>
+            );
+          };
+          return (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: 0.5, marginBottom: 6 }}>👥 EQUIPE DE PAGAMENTO</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {chip("todas", daObra.length, "")}
+                {grupos.map(g => {
+                  const dia = tipoRegime === "ciclo" ? diaDaEquipe(g) : "";
+                  return chip(g, daObra.filter(t => equipeDe(t) === g).length, dia ? `paga ${fmtD(dia)}` : "");
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
         <div style={{ background: `linear-gradient(135deg,${GREEN},#1a8540)`, borderRadius: 14, padding: 16, marginBottom: 12, color: "#fff", boxShadow: "0 4px 14px #2aa84f44" }}>
-          <div style={{ fontSize: 11, opacity: 0.9 }}>Total da folha {tipoRegime} (líquido)</div>
+          <div style={{ fontSize: 11, opacity: 0.9 }}>Total da folha {tipoRegime}{equipeFiltro !== "todas" ? ` · ${nomeEquipe(equipeFiltro)}` : ""} (líquido)</div>
           <div style={{ fontSize: 30, fontWeight: 900 }}>R$ {totalFolha.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
           <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{trabFiltro.length} trabalhador(es) • {tipoRegime === "ciclo" ? "ciclo por colaborador" : (() => {
             const p = calcularPeriodo();
@@ -1417,7 +1490,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
         <Btn label="📄 EXPORTAR FOLHA EM PDF" color={GOLD} onClick={exportarPDF} />
 
         <button onClick={() => {
-          if (!confirm(`Salvar folha da ${quinzena}ª quinzena de ${meses[mes]}/${ano} no histórico?`)) return;
+          if (!confirm(`Salvar folha da ${quinzena}ª quinzena de ${meses[mes]}/${ano}${equipeFiltro !== "todas" ? " — " + nomeEquipe(equipeFiltro) : ""} no histórico?`)) return;
           const periodo = `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
           const itens = trabFiltro.map(t => {
             const c = calcular(t);
@@ -1427,6 +1500,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
           onSalvarFolha({
             id: idFolha, mes, ano, quinzena, periodo,
             obraId: obraId === "todas" ? null : obraId,
+            equipe: equipeFiltro === "todas" ? null : equipeFiltro,
             itens, totalLiquido: totalFolha, totalAdiant: totalAdiantQuinzena,
             ts: Date.now(),
           });
@@ -1463,7 +1537,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 700, color: NAVY }}>{t.nome}</div>
-                        <div style={{ fontSize: 10, color: "#888" }}>{t.cargo} • {(t.tipoFolha || "quinzenal") === "semanal" ? "Semanal" : "Quinzenal"} • R$ {(parseFloat(t.diaria) || 0).toFixed(2)}/dia</div>
+                        <div style={{ fontSize: 10, color: "#888" }}>{t.cargo} • {t.equipe ? `Equipe ${t.equipe} • ` : ""}{(t.tipoFolha || "quinzenal") === "semanal" ? "Semanal" : t.tipoFolha === "mensal" ? `Mensal (dia ${t.diaPagamentoMes || 5})` : "Quinzenal"} • R$ {(parseFloat(t.diaria) || 0).toFixed(2)}/dia</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontWeight: 800, color: GREEN, fontSize: 14 }}>R$ {c.liquido.toFixed(2)}</div>
@@ -1490,7 +1564,25 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
               })}
               {trabFiltro.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "#aaa" }}>Nenhum trabalhador.</div>}
             </div>
-          <Btn label="📄 EXPORTAR FOLHA EM PDF" color={GOLD} onClick={exportarPDF} />
+          <Btn label={equipeFiltro !== "todas" ? `📄 GERAR FOLHA — ${nomeEquipe(equipeFiltro).toUpperCase()}` : "📄 EXPORTAR FOLHA EM PDF"} color={GOLD} onClick={exportarPDF} />
+          {/* Fechar a equipe inteira: marca todos como pagos na data do ciclo de cada um */}
+          {equipeFiltro !== "todas" && (() => {
+            const pagaveis = trabFiltro.map(t => ({ t, c: calcular(t) })).filter(x => !x.c.semAncora && x.c.proxPagamento);
+            if (!pagaveis.length) return null;
+            const fmtD = iso => new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+            const total = pagaveis.reduce((s, x) => s + x.c.liquido, 0);
+            const datas = [...new Set(pagaveis.map(x => x.c.proxPagamento))].sort();
+            const semCiclo = trabFiltro.length - pagaveis.length;
+            return (
+              <button type="button" onClick={() => {
+                const aviso = `Marcar ${nomeEquipe(equipeFiltro)} como PAGA?\n\n${pagaveis.length} pessoa(s) · líquido R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\nPagamento: ${datas.map(fmtD).join(", ")}${semCiclo ? `\n\n${semCiclo} sem "último pagamento" ficam de fora.` : ""}\n\nGere o PDF antes: depois de marcar, o ciclo de cada um avança para o próximo período.`;
+                if (!confirm(aviso)) return;
+                pagaveis.forEach(({ t, c }) => onMarcarPago && onMarcarPago(t, c.proxPagamento));
+              }} style={{ width: "100%", padding: 12, marginTop: 8, background: GREEN, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+                ✓ Marcar {nomeEquipe(equipeFiltro)} como paga ({pagaveis.length}) · {datas.map(fmtD).join(", ")}
+              </button>
+            );
+          })()}
           </>
         )}
       </div>
@@ -1532,7 +1624,7 @@ export function TelaHistFolha({ obras, trabalhadores, folhasSalvas, onBack, onRe
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
               <div>
                 <div style={{ fontWeight: 800, color: NAVY, fontSize: 14 }}>📅 {f.quinzena}ª quinzena de {meses[f.mes]}/{f.ano}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>Período: {f.periodo}</div>
+                <div style={{ fontSize: 11, color: "#888" }}>Período: {f.periodo}{f.equipe ? ` • ${f.equipe === "sem" ? "Sem equipe" : "Equipe " + f.equipe}` : ""}</div>
                 <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>Salvo em {new Date(f.ts).toLocaleString("pt-BR")}</div>
               </div>
               <button onClick={() => { confirmar(`Remover folha de ${meses[f.mes]}/${f.ano}?`, () => { onRemover(f.id); }); }} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", cursor: "pointer", fontSize: 16, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
