@@ -96,6 +96,34 @@ Alternativa sem terminal: Console Firebase → Firestore Database → Regras →
 - Acessos antigos da equipe criados com "usuário sem @" não entram mais: cadastre o Gmail da pessoa em Acessos do App.
 - Faça o primeiro login **no aparelho que tem os dados reais**: ele envia os cadastros para a nuvem e os outros aparelhos passam a receber. Antes disso, vale exportar um backup em Sistema → Backup.
 
+## 🌐 Site e domínio próprio
+
+O endereço do KMZERO tem duas partes:
+
+- **`/` (a raiz)** é a **vitrine**: página pública que apresenta o KMZERO Obras (o que faz, para quem, contato). Não pede login e não carrega o sistema.
+- **`/app/`** é o **sistema**: a tela de login e o app de campo/escritório. É esse endereço que a equipe instala no celular (ícone na tela inicial, funciona sem sinal). Quem já entrou uma vez e abre a raiz é levado direto para `/app/`.
+
+Hoje: https://kmzero.vercel.app (vitrine) e https://kmzero.vercel.app/app/ (sistema).
+
+### Domínio próprio (ex.: kmzero.com.br) — passo a passo
+
+Não precisa programar. Tenha em mãos o login da Vercel e do Firebase; leva uns 30 minutos mais o tempo de espera do item 4.
+
+1. **Registrar o domínio**
+   - `.com.br`: em https://registro.br → pesquisar `kmzero.com.br` → registrar. Pede CPF ou CNPJ e o valor é anual e baixo (algumas dezenas de reais por ano).
+   - `.app`: em um registrador internacional (Namecheap, GoDaddy, Squarespace Domains…) → pesquisar `kmzero.app` → registrar (cartão internacional).
+2. **Avisar a Vercel**: https://vercel.com → projeto `kmzero` → **Settings** → **Domains** → **Add** → digitar o domínio (ex.: `kmzero.com.br`) → Add. A Vercel mostra na tela os registros de DNS que ela espera. Deixe essa tela aberta.
+3. **Apontar o domínio para a Vercel**: no painel DNS do registrador (no Registro.br: "Editar zona DNS"; nos outros: "DNS" ou "DNS Management"), crie dois registros:
+   - Tipo **A** · nome `@` (ou em branco) · valor `76.76.21.21`
+   - Tipo **CNAME** · nome `www` · valor `cname.vercel-dns.com`
+
+   Use exatamente os valores que a Vercel mostrou no passo 2. Se forem diferentes destes, valem os da Vercel.
+4. **Esperar propagar**: de alguns minutos até algumas horas. Na tela Domains da Vercel o domínio ganha um ✓ verde quando estiver pronto (o certificado HTTPS é emitido sozinho).
+5. **Liberar o login com Google no domínio novo**: https://console.firebase.google.com → projeto `kmzero-aca24` → **Authentication** → **Settings** → **Authorized domains** → **Add domain** → `kmzero.com.br` (e também `www.kmzero.com.br`, se for usar). Sem isso, o botão "Entrar com Google" dá erro no domínio novo.
+6. **Conferir**: abrir `https://kmzero.com.br` (vitrine) e `https://kmzero.com.br/app/` (sistema) e fazer um login de teste.
+
+> **Depois do domínio, reinstale o app no celular pelo endereço novo**: abrir `https://kmzero.com.br/app/` no navegador → menu → "Adicionar à tela inicial" / "Instalar app". O ícone antigo, instalado por `kmzero.vercel.app`, continua abrindo o endereço antigo (que segue funcionando); remova-o para a equipe não confundir.
+
 ## � Documentação Técnica
 
 - [Dossiê Técnico KMZero](./docs/DOSSIE_TECNICO_KMZERO.md)

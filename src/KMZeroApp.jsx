@@ -11,6 +11,8 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "./components/ui.jsx";
+import { MenuLateral } from "./components/MenuLateral.jsx";
+import { useModoEscritorio } from "./lib/useLargura.js";
 import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
 
 /* ── Telas separadas por domínio ── */
@@ -40,6 +42,8 @@ export default function App() {
   const [tela, setTelaRaw]        = useState("login");
   const [historicoTelas, setHistoricoTelas] = useState([]); // pilha de navegação
   const [usuario, setUsuario]     = useState(null);
+  // Largura da tela: >= 1024 px vira "modo escritório" (só para gestor, ver `escritorio` abaixo)
+  const modoEscritorio = useModoEscritorio();
 
   // Wrapper inteligente: quando muda de tela, guarda a anterior no histórico
   const setTela = (novaTela) => {
@@ -251,6 +255,7 @@ export default function App() {
       try { await logoutFirebase(); } catch {}
       setUsuarios(us => us.filter(x => String(x.id) !== String(u.id)));
       store.set("usuarioLogado", null);
+      localStorage.removeItem("_kmzero_sessao");
       setUsuario(null);
       setTelaRaw("login");
       setTimeout(() => alert("⛔ Seu acesso foi desativado pelo gestor da empresa."), 300);
@@ -345,6 +350,7 @@ export default function App() {
         }
         setUsuario(userLogado);
         setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
+        localStorage.setItem("_kmzero_sessao", "1"); // a vitrine (/) manda direto para /app/
         verificarAcessoNuvem(userLogado); // em segundo plano
       } else {
         // Sem sessão local: pode ser a volta do login por redirecionamento (Google),
@@ -547,6 +553,7 @@ export default function App() {
       const lista = await store.get("usuarios");
       await store.set("usuarios", upsertUsuarioLista(lista, u));
       await store.set("usuarioLogado", u);
+      localStorage.setItem("_kmzero_sessao", "1");
       window.location.reload();
       return;
     }
@@ -556,6 +563,7 @@ export default function App() {
       localStorage.setItem("_kmzero_empresaId", u.empresaId);
     }
     setUsuario(u);
+    localStorage.setItem("_kmzero_sessao", "1"); // a página inicial (vitrine) manda direto para o app
     // Guarda/atualiza o perfil na lista deste aparelho (pra próxima vez entrar por PIN / "Continuar como")
     setUsuarios(us => upsertUsuarioLista(us, u));
     store.set("usuarioLogado", u);
@@ -574,6 +582,7 @@ export default function App() {
     setUsuario(null);
     setEmpresaIdState(null);
     store.set("usuarioLogado", null);
+    localStorage.removeItem("_kmzero_sessao");
     setEmpresaId(null);
     // Recarrega para limpar TODO o estado em memória (evita levar dados desta empresa
     // para a nuvem de outra empresa se o próximo login for de outra conta)
@@ -655,6 +664,17 @@ export default function App() {
     }
   };
 
+  // Modo escritório: gestor logado em tela larga (>= 1024 px) vê menu lateral à esquerda
+  // e a tela à direita. No celular (ou nas telas de entrada) nada muda.
+  const escritorio = modoEscritorio && !!usuario && usuario.perfil === "gestor" && !["login", "registro", "primeiro_acesso"].includes(tela);
+  // Só recalcula quando os dados mudam (gerarAlertas percorre várias coleções)
+  const badgesMenu = useMemo(() => escritorio ? {
+    pedidos: (pedidos || []).filter(p => p.status === "Aguardando").length,
+    aprovar_mov: (movimentacoes || []).filter(m => m.status === "Aguardando").length,
+    mensagens: (mensagens || []).filter(m => m.para === usuario.id && !m.lida).length,
+    alertas: gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos }).length,
+  } : {}, [escritorio, pedidos, movimentacoes, mensagens, usuario, obras, trabalhadores, equips, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos]);
+
   if (carregando) return (
     <div style={{ flex: 1, background: `linear-gradient(175deg,${NAVY},#071030)`, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
       <div style={{ fontSize: 52, fontWeight: 900, color: "#fff", letterSpacing: -2 }}>KM<span style={{ color: GOLD }}>ZERO</span></div>
@@ -731,7 +751,7 @@ export default function App() {
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
       case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={salvarFotoObraSync} />;
-      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
+      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
       case "obras":      return <TelaObras usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
@@ -995,6 +1015,11 @@ export default function App() {
             max-width: 520px !important;
           }
         }
+        /* Modo escritório (gestor em tela larga): menu lateral + conteúdo na largura toda */
+        .km-app-wrapper.km-escritorio {
+          max-width: none !important;
+          box-shadow: none !important;
+        }
         /* Ajustes para telas pequenas */
         @media (max-width: 380px) {
           .km-app-wrapper {
@@ -1028,11 +1053,24 @@ export default function App() {
           .km-tela-transicao { animation: none; }
         }
       `}</style>
-      <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#fff", position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
-        <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-          {render()}
+      {escritorio ? (
+        <div className="km-app-wrapper km-escritorio" style={{ width: "100%", maxWidth: "none", minHeight: "100vh", display: "flex", flexDirection: "row", alignItems: "stretch", backgroundColor: LIGHT, position: "relative", boxShadow: "none" }}>
+          <MenuLateral tela={tela} onNav={setTela} usuario={usuario} empresa={empresa} badges={badgesMenu} onLogout={logout} />
+          <div style={{ flex: 1, minWidth: 0, padding: "0 24px 24px", display: "flex", flexDirection: "column" }}>
+            <div style={{ maxWidth: 1280, margin: "0 auto", width: "100%", flex: 1, display: "flex", flexDirection: "column", backgroundColor: "#fff" }}>
+              <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                {render()}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#fff", position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
+          <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            {render()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

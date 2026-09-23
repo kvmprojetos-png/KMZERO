@@ -8,7 +8,8 @@ import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDoc
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { useModoEscritorio } from "../lib/useLargura.js";
 
 export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 }) {
   const [fotos, setFotos] = useState([]);
@@ -145,6 +146,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroData, setFiltroData] = useState("");
   const [fotoExpandida, setFotoExpandida] = useState(null);
+  const escritorio = useModoEscritorio(); // celular: 3 miniaturas por linha (como sempre); escritório: quantas couberem de 160 px
 
   const fotosFiltradas = fotos
     .filter(f => filtroObra === "todas" || String(f.obraId) === String(filtroObra))
@@ -209,7 +211,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
               <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6, padding: "0 4px" }}>
                 📅 {data} ({porData[data].length} foto{porData[data].length === 1 ? "" : "s"})
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+              <Grade min={160} gap={6} style={escritorio ? undefined : { gridTemplateColumns: "repeat(3, 1fr)" }}>
                 {porData[data].map(f => (
                   <div key={f.id} onClick={() => setFotoExpandida(f)} style={{ position: "relative", aspectRatio: "1", background: "#ddd", borderRadius: 8, overflow: "hidden", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
                     <img src={f.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -224,7 +226,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
                     </div>
                   </div>
                 ))}
-              </div>
+              </Grade>
             </div>
           ))
         )}

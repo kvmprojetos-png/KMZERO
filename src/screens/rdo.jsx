@@ -7,7 +7,7 @@ import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDoc
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
 export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
@@ -1473,6 +1473,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         {rdosEmitidos.length > 0 && (
           <div style={{ marginTop: 16 }}>
             <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosEmitidos.length})</div>
+            <Grade min={320} gap={6} style={{ marginBottom: 6 }}>
             {rdosEmitidos.slice(0, 10).map(r => {
               const o = obras.find(x => x.id === r.obraId);
               const baixar = () => {
@@ -1497,7 +1498,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                 });
               };
               return (
-                <div key={r.id} style={{ background: "#fff", borderRadius: 10, padding: "10px 14px", marginBottom: 6, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
+                <div key={r.id} style={{ background: "#fff", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                     <div style={{ fontSize: 22, marginRight: 10 }}>📄</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -1532,6 +1533,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                 </div>
               );
             })}
+            </Grade>
           </div>
         )}
 

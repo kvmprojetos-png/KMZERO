@@ -7,7 +7,7 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
 export function TelaEquip({ obra, equips, onBack, onSaveEquips }) {
   const obraEquips = equips.filter(e => e.obraId === obra.id);
@@ -192,12 +192,14 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
+        {lista.length > 0 && (
+        <Grade min={300} gap={8} style={{ marginBottom: 8 }}>
         {lista.map(a => {
           const obra = obras.find(o => o.id === a.obraId);
           const meusAbast = abastecimentos.filter(x => x.ativoId === a.id);
           const totalAbast = meusAbast.reduce((s, x) => s + x.valor, 0);
           return (
-            <div key={a.id} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+            <div key={a.id} style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 32, marginRight: 12 }}>{ICONS[a.tipo] || "⚙️"}</div>
                 <div style={{ flex: 1 }}>
@@ -217,6 +219,8 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
             </div>
           );
         })}
+        </Grade>
+        )}
         {lista.length === 0 && (
           <EmptyState
             icon="🚜"

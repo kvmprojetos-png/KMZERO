@@ -7,7 +7,7 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
 export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
   const [filtroObra, setFiltroObra] = useState("todas");
@@ -201,6 +201,8 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
+        {lista.length > 0 && (
+        <Grade min={300} gap={8} style={{ marginBottom: 8 }}>
         {lista.map(t => {
           const obra = obras.find(o => o.id === t.obraId);
           const aso = checaASO(t);
@@ -215,7 +217,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           else if (t.asoStatus === "Apto com restrições") indicadores.push({ icon: "⚠️", label: "Restrições", cor: ORANGE });
 
           return (
-            <div key={t.id} onClick={() => onVerDetalhe && onVerDetalhe(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
+            <div key={t.id} onClick={() => onVerDetalhe && onVerDetalhe(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
               {t.foto ? (
                 <img src={t.foto} alt="" style={{ width: 44, height: 44, borderRadius: 22, objectFit: "cover", border: `2px solid ${NAVY}`, marginRight: 10, flexShrink: 0 }} />
               ) : (
@@ -266,6 +268,8 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
             </div>
           );
         })}
+        </Grade>
+        )}
         {lista.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 20 }}>Nenhum resultado.</div>}
         <Btn label="➕ Adicionar Trabalhador" color={NAVY} onClick={() => setModal(true)} style={{ marginTop: 8 }} />
       </div>
