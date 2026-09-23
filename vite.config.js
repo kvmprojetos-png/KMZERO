@@ -69,7 +69,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        globIgnores: ['index.html'], // a vitrine (/) não entra no cache do app: sempre vem da rede
+        // A vitrine (/) e o que só ela usa (capturas da demo, og.png, termos) não entram no cache do app: sempre vêm da rede
+        globIgnores: ['index.html', 'capturas/**', 'og.png', 'termos.html', 'privacidade.html'],
         maximumFileSizeToCacheInBytes: 5000000,
         // Só as navegações dentro de /app/ caem no app; a raiz (/) é a vitrine estática
         navigateFallback: '/app/index.html',

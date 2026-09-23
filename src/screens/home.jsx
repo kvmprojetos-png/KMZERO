@@ -405,7 +405,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
     const textoVazio = "Nada ainda: os lançamentos da equipe aparecem aqui.";
     const indicadores = [
       { v: obrasAtivas.length,    l: "Obras ativas",       nav: "obras",      c: BLUE },
-      { v: trabalhadores.length,  l: "Trabalhadores",      nav: "equipe",     c: NAVY },
+      { v: trabalhadores.length,  l: "Trabalhadores",      nav: "equipe",     c: T.titulo },
       { v: presentesHoje,         l: "Presentes hoje",     nav: "calendario", c: GREEN },
       { v: pendentes,             l: "Pedidos aguardando", nav: "pedidos",    c: pendentes > 0 ? ORANGE : T.texto3 },
       { v: totalPendencias,       l: "Pendências",         nav: "alertas",    c: totalPendencias > 0 ? RED : GREEN },

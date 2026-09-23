@@ -44,7 +44,7 @@ export function TelaGerarSimulacao({ onGerar, onBack }) {
         <div style={{ background: T.avisoFundo, borderRadius: 12, padding: 12, marginBottom: 10, fontSize: 11, color: T.avisoTexto, lineHeight: 1.5 }}>
           ⚠️ <b>Cuidado:</b> Isto vai <b>SUBSTITUIR</b> todos os dados atuais (RDOs, pedidos, fotos, despesas, etc).<br/><br/>
           🗑️ Você pode <b>excluir cada um manualmente</b> depois pra ver o app vazio de novo.<br/><br/>
-          💾 Antes de gerar, recomendo fazer um <b>Backup</b> em <i>Sistema → Backup</i>.
+          💾 Antes de gerar, recomendo fazer um <b>Backup</b> em <i>Sistema → Exportar dados</i>.
         </div>
 
         <Btn label="🎬 GERAR 30 DIAS DE DADOS" color="#7c3aed" onClick={onGerar} />
@@ -349,7 +349,7 @@ export function TelaAjuda({ empresa, onBack }) {
     {
       id: "como_inicio",
       pergunta: "Como começo a usar o KMZERO?",
-      resposta: "O KMZERO já vem com dados de exemplo. Como gestor, você acessa o Painel do Gestor pela tela inicial. Pelo menu Sistema → Empresa, configura os dados da sua empresa. Pelo menu Recursos Humanos → Equipe, cadastra trabalhadores e encarregados. Pelo menu Obras & Recursos → Obras, cadastra as obras em andamento. Os encarregados acessam pelo seu próprio cadastro (criado em Sistema → Acessos do App).",
+      resposta: "Como gestor, você acessa o Painel pela tela inicial (quer ver o sistema cheio antes de cadastrar? Abra a demonstração em kmzero.vercel.app/app/?demo=1). Pelo menu Sistema → Empresa, configura os dados da sua empresa. Pelo menu Recursos Humanos → Equipe, cadastra trabalhadores e encarregados. Pelo menu Obras & Recursos → Obras, cadastra as obras em andamento. Os encarregados acessam pelo seu próprio cadastro (criado em Sistema → Usuários e acessos).",
     },
     {
       id: "como_rdo",
@@ -379,7 +379,7 @@ export function TelaAjuda({ empresa, onBack }) {
     {
       id: "encarregado_acessar",
       pergunta: "Como os encarregados acessam o aplicativo?",
-      resposta: "O gestor cadastra o Gmail de cada encarregado em Sistema → Acessos do App, escolhendo a obra. No celular, o encarregado abre o app e toca em \"Entrar com Google\" com esse Gmail: entra direto na empresa, sem senha para decorar. Os encarregados só veem a obra à qual estão vinculados.",
+      resposta: "O gestor cadastra o Gmail de cada encarregado em Sistema → Usuários e acessos, escolhendo a obra. No celular, o encarregado abre o app e toca em \"Entrar com Google\" com esse Gmail: entra direto na empresa, sem senha para decorar. Os encarregados só veem a obra à qual estão vinculados.",
     },
     {
       id: "offline",
@@ -394,7 +394,7 @@ export function TelaAjuda({ empresa, onBack }) {
     {
       id: "backup",
       pergunta: "Como faço backup dos dados?",
-      resposta: "Em Sistema → Backup, você pode exportar todos os dados em arquivo único para guardar no seu computador. Recomendamos fazer backup pelo menos uma vez por mês. Em breve, com a sincronização na nuvem ativa, o backup será automático.",
+      resposta: "Em Sistema → Exportar dados, você pode exportar todos os dados em arquivo único para guardar no seu computador. Com a sincronização na nuvem ativa, os dados já ficam guardados no Firebase; o arquivo exportado é uma cópia extra para o seu computador, que recomendamos gerar pelo menos uma vez por mês.",
     },
     {
       id: "suporte",
@@ -577,7 +577,7 @@ export function TelaAjuda({ empresa, onBack }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11 }}>
                 {[
                   ["🔒 Firebase Auth", "Google Cloud"],
-                  ["☁️ Firestore", "Banco em São Paulo"],
+                  ["☁️ Firestore", "Banco na nuvem do Google"],
                   ["📱 React + Vite", "Frontend moderno"],
                   ["🌐 Vercel", "CDN global"],
                   ["📄 jsPDF", "Relatórios ABNT"],
@@ -714,12 +714,12 @@ export function TelaAjuda({ empresa, onBack }) {
 
               <p>
                 <b>6. Responsabilidades</b><br/>
-                A KM Consultoria não se responsabiliza por perdas de dados decorrentes de falha do aparelho do usuário, exclusão acidental, ou problemas de conexão. Recomendamos backup periódico em Sistema → Backup.
+                A KM Consultoria não se responsabiliza por perdas de dados decorrentes de falha do aparelho do usuário, exclusão acidental, ou problemas de conexão. Recomendamos backup periódico em Sistema → Exportar dados.
               </p>
 
               <p>
                 <b>7. Atualizações</b><br/>
-                Estes termos podem ser atualizados a qualquer momento. A versão vigente sempre estará disponível dentro do aplicativo, em Sistema → Ajuda & Suporte → Termos de Uso.
+                Estes termos podem ser atualizados a qualquer momento. A versão vigente sempre estará disponível dentro do aplicativo, em Sistema → Ajuda → Termos de Uso.
               </p>
 
               <p>
@@ -761,7 +761,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
               <p>
                 <b>Onde os dados ficam</b><br/>
-                Os dados ficam armazenados localmente no aparelho do usuário e, quando autenticado pelo Firebase, em servidores do Google Cloud (data center em São Paulo, Brasil). O aplicativo não armazena senhas: a autenticação é feita pelo Google.
+                Os dados ficam armazenados localmente no aparelho do usuário e, quando autenticado pelo Firebase, em servidores do Google Cloud. O aplicativo não armazena senhas: a autenticação é feita pelo Google.
               </p>
 
               <p>
@@ -1209,7 +1209,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               <ul style={{ margin: "0 0 0 20px", padding: 0, fontSize: 12, color: T.sucessoTexto, lineHeight: 1.6 }}>
                 <li>Obras cadastradas</li>
                 <li>Trabalhadores (folha)</li>
-                <li>Acessos do app (logins)</li>
+                <li>Usuários e acessos (logins)</li>
                 <li>Dados da empresa</li>
                 <li>Fornecedores</li>
                 <li>Equipamentos e ativos</li>

@@ -470,7 +470,7 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title="Acessos do App" sub="Quem entra na sua empresa" onBack={onBack} />
+      <KMHeader title="Usuários e acessos" sub="Quem entra na sua empresa" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ background: "#f0f9ff", borderRadius: 12, padding: 12, marginBottom: 12, border: `1px solid ${T.infoBorda}`, fontSize: 11, color: T.infoTexto, lineHeight: 1.6 }}>
           Cadastre o <b>Gmail</b> de cada pessoa. Ela entra no app com "Entrar com Google" usando esse Gmail e já cai na sua empresa, na obra escolhida. Sem senha para passar.

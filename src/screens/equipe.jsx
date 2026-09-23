@@ -292,7 +292,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
 
         <div style={{ background: T.avisoFundo, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: T.avisoTexto, marginBottom: 10, lineHeight: 1.5 }}>
           💡 Esta tela cadastra <b>trabalhador</b> (folha, presença, frequência).<br/>
-          Pra dar <b>acesso ao app</b> (login do encarregado), vá em <b>⚙️ Sistema → 🔑 Acessos do App</b>.
+          Pra dar <b>acesso ao app</b> (login do encarregado), vá em <b>⚙️ Sistema → 🔑 Usuários e acessos</b>.
         </div>
         <Btn label="SALVAR" color={GREEN} onClick={() => {
           if (!form.nome || !form.cargo || !form.obraId) return;

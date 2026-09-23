@@ -288,6 +288,7 @@
       .secao h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; line-height: 1.1; max-width: 800px; }
       .intro { margin-top: 14px; font-size: 17px; line-height: 1.6; color: var(--km-texto2); max-width: 640px; }
       .cab { margin-bottom: 32px; }
+      .cab p { margin: 14px 0 0; font-size: 17px; line-height: 1.55; color: var(--km-texto2); max-width: 62ch; }
       @media (min-width: 960px) { .cab { margin-bottom: 44px; } }
       .fecho { margin-top: 24px; font-size: 17px; font-weight: 600; color: var(--km-titulo); }
       .cartao { background: var(--km-superficie); border: 1px solid var(--km-borda); border-radius: 16px; padding: 22px 20px; }
@@ -350,11 +351,20 @@
       .painel li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--km-texto); }
       @media (min-width: 720px) { .painel li { font-size: 15px; } }
       .painel li .ico { width: 18px; height: 18px; color: var(--verde); margin-top: 2px; }
-      .painel-mk { margin-top: 20px; display: none; }
-      .painel-mk .mk-nav { max-width: none; box-shadow: none; }
-      .painel-mk .mk-cel-caixa { transform: none; }
-      @media (min-width: 720px) { .painel-mk { display: block; } }
-      @media (max-width: 719px) { .painel-mk-nav { display: block; } }
+      /* Capturas reais da demonstração (public/capturas, geradas de /app/?demo=1) */
+      .captura { margin: 20px 0 0; }
+      .captura img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--km-borda); background: var(--km-superficie2); }
+      .captura-cel { display: flex; justify-content: center; }
+      .captura-cel a { display: block; width: min(240px, 70%); } /* a largura fica no link: % em <img> dentro de item flex colapsa */
+      .captura-cel img { border-radius: 22px; border-width: 4px; border-color: #0b1f27; box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+      .captura-pc img { box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+      .galeria { margin-top: 28px; display: grid; grid-auto-flow: column; grid-auto-columns: min(520px, 86%); gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 0 12px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+      .galeria figure { margin: 0; scroll-snap-align: start; }
+      .galeria img { display: block; width: 100%; height: auto; aspect-ratio: 1400 / 860; object-fit: cover; object-position: top left; border-radius: 10px; border: 1px solid var(--km-borda); background: var(--km-superficie2); }
+      .galeria figcaption { margin-top: 10px; font-size: 14px; color: var(--km-texto2); line-height: 1.45; }
+      .galeria figcaption b { color: var(--km-titulo); font-weight: 700; }
+      .por-dentro-cta { margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+      .por-dentro-cta p { font-size: 14px; color: var(--km-texto2); margin: 0; }
 
       /* Para quem */
       .publico { display: grid; gap: 12px; }
@@ -385,7 +395,7 @@
       @media (min-width: 720px) { .dados li { font-size: 15px; } }
       .dados .icone { width: 40px; height: 40px; border-radius: 10px; background: var(--km-superficie2); color: var(--km-contorno); display: flex; align-items: center; justify-content: center; flex: none; }
       .dados-links { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 15px; font-weight: 600; }
-      .dados-links a { display: inline-block; padding: 10px 0; }
+      .dados-links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0; } /* alvo de toque ≥ 44px */
 
       /* Perguntas */
       .faq { max-width: 800px; }
@@ -700,11 +710,12 @@
         </div>
       </section>
 
-      <section class="secao secao-sup" id="celular-pc">
+      <section class="secao secao-sup" id="por-dentro">
         <div class="wrap">
           <div class="cab rev">
-            <span class="rotulo">Celular e computador</span>
+            <span class="rotulo">O sistema por dentro</span>
             <h2>O celular é o apoio do canteiro. O computador é o controle do escritório.</h2>
+            <p>Telas reais da demonstração, com dados de exemplo. Clique em qualquer uma para abrir o sistema e mexer.</p>
           </div>
           <div class="duas">
             <div class="cartao painel rev">
@@ -716,7 +727,7 @@
                 <li><svg class="ico"><use href="#i-check"/></svg>Envia sozinho quando o sinal volta</li>
                 <li><svg class="ico"><use href="#i-check"/></svg>Botões grandes: presença, foto, pedido e RDO</li>
               </ul>
-              <div class="painel-mk" id="clone-cel" aria-hidden="true"></div>
+              <figure class="captura captura-cel"><a href="/app/?demo=1"><img src="/capturas/cel-rdo.png" width="480" height="1039" alt="RDO no celular, em tema claro: obra, data, clima, conteúdo do dia e empresa emissora" loading="lazy" decoding="async"></a></figure>
             </div>
             <div class="cartao painel rev">
               <span class="tag">Escritório</span>
@@ -727,8 +738,18 @@
                 <li><svg class="ico"><use href="#i-check"/></svg>Aprova pedidos e movimentações na hora</li>
                 <li><svg class="ico"><use href="#i-check"/></svg>Relatórios, folha e custos prontos para imprimir</li>
               </ul>
-              <div class="painel-mk painel-mk-nav" id="clone-nav" aria-hidden="true"></div>
+              <figure class="captura captura-pc"><a href="/app/?demo=1"><img src="/capturas/pc-painel.png" width="1400" height="860" alt="Painel do escritório em tema escuro: menu lateral, obras ativas e pedidos aguardando aprovação" loading="lazy" decoding="async"></a></figure>
             </div>
+          </div>
+          <div class="galeria rev" aria-label="Mais telas do escritório">
+            <figure><a href="/app/?demo=1&amp;tela=folha_quinzenal"><img src="/capturas/pc-folha.png" width="1400" height="860" alt="Folha de pagamento quinzenal por equipe de pagamento, com presenças, faltas e vales" loading="lazy" decoding="async"></a><figcaption><b>Folha de pagamento.</b> Por equipe de pagamento, com presenças, faltas, vales e o líquido de cada um.</figcaption></figure>
+            <figure><a href="/app/?demo=1&amp;tela=calendario"><img src="/capturas/pc-calendario.png" width="1400" height="860" alt="Calendário de presenças do mês, com o detalhe do dia ao lado" loading="lazy" decoding="async"></a><figcaption><b>Calendário.</b> Quem veio em cada dia, por obra, com o detalhe do dia ao lado.</figcaption></figure>
+            <figure><a href="/app/?demo=1&amp;tela=pedidos"><img src="/capturas/pc-pedidos.png" width="1400" height="860" alt="Pedidos de material aguardando aprovação do gestor" loading="lazy" decoding="async"></a><figcaption><b>Pedidos de material.</b> O encarregado pede do canteiro; você aprova ou nega em um toque.</figcaption></figure>
+            <figure><a href="/app/?demo=1&amp;tela=dashboard"><img src="/capturas/pc-indicadores.png" width="1400" height="860" alt="Indicadores da empresa em gráficos" loading="lazy" decoding="async"></a><figcaption><b>Indicadores.</b> Presença, custos e produção em gráficos, por obra e por mês.</figcaption></figure>
+          </div>
+          <div class="por-dentro-cta rev">
+            <a class="btn btn-ouro" href="/app/?demo=1">Abrir a demonstração</a>
+            <p>Sem cadastro. Os dados são de exemplo e somem quando você sai.</p>
           </div>
         </div>
       </section>
@@ -794,7 +815,7 @@
             <details><summary>Precisa instalar alguma coisa?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Não. No computador abre no navegador. No celular, você adiciona à tela inicial e ele vira um ícone como qualquer app, sem loja e sem atualização manual. Funciona em Android e iPhone.</p></details>
             <details><summary>Funciona sem sinal na obra?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Sim. O que a equipe lança fica guardado no aparelho e sobe sozinho quando o sinal volta. Só a primeira entrada precisa de internet.</p></details>
             <details><summary>Quem vê os meus dados?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Só a sua empresa. Cada empresa tem os dados separados, o acesso é pela conta Google e o encarregado só enxerga a obra em que está cadastrado. Os dados ficam em servidores do Google Cloud e você exporta tudo quando quiser.</p></details>
-            <details><summary>Minha equipe precisa de Gmail?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Precisa de uma conta Google (Gmail ou e-mail da empresa no Google). O gestor cadastra o e-mail de cada pessoa em Sistema → Acessos do app; ela entra com esse e-mail no celular e já cai na sua empresa, na obra certa. Não tem senha para distribuir.</p></details>
+            <details><summary>Minha equipe precisa de Gmail?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Precisa de uma conta Google (Gmail ou e-mail da empresa no Google). O gestor cadastra o e-mail de cada pessoa em Sistema → Usuários e acessos; ela entra com esse e-mail no celular e já cai na sua empresa, na obra certa. Não tem senha para distribuir.</p></details>
             <details><summary>Meu mestre de obra vai conseguir usar?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>O app de campo foi feito para isso: presença, foto e pedido em poucos toques, botões grandes, sem menus escondidos. Se ele usa WhatsApp, usa o KMZERO.</p></details>
             <details><summary>Serve para quantas obras?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>O sistema foi feito para várias obras ao mesmo tempo, com painel que mostra todas numa tela. Converse com a gente sobre o tamanho da sua operação.</p></details>
             <details><summary>Já tenho tudo em planilha. Perco esse histórico?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>O cadastro de obras e equipe é feito dentro do sistema. Nas primeiras empresas, o engenheiro acompanha essa montagem com você.</p></details>
@@ -930,11 +951,6 @@
         painel.addEventListener("click", function (e) { if (e.target.closest("a")) abrirMenu(false); });
         d.addEventListener("keydown", function (e) { if (e.key === "Escape" && painel.classList.contains("aberto")) { abrirMenu(false); hamb.focus(); } });
 
-        // Os mockups do hero aparecem de novo, menores, em 'Celular e computador'
-        var mkNav = d.querySelector(".mk .mk-nav"), mkCel = d.querySelector(".mk .mk-cel-caixa");
-        var cloneNav = d.getElementById("clone-nav"), cloneCel = d.getElementById("clone-cel");
-        if (mkNav && cloneNav) cloneNav.appendChild(mkNav.cloneNode(true));
-        if (mkCel && cloneCel) cloneCel.appendChild(mkCel.cloneNode(true));
 
         var temIO = "IntersectionObserver" in window;
         var semMovimento = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

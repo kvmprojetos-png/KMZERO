@@ -52,6 +52,13 @@ const detectarDemo = () => {
     return p.get("demo") === "1" || /^\/app\/demo\/?$/.test(window.location.pathname);
   } catch { return false; }
 };
+// Tela inicial da demo: ?tela=<nav do menu> abre direto nela (links da vitrine e capturas); senão, o Painel
+const telaInicialDemo = () => {
+  try {
+    const t = new URLSearchParams(window.location.search).get("tela");
+    return t && TODAS_TELAS_MENU.has(t) ? t : "gestor";
+  } catch { return "gestor"; }
+};
 // Limpeza oportunista: em todo login real, apaga o que a demo deixou (chaves demo_* e o banco demo_files)
 const limparRestosDemo = () => {
   try { Object.keys(localStorage).filter(k => k.startsWith("demo_")).forEach(k => localStorage.removeItem(k)); } catch {}
@@ -488,7 +495,7 @@ export default function App() {
         // verificarAcessoNuvem (restaurariam a conta real do navegador) e nunca grava _kmzero_sessao.
         setUsuario(DEMO_USUARIO);
         setAvisos(gerarAvisosDemo()); // avisos só existem na nuvem; na demo ficam em memória
-        setTelaRaw("gestor");
+        setTelaRaw(telaInicialDemo());
       } else if (userLogado) {
         limparRestosDemo(); // login real: o que a demo deixou neste navegador sai
         if (userLogado.empresaId) {
@@ -962,7 +969,7 @@ export default function App() {
               <div style={{ fontSize: 64, marginBottom: 16 }}>🏗️</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>Sem obra vinculada</div>
               <div style={{ fontSize: 13, color: T.texto2, lineHeight: 1.5, marginBottom: 20 }}>
-                Peça ao gestor para vincular você a uma obra em Sistema → Acessos do App.
+                Peça ao gestor para vincular você a uma obra em Sistema → Usuários e acessos.
               </div>
               <button onClick={() => window.location.reload()} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13, marginRight: 8 }}>🔄 Atualizar</button>
               <button onClick={() => setTela("home")} style={{ background: T.superficie2, color: T.titulo, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
@@ -992,7 +999,7 @@ export default function App() {
       case "mov_equip_detalhe": return movEquipSel ? <TelaMovEquipDetalhe mov={movEquip.find(x => x.id === movEquipSel.id) || movEquipSel} obras={obras} equips={equips} ferramentas={ferramentas} usuario={usuario} onBack={voltar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} /> : <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} />;
       case "equipe":     return <TelaEquipe obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onAdd={(t) => {
         setTrab(ts => [...ts, t]);
-        // Acesso ao app é separado: Sistema → Acessos do App (Gmail da pessoa)
+        // Acesso ao app é separado: Sistema → Usuários e acessos (Gmail da pessoa)
       }} onRemove={(id) => {
         // Remove trabalhador
         const trab = trabalhadores.find(t => t.id === id);
