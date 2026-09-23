@@ -488,17 +488,26 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
   for (let i = 0; i < primDia; i++) cells.push(null);
   for (let d = 1; d <= totalDias; d++) cells.push(d);
 
+  // Só entra na conta quem tem ponto lançado no dia: quem ainda não tinha sido
+  // contratado, estava de férias ou em outra obra não pode "puxar" a % para baixo.
+  const resumoDia = (d) => {
+    if (!d) return null;
+    const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const pres = historico[iso] || {};
+    const marcados = trabObra.map(t => pres[t.id]).filter(Boolean);
+    if (!marcados.length) return null;
+    const validos = marcados.filter(s => s !== "Feriado");
+    if (!validos.length) return { feriado: true };
+    const pontos = validos.reduce((s, x) => s + (x === "Presente" ? 1 : x === "Meia" ? 0.5 : 0), 0);
+    return { pontos, total: validos.length, pct: pontos / validos.length };
+  };
   const corDoDia = (d) => {
     if (!d) return "transparent";
-    const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const pres = historico[iso];
-    if (!pres) return "#f0f0f0";
-    const total = trabObra.length;
-    const presentes = trabObra.filter(t => pres[t.id] === "Presente").length;
-    if (total === 0) return "#f0f0f0";
-    const pct = presentes / total;
-    if (pct >= 0.8) return GREEN;
-    if (pct >= 0.5) return ORANGE;
+    const r = resumoDia(d);
+    if (!r) return "#f0f0f0";
+    if (r.feriado) return STATUS_COLOR.Feriado;
+    if (r.pct >= 0.8) return GREEN;
+    if (r.pct >= 0.5) return ORANGE;
     return RED;
   };
 
@@ -533,13 +542,22 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
                 aspectRatio: "1", border: diaSel === d ? `2px solid ${NAVY}` : "none", borderRadius: 8,
                 background: corDoDia(d), color: !d || corDoDia(d) === "#f0f0f0" ? "#888" : "#fff",
                 fontWeight: 700, fontSize: 13, cursor: d ? "pointer" : "default", opacity: d ? 1 : 0,
-              }}>{d || ""}</button>
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+              }}>
+                <span>{d || ""}</span>
+                {(() => {
+                  const r = resumoDia(d);
+                  if (!r) return null;
+                  return <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.9 }}>{r.feriado ? "Feriado" : `${String(r.pontos).replace(".", ",")}/${r.total}`}</span>;
+                })()}
+              </button>
             ))}
           </div>
           <div style={{ display: "flex", gap: 12, marginTop: 12, fontSize: 10, color: "#666", justifyContent: "center" }}>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: GREEN, borderRadius: 2, marginRight: 4 }}></span>≥80%</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: ORANGE, borderRadius: 2, marginRight: 4 }}></span>50-79%</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: RED, borderRadius: 2, marginRight: 4 }}></span>&lt;50%</span>
+            <span><span style={{ display: "inline-block", width: 10, height: 10, background: STATUS_COLOR.Feriado, borderRadius: 2, marginRight: 4 }}></span>Feriado</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#f0f0f0", borderRadius: 2, marginRight: 4 }}></span>Sem dados</span>
           </div>
         </div>
@@ -551,7 +569,7 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
             {trabObra.map(t => (
               <div key={t.id} style={{ display: "flex", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: "1px solid #f0f0f0" }}>
                 <span style={{ flex: 1, fontSize: 13, color: NAVY }}>{t.nome}</span>
-                <Badge label={presenDia[t.id] || "—"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small />
+                <Badge label={presenDia[t.id] || "Sem ponto"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small />
               </div>
             ))}
           </div>
