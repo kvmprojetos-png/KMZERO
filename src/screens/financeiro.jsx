@@ -190,7 +190,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
         <select value={form.quemPagou} onChange={e => set("quemPagou", e.target.value)} style={selS}>
           <option value="Caixa da obra">Caixa da obra</option>
           <option value="Adiantamento empresa">Adiantamento empresa</option>
-          <option value="Kleber (reembolso)">Kleber (reembolso)</option>
+          <option value="Gestor (reembolso)">Gestor (reembolso)</option>
           <option value="Encarregado (reembolso)">Encarregado (reembolso)</option>
           <option value="Cartão da empresa">Cartão da empresa</option>
           <option value="PIX direto">PIX direto</option>

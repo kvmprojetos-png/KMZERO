@@ -546,6 +546,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa) {
     try { return new Date(d).toLocaleDateString("pt-BR"); } catch { return d; }
   };
   const v = (val) => val && String(val).trim() ? val : "—";
+  const vz = (val) => val && String(val).trim() ? String(val).trim() : ""; // vazio de verdade (dados da empresa: campo em branco some)
 
   // Tipo de folha (badge)
   const tiposFolha = { semanal: "Semanal (7 dias)", quinzenal: "Quinzenal (15 dias)", mensal: "Mensal (30 dias)", personalizado: "Personalizado" };
@@ -822,13 +823,10 @@ export function gerarFichaCadastralPDF(t, obra, empresa) {
         <div class="cabecalho-empresa">
           <div class="cabecalho-logo"><span class="km">KM</span><span class="zero">ZERO</span></div>
           <div class="cabecalho-tagline">GESTÃO DE OBRAS</div>
-          <div class="cabecalho-razao">${v(empresa.razaoSocial) || "KM Consultoria, Assessoria e Serviços de Engenharia Ltda"}</div>
+          <div class="cabecalho-razao">${vz(empresa.razaoSocial) || vz(empresa.nomeFantasia) || ""}</div>
           <div class="cabecalho-dados">
-            CNPJ: ${v(empresa.cnpj) || "60.368.233/0001-73"} &nbsp;•&nbsp;
-            ${v(empresa.endereco) || "Alegre/ES"}<br>
-            ${v(empresa.responsavel) || "Eng. Kleber Vieira Martins · CREA-ES"} &nbsp;•&nbsp;
-            ${v(empresa.telefone) || "(28) 99925-8172"} &nbsp;•&nbsp;
-            ${v(empresa.email) || "kvmprojetos@gmail.com"}
+            ${[vz(empresa.cnpj) ? "CNPJ: " + vz(empresa.cnpj) : "", vz(empresa.endereco)].filter(Boolean).join(" &nbsp;•&nbsp; ")}<br>
+            ${[[vz(empresa.responsavel), vz(empresa.registro)].filter(Boolean).join(" · "), vz(empresa.telefone), vz(empresa.email)].filter(Boolean).join(" &nbsp;•&nbsp; ")}
           </div>
         </div>
         <div class="foto-3x4">
@@ -994,7 +992,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa) {
         </div>
         <div class="ass-bloco">
           <div class="linha-ass">Responsável pela Empresa</div>
-          <div class="nome-ass">${v(empresa.responsavel) || "Eng. Kleber Vieira Martins"}<br>CREA-ES</div>
+          <div class="nome-ass">${vz(empresa.responsavel) || "&nbsp;"}<br>${vz(empresa.registro) || ""}</div>
         </div>
       </div>
 
@@ -1003,7 +1001,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa) {
       </div>
 
       <div class="rodape-doc">
-        <span><b>${v(empresa.razaoSocial)?.split(",")[0] || "KM Consultoria"}</b> · Matrícula #${idTrab}</span>
+        <span><b>${(vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "").split(",")[0]}</b> · Matrícula #${idTrab}</span>
         <span>Documento emitido pelo KMZERO em ${dataEmissao}</span>
       </div>
 
@@ -1039,7 +1037,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa) {
                 </div>
               </div>
               <div class="cracha-footer">
-                ${v(empresa.razaoSocial)?.split(",")[0]?.toUpperCase() || "KM CONSULTORIA"} · ${v(empresa.cnpj) || "60.368.233/0001-73"}
+                ${[(vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "").split(",")[0].toUpperCase(), vz(empresa.cnpj)].filter(Boolean).join(" · ")}
               </div>
             </div>
           `).join("")}
@@ -1056,7 +1054,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa) {
         </div>
 
         <div class="rodape-doc" style="margin-top: 8mm;">
-          <span><b>${v(empresa.razaoSocial)?.split(",")[0] || "KM Consultoria"}</b> · Carteira #${idTrab}</span>
+          <span><b>${(vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "").split(",")[0]}</b> · Carteira #${idTrab}</span>
           <span>Emitida em ${dataEmissao}</span>
         </div>
       </div>

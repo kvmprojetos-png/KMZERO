@@ -1253,9 +1253,9 @@ export function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
     <body>
       <div class="topo">
         <div class="topo-header">
-          <div class="razao">${empresa?.razaoSocial || "KM Consultoria, Assessoria e Serviços de Engenharia Ltda"}</div>
-          <div class="sub">CNPJ: ${empresa?.cnpj || "—"} • ${empresa?.responsavel || "Kleber Vieira Martins"}</div>
-          <div class="sub">📱 ${empresa?.telefone || ""} • 📧 ${empresa?.email || ""}</div>
+          <div class="razao">${empresa?.razaoSocial || empresa?.nomeFantasia || ""}</div>
+          <div class="sub">${[empresa?.cnpj ? "CNPJ: " + empresa.cnpj : "", empresa?.responsavel].filter(Boolean).join(" • ")}</div>
+          <div class="sub">${[empresa?.telefone ? "📱 " + empresa.telefone : "", empresa?.email ? "📧 " + empresa.email : ""].filter(Boolean).join(" • ")}</div>
         </div>
         <div class="topo-titulo">
           <h1>SOLICITAÇÃO DE PEDIDO</h1>
@@ -1333,8 +1333,8 @@ export function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
       <div class="ass">
         <div style="height:18px;"></div>
         <div class="ass-linha">
-          <b>${empresa?.responsavel || "Kleber Vieira Martins"}</b><br/>
-          ${empresa?.razaoSocial?.split(",")[0] || "KM Consultoria"} • ${empresa?.telefone || ""}
+          <b>${empresa?.responsavel || "&nbsp;"}</b><br/>
+          ${[(empresa?.nomeFantasia || empresa?.razaoSocial || "").split(",")[0], empresa?.telefone].filter(Boolean).join(" • ")}
         </div>
       </div>
 

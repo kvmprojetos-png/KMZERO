@@ -933,7 +933,7 @@ export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, on
                 ${pedidosObra.map(p => `<tr><td><b>${String(p.id).slice(-6)}</b></td><td>${p.material}</td><td>${fmtQtd(p.qtd)}</td><td><span class="badge" style="background:${p.status === "Aprovado" ? GREEN : p.status === "Negado" ? RED : ORANGE}">${p.status}</span></td></tr>`).join("")}
                 </table>
               ` : ""}
-              <div class="footer"><b>KM ZERO</b> — Gestão de Obras &nbsp;|&nbsp; KM Consultoria e Serviços &nbsp;|&nbsp; Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+              <div class="footer">Relatório emitido pelo <b>KMZERO</b> — Gestão de Obras &nbsp;|&nbsp; Gerado em ${new Date().toLocaleString("pt-BR")}</div>
               <script>window.onload=()=>{setTimeout(()=>window.print(),300);}</script>
             </body></html>`;
           abrirOuBaixarHTML(html, `Relatorio-${(obra?.nome || "obra").replace(/[^a-z0-9]/gi, "_").substring(0, 25)}-${hoje.replace(/\//g, "-")}.html`);
@@ -1332,7 +1332,7 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
       </table>
       <h2>📦 Pedidos no Período</h2>
       <p>Total: ${pedidosFiltro.length} • Aprovados: ${pedidosFiltro.filter(p => p.status === "Aprovado").length} • Negados: ${pedidosFiltro.filter(p => p.status === "Negado").length} • Aguardando: ${pedidosFiltro.filter(p => p.status === "Aguardando").length}</p>
-      <div class="footer"><b>KM ZERO</b> — Gestão de Obras &nbsp;|&nbsp; KM Consultoria e Serviços</div>
+      <div class="footer">Relatório emitido pelo <b>KMZERO</b> — Gestão de Obras</div>
       <script>window.onload=()=>{setTimeout(()=>window.print(),300);}</script>
       </body></html>`;
     abrirOuBaixarHTML(html, `Consolidado-${tituloPeriodo.replace(/\s/g, "_")}.html`);
