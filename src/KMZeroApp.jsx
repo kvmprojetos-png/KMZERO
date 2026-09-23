@@ -14,6 +14,7 @@ import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirma
 import { MenuLateral } from "./components/MenuLateral.jsx";
 import { TODAS_TELAS_MENU } from "./components/menuGrupos.js";
 import { useModoEscritorio } from "./lib/useLargura.js";
+import { CHAVE_TEMA, aplicarTema } from "./lib/useTema.js";
 import { LARGURA_POR_TELA, tipoDaTela } from "./lib/layoutEscritorio.js";
 import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
 
@@ -51,6 +52,13 @@ const detectarDemo = () => {
     const p = new URLSearchParams(window.location.search);
     return p.get("demo") === "1" || /^\/app\/demo\/?$/.test(window.location.pathname);
   } catch { return false; }
+};
+// Tema da demo: ?tema=claro|escuro grava a preferência (só na demo) antes do app montar — capturas e links da vitrine
+const aplicarTemaDaDemo = () => {
+  try {
+    const t = new URLSearchParams(window.location.search).get("tema");
+    if (t === "claro" || t === "escuro") { localStorage.setItem(CHAVE_TEMA, t); aplicarTema(t); }
+  } catch {}
 };
 // Tela inicial da demo: ?tela=<nav do menu> abre direto nela (links da vitrine e capturas); senão, o Painel
 const telaInicialDemo = () => {
@@ -409,6 +417,7 @@ export default function App() {
       if (modoDemo) {
         // Demo: empresa "demo" (prefixo demo_ / demo_files), nuvem desligada, nada de _kmzero_*
         setModoDemo(true);
+        aplicarTemaDaDemo();
         setEmpresaId(DEMO_ID);
         setEmpresaIdState(DEMO_ID);
         empresaCarregadaRef.current = DEMO_ID;
