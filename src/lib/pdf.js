@@ -118,6 +118,21 @@ export const KM_PDF_CSS = `
   .km-assinaturas .ass span { display: block; color: #888; font-size: 8pt; margin-top: 2px; }
 `;
 
+/* Dados da EMPRESA CLIENTE nos documentos (RDO, relatórios, PDFs). Nunca completa com
+   dados da KM Consultoria: o KMZERO é vendido para várias empresas e cada documento
+   leva só o que a própria empresa cadastrou em Sistema → Empresa. Campo vazio = omitido. */
+const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+export const nomeEmpresa = (empresa = {}) => String(empresa.razaoSocial || empresa.nomeFantasia || "").trim();
+export function linhasEmpresaHTML(empresa = {}) {
+  const juntar = partes => partes.map(p => String(p || "").trim()).filter(Boolean).map(esc).join(" · ");
+  const linhas = [
+    nomeEmpresa(empresa) ? `<b>${esc(nomeEmpresa(empresa))}</b>` : "",
+    juntar([empresa.cnpj ? "CNPJ " + empresa.cnpj : "", empresa.responsavel, empresa.registro]),
+    juntar([empresa.email, empresa.telefone]),
+  ].filter(Boolean);
+  return linhas.join("<br/>");
+}
+
 export function gerarHeaderHTML({ tipo, numero, empresa = {}, periodo, info_extra }) {
   const numeroFmt = numero ? `Nº ${typeof numero === "number" ? String(numero).padStart(3, "0") : numero}` : "";
   const dataAgora = new Date().toLocaleString("pt-BR");
@@ -140,9 +155,7 @@ export function gerarHeaderHTML({ tipo, numero, empresa = {}, periodo, info_extr
           ${info_extra ? `<div class="doc-num">${info_extra}</div>` : ""}
         </div>
         <div class="empresa">
-          <b>${empresa.razaoSocial || "KM Consultoria, Assessoria e Serviços de Engenharia Ltda"}</b><br/>
-          ${empresa.responsavel || "Kleber Vieira Martins"} · ${empresa.registro || "CREA-ES"}<br/>
-          ${empresa.email || "kvmprojetos@gmail.com"} · ${empresa.telefone || "(28) 99925-8172"}
+          ${linhasEmpresaHTML(empresa)}
         </div>
       </div>
       <div class="km-header-meta">
@@ -159,7 +172,7 @@ export function gerarFooterHTML({ empresa = {}, autor }) {
     <div class="km-footer">
       <div class="left">
         <span class="logo-mini">KM<span>ZERO</span></span>
-        · ${empresa.razaoSocial ? empresa.razaoSocial.substring(0, 50) : "KM Consultoria"}
+        ${nomeEmpresa(empresa) ? "· " + nomeEmpresa(empresa).substring(0, 50) : ""}
       </div>
       <div class="center">Documento gerado pelo KMZERO</div>
       <div class="right">${autor ? autor + " · " : ""}${dataAgora}</div>
@@ -171,8 +184,8 @@ export function gerarAssinaturasHTML({ empresa = {}, autor }) {
   return `
     <div class="km-assinaturas">
       <div class="ass">
-        <b>${autor || empresa.responsavel || "Kleber Vieira Martins"}</b>
-        <span>Engenheiro Responsável · ${empresa.registro || "CREA-ES"}</span>
+        <b>${autor || empresa.responsavel || "&nbsp;"}</b>
+        <span>Responsável técnico${empresa.registro ? " · " + empresa.registro : ""}</span>
       </div>
       <div class="ass">
         <b>Fiscalização</b>
