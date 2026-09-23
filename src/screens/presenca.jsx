@@ -124,7 +124,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                   <div style={{ fontSize: 11, color: "#888" }}>{t.cargo}</div>
                 </div>
                 <div style={{ display: "flex", gap: 5 }}>
-                  {["Presente", "Falta", "Atestado"].map(s => (
+                  {["Presente", "Meia", "Falta", "Atestado"].map(s => (
                     <button key={s} onClick={() => setPresencas(p => ({ ...p, [t.id]: s }))} style={{ padding: "5px 7px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700, background: presencas[t.id] === s ? STATUS_COLOR[s] : "#eee", color: presencas[t.id] === s ? "#fff" : "#aaa" }}>{s}</button>
                   ))}
                 </div>
@@ -591,6 +591,7 @@ export function TelaFolha({ obras, trabalhadores, historico, onBack }) {
       const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const s = (historico[iso] || {})[t.id];
       if (s === "Presente") presentes++;
+      else if (s === "Meia") presentes += 0.5; // meia diária vale 0,5 dia
       else if (s === "Falta") faltas++;
       else if (s === "Atestado") atestados++;
     }
@@ -980,6 +981,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       const fer = feriadoEm(iso);
       if (fer && fer.tipo === "nacional" && (sdia === undefined || sdia === "" || sdia === "Feriado" || sdia === "Falta")) { feriados++; continue; }
       if (sdia === "Presente") presentes++;
+      else if (sdia === "Meia") presentes += 0.5; // meia diária vale 0,5 dia
       else if (sdia === "Falta") faltas++;
       else if (sdia === "Atestado") atestados++;
       else if (sdia === "Feriado") feriados++;
@@ -1017,6 +1019,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
         return;
       }
       if (s === "Presente") presentes++;
+      else if (s === "Meia") presentes += 0.5; // meia diária vale 0,5 dia
       else if (s === "Falta") faltas++;
       else if (s === "Atestado") atestados++;
       else if (s === "Feriado") feriados++;

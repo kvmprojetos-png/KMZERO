@@ -25,6 +25,7 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
       const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const s = (historico[iso] || {})[t.id];
       if (s === "Presente") pres++;
+      else if (s === "Meia") pres += 0.5;
       else if (s === "Falta") falt++;
       else if (s === "Atestado") atest++;
     }
@@ -1079,7 +1080,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
   const mes = ref.getMonth();
 
   const chaveISODia = (dia) => `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-  const PROXIMO_STATUS = { null: "Presente", "Presente": "Falta", "Falta": "Atestado", "Atestado": null };
+  const PROXIMO_STATUS = { null: "Presente", "Presente": "Meia", "Meia": "Falta", "Falta": "Atestado", "Atestado": null };
 
   const tocarDia = (dia, st) => {
     if (!podeEditar || !onEditarDia) return;
@@ -1106,12 +1107,14 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
     if (st === "Presente") return "#dcfce7";
     if (st === "Falta") return "#fee2e2";
     if (st === "Atestado") return "#fef3c7";
+    if (st === "Meia") return "#e0f2fe";
     return "#f8fafc";
   };
   const corTexto = (st) => {
     if (st === "Presente") return "#15803d";
     if (st === "Falta") return "#b91c1c";
     if (st === "Atestado") return "#a16207";
+    if (st === "Meia") return "#0369a1";
     return "#cbd5e1";
   };
 
@@ -1123,6 +1126,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
   for (let d = 1; d <= totalDias; d++) {
     const st = statusDoDia(d);
     if (st === "Presente") contPresente++;
+    else if (st === "Meia") contPresente += 0.5;
     else if (st === "Falta") contFalta++;
     else if (st === "Atestado") contAtestado++;
   }
@@ -1184,7 +1188,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
               <div style={{ fontSize: 12, fontWeight: 700, color: st ? corTexto(st) : "#94a3b8" }}>{dia}</div>
               {st && (
                 <div style={{ fontSize: 9, lineHeight: 1 }}>
-                  {st === "Presente" ? "✓" : st === "Falta" ? "✕" : "⚕"}
+                  {st === "Presente" ? "✓" : st === "Meia" ? "½" : st === "Falta" ? "✕" : "⚕"}
                 </div>
               )}
             </div>

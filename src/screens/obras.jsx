@@ -337,6 +337,7 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
       const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const s = (historico[iso] || {})[t.id];
       if (s === "Presente" || s === "Atestado") dias++;
+      else if (s === "Meia") dias += 0.5;
     }
     totalCustoMaoObra += dias * (parseFloat(t.diaria) || 0);
     diasTrabalhados += dias;

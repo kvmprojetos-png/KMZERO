@@ -1720,7 +1720,7 @@ export const CATALOGO_EQUIPAMENTOS_NOMES = CATALOGO_EQUIPAMENTOS.map(e => e.nome
 export const MATERIAL_INFO = {};
 MATERIAIS_BANCO_DETALHADO.forEach(m => { MATERIAL_INFO[m.nome] = m; });
 export const EQUIP_COLOR = { "Em Uso": BLUE, "Quebrada": RED, "Disponível": GREEN };
-export const STATUS_COLOR = { "Presente": GREEN, "Falta": RED, "Atestado": ORANGE };
+export const STATUS_COLOR = { "Presente": GREEN, "Meia": "#0284c7", "Falta": RED, "Atestado": ORANGE };
 
 export const EMPRESA_TEMPLATE = {
   razaoSocial: "",
