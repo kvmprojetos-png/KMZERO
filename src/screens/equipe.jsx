@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
-import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
+import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, precoAlim } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
+import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
 export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
   const [filtroObra, setFiltroObra] = useState("todas");
@@ -201,6 +201,8 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
+        {lista.length > 0 && (
+        <Grade min={300} gap={8} style={{ marginBottom: 8 }}>
         {lista.map(t => {
           const obra = obras.find(o => o.id === t.obraId);
           const aso = checaASO(t);
@@ -215,7 +217,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           else if (t.asoStatus === "Apto com restrições") indicadores.push({ icon: "⚠️", label: "Restrições", cor: ORANGE });
 
           return (
-            <div key={t.id} onClick={() => onVerDetalhe && onVerDetalhe(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
+            <div key={t.id} onClick={() => onVerDetalhe && onVerDetalhe(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
               {t.foto ? (
                 <img src={t.foto} alt="" style={{ width: 44, height: 44, borderRadius: 22, objectFit: "cover", border: `2px solid ${NAVY}`, marginRight: 10, flexShrink: 0 }} />
               ) : (
@@ -266,6 +268,8 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
             </div>
           );
         })}
+        </Grade>
+        )}
         {lista.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 20 }}>Nenhum resultado.</div>}
         <Btn label="➕ Adicionar Trabalhador" color={NAVY} onClick={() => setModal(true)} style={{ marginTop: 8 }} />
       </div>
@@ -337,9 +341,10 @@ export function TelaFicha({ obras, onBack, onAdd }) {
   const handleFoto = (e, campo) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => set(campo, ev.target.result);
-    reader.readAsDataURL(file);
+    // foto do rosto fica pequena (800 px); documentos (CTPS, CPF, comprovante) até 1600 px
+    reduzirImagem(file, campo === "foto" ? { ladoMax: 800 } : undefined)
+      .then(dataUrl => set(campo, dataUrl))
+      .catch(() => alert("Não foi possível ler a foto. Tente outra."));
   };
 
   return (
@@ -1381,10 +1386,11 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           rdosMes.forEach(r => {
             const ali = (r.alimentacao || {})[trabalhador.id];
             if (!ali) return;
-            if (ali.cafeManha) { qtdManha++; totalAli += (empresa.valorCafeManha || 4); }
-            if (ali.cafeTarde) { qtdTarde++; totalAli += (empresa.valorCafeTarde || 4); }
-            if (ali.marmita) { qtdMarmita++; totalAli += (empresa.valorMarmita || 18); }
-            if (ali.lanche) { qtdLanche++; totalAli += (empresa.valorLanche || 10); }
+            // Só soma o que tem preço configurado em Sistema → Empresa (sem valor inventado)
+            if (ali.cafeManha) { qtdManha++; totalAli += (precoAlim(empresa, "cafeManha") ?? 0); }
+            if (ali.cafeTarde) { qtdTarde++; totalAli += (precoAlim(empresa, "cafeTarde") ?? 0); }
+            if (ali.marmita) { qtdMarmita++; totalAli += (precoAlim(empresa, "marmita") ?? 0); }
+            if (ali.lanche) { qtdLanche++; totalAli += (precoAlim(empresa, "lanche") ?? 0); }
           });
           if (rdosMes.length === 0) return null;
           return (
@@ -1493,7 +1499,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           <div style={{ marginTop: 6 }}>
             <label style={{ background: "#eef2ff", border: "none", borderRadius: 16, padding: "5px 12px", fontSize: 11, fontWeight: 700, color: NAVY, cursor: "pointer", display: "inline-block" }}>
               📷 {form.foto ? "Trocar" : "Adicionar foto"}
-              <input type="file" accept="image/*" capture="user" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = ev => set("foto", ev.target.result); r.readAsDataURL(f); }} style={{ display: "none" }} />
+              <input type="file" accept="image/*" capture="user" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; reduzirImagem(f, { ladoMax: 800 }).then(dataUrl => set("foto", dataUrl)).catch(() => alert("Não foi possível ler a foto. Tente outra.")); }} style={{ display: "none" }} />
             </label>
           </div>
         </div>
@@ -2162,7 +2168,7 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
         </div>
 
         <div style={{ background: "#fffaeb", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#8b6f00", marginBottom: 12 }}>
-          💡 Os adiantamentos do mês atual são automaticamente descontados na 2ª quinzena.
+          💡 Cada vale é descontado uma vez só, na folha cujo período inclui a data dele (qualquer regime). Ao arquivar a folha, o vale fica marcado como descontado.
         </div>
 
         <Btn label="➕ Registrar Adiantamento" color={ORANGE} onClick={() => setModal(true)} style={{ marginBottom: 14 }} />
@@ -2179,6 +2185,7 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
                   <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{t?.nome || "—"}</div>
                   <div style={{ fontSize: 11, color: "#888" }}>{t?.cargo} • {obra?.nome}</div>
                   <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>📅 {a.data}</div>
+                  {a.descontadoEm && <div style={{ fontSize: 10, color: GREEN, fontWeight: 700, marginTop: 2 }}>✅ Descontado em {a.descontadoEm}</div>}
                   {a.motivo && <div style={{ fontSize: 11, color: "#777", fontStyle: "italic", marginTop: 2 }}>"{a.motivo}"</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>

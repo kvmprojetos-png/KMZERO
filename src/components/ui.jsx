@@ -133,6 +133,16 @@ export function KMHeader({ title, sub, onBack, right }) {
   );
 }
 
+/* Grade responsiva: 1 coluna no celular, várias no escritório (sem media query:
+   o próprio grid decide quantas colunas cabem com largura mínima `min`). */
+export function Grade({ min = 320, gap = 12, children, style }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(min(${min}px, 100%), 1fr))`, gap, alignItems: "start", ...style }}>
+      {children}
+    </div>
+  );
+}
+
 export function KMFooter() {
   return (
     <div style={{ background: `linear-gradient(180deg,${NAVY2} 0%,${NAVY} 100%)`, padding: "10px 0", paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))", textAlign: "center", flexShrink: 0 }}>

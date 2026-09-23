@@ -1,13 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { useModoEscritorio } from "../lib/useLargura.js";
+
+/* Data ISO (AAAA-MM-DD) → DD/MM/AAAA; sem data ou inválida fica "—" */
+const dataBR = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso + "T12:00:00");
+  return isNaN(d) ? "—" : d.toLocaleDateString("pt-BR");
+};
 
 export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
   const [modal, setModal] = useState(false);
@@ -15,6 +22,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
   const [obraSelecionada, setObraSelecionada] = useState(null);
   const [form, setForm] = useState({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const escritorio = useModoEscritorio(); // largura >= 1024 px: mostra a tabela-resumo acima dos cartões
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" }); setModal(true); };
   const abrirEdit = (o) => { setEditandoId(o.id); setForm({ ...o, clienteId: o.clienteId || "", cliente: o.cliente || "", clienteDoc: o.clienteDoc || "" }); setModal(true); };
@@ -68,6 +76,43 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Obras" sub={`${obras.filter(o => o.status === "Ativa").length} ativas • Toque para ver detalhes`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+        {/* ESCRITÓRIO: tabela-resumo das obras (não aparece no celular). Clicar na linha abre a obra. */}
+        {escritorio && obras.length > 0 && (
+          <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", marginBottom: 14, overflowX: "auto" }}>
+            <table data-test="obras-tabela" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#eef6f8", textAlign: "left" }}>
+                  {["Obra", "Cliente", "Status", "Encarregado", "Trabalhadores", "Início", "Prazo"].map(h => (
+                    <th key={h} style={{ padding: "10px 12px", color: NAVY, fontWeight: 800, fontSize: 12, whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {obras.map(o => {
+                  const nomeCliente = clientes.find(c => String(c.id) === String(o.clienteId))?.nome || o.cliente || "—";
+                  const encarregado = usuarios.find(u => u.id === o.apontadorId)?.nome
+                    || usuarios.find(u => u.obraId != null && String(u.obraId) === String(o.id) && u.perfil !== "gestor")?.nome
+                    || "—";
+                  const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
+                  return (
+                    <tr key={o.id} data-test={`obra-linha-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ borderTop: "1px solid #e6edf0", cursor: "pointer" }}>
+                      <td style={{ padding: "9px 12px", fontWeight: 700, color: NAVY }}>{o.nome}</td>
+                      <td style={{ padding: "9px 12px", color: "#444" }}>{nomeCliente}</td>
+                      <td style={{ padding: "9px 12px" }}><Badge label={o.status} color={o.status === "Ativa" ? GREEN : "#888"} small /></td>
+                      <td style={{ padding: "9px 12px", color: "#444" }}>{encarregado}</td>
+                      <td style={{ padding: "9px 12px", color: "#444" }}>{nTrab}</td>
+                      <td style={{ padding: "9px 12px", color: "#444", whiteSpace: "nowrap" }}>{dataBR(o.dataInicioContrato)}</td>
+                      <td style={{ padding: "9px 12px", color: "#444", whiteSpace: "nowrap" }}>{dataBR(o.dataFimContrato)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {obras.length > 0 && (
+        <Grade min={320} gap={10} style={{ marginBottom: 10 }}>
         {obras.map(o => {
           const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
           const nAtivos = (ativos || []).filter(a => a.obraId === o.id).length;
@@ -75,7 +120,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
           const cron = (cronogramas || {})[o.id] || [];
           const progresso = cron.length > 0 ? Math.round(cron.reduce((s, e) => s + (e.progresso || 0), 0) / cron.length) : 0;
           return (
-            <div key={o.id} data-test={`obra-card-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 10, borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}`, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
+            <div key={o.id} data-test={`obra-card-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}`, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, color: NAVY, fontSize: 15 }}>{o.nome}</div>
@@ -104,6 +149,8 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
             </div>
           );
         })}
+        </Grade>
+        )}
         <Btn data-test="nova-obra" label="➕ Nova Obra" color={NAVY} onClick={abrirNovo} />
       </div>
       <KMFooter />
@@ -306,8 +353,13 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
     try { const [d, m, y] = r.data.split("/"); return parseInt(m) - 1 === mes && parseInt(y) === ano; } catch { return false; }
   }).reduce((s, r) => s + (parseFloat(r.totalAlimentacao) || 0), 0);
 
-  const totalMaterialAprov = pedidosObra.filter(p => p.status === "Aprovado" && p.data && p.data.includes(`/${String(mes + 1).padStart(2, "0")}/${ano}`)).length * 100;
-  const custoTotalMes = totalCustoMaoObra + totalCombustivel + totalMaterialAprov + totalAlimentacaoMes;
+  // Materiais: só soma valor REAL informado no pedido aprovado; sem valor, fica "—" (nada inventado)
+  const pedidosAprovMes = pedidosObra.filter(p => p.status === "Aprovado" && p.data && p.data.includes(`/${String(mes + 1).padStart(2, "0")}/${ano}`));
+  const valorPedido = p => { const n = parseFloat(p.valor ?? p.valorTotal); return Number.isFinite(n) ? n : null; };
+  const pedidosComValor = pedidosAprovMes.filter(p => valorPedido(p) !== null);
+  const totalMaterialAprov = pedidosComValor.length ? pedidosComValor.reduce((s, p) => s + valorPedido(p), 0) : null;
+  const temCustoMateriais = totalMaterialAprov !== null;
+  const custoTotalMes = totalCustoMaoObra + totalCombustivel + (totalMaterialAprov || 0) + totalAlimentacaoMes;
 
   const Secao = ({ titulo, icone, valor, cor, onClickAcao, acaoLabel, children }) => (
     <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
@@ -378,10 +430,10 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
                 {obra.dataFimContrato && <span>🏁 Prazo: <b>{new Date(obra.dataFimContrato + "T12:00:00").toLocaleDateString("pt-BR")}</b></span>}
               </div>
             )}
-            {/* Margem estimada (Valor contrato - custo do mês × meses estimados) */}
+            {/* Margem estimada (Valor contrato - custo do mês × meses estimados) — só com custo real de materiais */}
             {(() => {
               const valor = parseFloat(obra.valorContrato);
-              if (custoTotalMes > 0 && obra.dataInicioContrato && obra.dataFimContrato) {
+              if (temCustoMateriais && custoTotalMes > 0 && obra.dataInicioContrato && obra.dataFimContrato) {
                 const ini = new Date(obra.dataInicioContrato + "T12:00:00");
                 const fim = new Date(obra.dataFimContrato + "T12:00:00");
                 const mesesObra = Math.max(1, Math.round((fim - ini) / (1000 * 60 * 60 * 24 * 30)));
@@ -422,8 +474,9 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
               <div style={{ fontSize: 12, fontWeight: 800, color: "#dc7e00" }}>R$ {totalAlimentacaoMes.toFixed(2)}</div>
             </div>
             <div style={{ background: "#f0f7ff", padding: 8, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "#888" }}>📦 Materiais (est.)</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: BLUE }}>R$ {totalMaterialAprov.toFixed(2)}</div>
+              <div style={{ fontSize: 9, color: "#888" }}>📦 Materiais</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: BLUE }}>{temCustoMateriais ? `R$ ${totalMaterialAprov.toFixed(2)}` : "—"}</div>
+              {!temCustoMateriais && <div style={{ fontSize: 9, color: "#888" }}>informe o valor nos pedidos aprovados</div>}
             </div>
           </div>
         </div>

@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
-import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
+import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
+import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
 
@@ -62,7 +62,7 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
   const [sucesso, setSucesso] = useState("");
   const [modoImportar, setModoImportar] = useState(false);
 
-  const dataHoje = new Date().toISOString().split("T")[0];
+  const dataHoje = dataLocalIso();
   const filename = `kmzero-backup-${dataHoje}.json`;
 
   const exportar = () => {
@@ -370,17 +370,17 @@ export function TelaAjuda({ empresa, onBack }) {
     {
       id: "esqueci_senha",
       pergunta: "Esqueci minha senha. O que fazer?",
-      resposta: "Na tela de login do gestor, toque em \"Esqueci minha senha\" abaixo do botão ENTRAR. Digite seu email cadastrado. Você vai receber um link de recuperação no email para definir uma nova senha. Verifique a caixa de entrada e a pasta de spam. O email pode demorar até 3 minutos.",
+      resposta: "O KMZERO não tem senha própria: você entra com a sua conta Google (Gmail). Se esqueceu a senha do Google, recupere em accounts.google.com e depois toque em \"Entrar com Google\" no app.",
     },
     {
       id: "trocar_senha",
-      pergunta: "Como troco minha senha sem precisar do email?",
-      resposta: "Acesse o menu Sistema → Minha Conta. Lá você encontra a opção de trocar senha. Informe a senha atual e defina uma nova. A troca acontece imediatamente, sem precisar do email.",
+      pergunta: "Como troco minha senha?",
+      resposta: "A senha é a da sua conta Google e fica só no Google. Troque em myaccount.google.com → Segurança. O app não guarda senha de ninguém.",
     },
     {
       id: "encarregado_acessar",
       pergunta: "Como os encarregados acessam o aplicativo?",
-      resposta: "O gestor cadastra cada encarregado em Sistema → Acessos do App, definindo um email e uma senha simples. Esses dados são compartilhados com o encarregado, que entra na tela inicial selecionando o próprio perfil. Os encarregados só veem a obra à qual estão vinculados.",
+      resposta: "O gestor cadastra o Gmail de cada encarregado em Sistema → Acessos do App, escolhendo a obra. No celular, o encarregado abre o app e toca em \"Entrar com Google\" com esse Gmail: entra direto na empresa, sem senha para decorar. Os encarregados só veem a obra à qual estão vinculados.",
     },
     {
       id: "offline",
@@ -700,7 +700,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
               <p>
                 <b>3. Conta e segurança</b><br/>
-                Você é responsável por manter sigilo sobre sua senha e por todas as atividades realizadas com sua conta. Em caso de uso indevido suspeito, troque sua senha e informe o suporte imediatamente.
+                O acesso é feito pela sua conta Google. Você é responsável por manter a segurança dessa conta e por todas as atividades realizadas com ela no aplicativo. Em caso de uso indevido suspeito, troque a senha da conta Google e informe o suporte imediatamente.
               </p>
 
               <p>
@@ -752,7 +752,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
               <p>
                 <b>Quais dados coletamos</b><br/>
-                Para funcionamento do aplicativo, coletamos: nome, e-mail e senha de gestor e encarregados; dados de trabalhadores cadastrados pelo gestor (nome, CPF, função, salário, fotos); dados das obras (localização, fotos, RDOs); dados de pedidos e fornecedores. Não coletamos dados sensíveis (saúde, biometria, opinião política) sem consentimento expresso.
+                Para funcionamento do aplicativo, coletamos: nome, e-mail e foto de perfil da conta Google de gestor e encarregados (nunca a senha, que fica só no Google); dados de trabalhadores cadastrados pelo gestor (nome, CPF, função, salário, fotos); dados das obras (localização, fotos, RDOs); dados de pedidos e fornecedores. Não coletamos dados sensíveis (saúde, biometria, opinião política) sem consentimento expresso.
               </p>
 
               <p>
@@ -762,7 +762,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
               <p>
                 <b>Onde os dados ficam</b><br/>
-                Os dados ficam armazenados localmente no aparelho do usuário e, quando autenticado pelo Firebase, em servidores do Google Cloud (data center em São Paulo, Brasil). As senhas ficam criptografadas, ninguém da KM Consultoria pode vê-las.
+                Os dados ficam armazenados localmente no aparelho do usuário e, quando autenticado pelo Firebase, em servidores do Google Cloud (data center em São Paulo, Brasil). O aplicativo não armazena senhas: a autenticação é feita pelo Google.
               </p>
 
               <p>
@@ -818,6 +818,24 @@ export function TelaConfigEmpresa({ empresa, onSave, onBack }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const [salvo, setSalvo] = useState(false);
 
+  // Preços de alimentação: mesmas chaves que presenca.jsx / rdo.jsx leem via precoAlim(). Vazio grava null (= sem preço, nunca inventa valor).
+  const CAMPOS_PRECO_ALIM = [
+    { k: "valorCafeManha", l: "Café da manhã (R$)" },
+    { k: "valorCafeTarde", l: "Café da tarde (R$)" },
+    { k: "valorMarmita",   l: "Marmita / almoço (R$)" },
+    { k: "valorLanche",    l: "Lanche (R$)" },
+  ];
+  const normalizarPrecos = (f) => {
+    const n = { ...f };
+    CAMPOS_PRECO_ALIM.forEach(({ k }) => {
+      const v = n[k];
+      if (v === undefined || v === null || v === "") { n[k] = null; return; }
+      const num = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+      n[k] = Number.isFinite(num) && num >= 0 ? num : null;
+    });
+    return n;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Empresa" sub="Dados para RDO/PDF" onBack={onBack} />
@@ -866,6 +884,28 @@ export function TelaConfigEmpresa({ empresa, onSave, onBack }) {
           )}
 
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: "2px solid #f3f4f6" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 4 }}>🍽️ Preços de alimentação</div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>
+              Valor por pessoa, por dia. Usado na presença do encarregado, no RDO e na ficha do trabalhador. Sem preço, o app mostra "—" e não inventa valor.
+            </div>
+            {CAMPOS_PRECO_ALIM.map(({ k, l }) => (
+              <div key={k}>
+                <label style={labelS}>{l}</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={form[k] === undefined || form[k] === null ? "" : form[k]}
+                  onChange={e => set(k, e.target.value)}
+                  placeholder="Ex.: 4.00"
+                  style={inputS}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: "2px solid #f3f4f6" }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 4 }}>🏢 Logomarca da Empresa</div>
             <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>
               A logo aparece nos cabeçalhos dos relatórios (RDO, pedidos, folha) ao lado da identidade KMZERO. Use uma imagem PNG ou JPG, de preferência com fundo transparente.
@@ -902,16 +942,16 @@ export function TelaConfigEmpresa({ empresa, onSave, onBack }) {
                   e.target.value = "";
                   return;
                 }
-                const reader = new FileReader();
-                reader.onload = () => set("logoBase64", reader.result);
-                reader.onerror = () => alert("Não foi possível ler a imagem. Tente outro arquivo.");
-                reader.readAsDataURL(file);
+                // logo fica pequena (512 px); PNG com transparência continua PNG
+                reduzirImagem(file, { ladoMax: 512, manterPng: true })
+                  .then(dataUrl => set("logoBase64", dataUrl))
+                  .catch(() => alert("Não foi possível ler a imagem. Tente outro arquivo."));
               }}
               style={{ ...inputS, padding: 8 }}
             />
           </div>
 
-          <Btn label="💾 SALVAR" color={GREEN} onClick={() => { onSave(form); setSalvo(true); setTimeout(() => setSalvo(false), 2500); }} style={{ marginTop: 16 }} />
+          <Btn label="💾 SALVAR" color={GREEN} onClick={() => { const f = normalizarPrecos(form); setForm(f); onSave(f); setSalvo(true); setTimeout(() => setSalvo(false), 2500); }} style={{ marginTop: 16 }} />
           {salvo && <div style={{ background: "#f0fdf4", color: GREEN, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 8, textAlign: "center", fontWeight: 600 }}>✅ Salvo!</div>}
         </div>
       </div>

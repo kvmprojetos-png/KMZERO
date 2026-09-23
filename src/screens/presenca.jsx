@@ -1,9 +1,8 @@
 import { carimbarFoto } from "./suprimentos.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
-import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
+import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
@@ -25,6 +24,8 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
   });
   const [editandoHoras, setEditandoHoras] = useState(null); // trabId em edição
 
+  // Preço configurado em Sistema → Empresa; sem preço mostra "—" (nunca inventa valor)
+  const precoTxt = (k) => { const p = precoAlim(empresa, k); return p === null ? "—" : "R$ " + p.toFixed(2); };
   // ALIMENTAÇÃO: por padrão, todo presente recebe café manhã + café tarde
   const [alimentacao, setAlimentacao] = useState(() => {
     const m = {};
@@ -160,11 +161,16 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.5, marginBottom: 6 }}>☕ ALIMENTAÇÃO DO DIA</div>
             <div style={{ background: "#fff8e1", borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#8b6f00", marginBottom: 10 }}>
-              💡 Por padrão, todos os presentes recebem café da manhã (R$ {empresa.valorCafeManha}) e da tarde (R$ {empresa.valorCafeTarde}). Marque exceções e adicione marmita/lanche se for o caso.
+              💡 Por padrão, todos os presentes recebem café da manhã ({precoTxt("cafeManha")}) e da tarde ({precoTxt("cafeTarde")}). Marque exceções e adicione marmita/lanche se for o caso.
             </div>
+            {faltaPrecoAlim(empresa) && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#b91c1c", fontWeight: 700, marginBottom: 10 }}>
+                ⚠️ Configure os preços em Sistema → Empresa
+              </div>
+            )}
             {trabalhadores.filter(t => presencas[t.id] === "Presente").map(t => {
               const a = alimentacao[t.id] || {};
-              const totalDia = (a.cafeManha ? empresa.valorCafeManha : 0) + (a.cafeTarde ? empresa.valorCafeTarde : 0) + (a.marmita ? empresa.valorMarmita : 0) + (a.lanche ? empresa.valorLanche : 0);
+              const totalDia = somaAlim(empresa, a);
               const toggle = (campo) => setAlimentacao(al => ({ ...al, [t.id]: { ...al[t.id], [campo]: !al[t.id]?.[campo] } }));
               return (
                 <div key={t.id} style={{ background: "#fff", borderRadius: 10, padding: "8px 12px", marginBottom: 6, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
@@ -196,7 +202,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
               <div style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>
                 R$ {trabalhadores.filter(t => presencas[t.id] === "Presente").reduce((s, t) => {
                   const a = alimentacao[t.id] || {};
-                  return s + (a.cafeManha ? empresa.valorCafeManha : 0) + (a.cafeTarde ? empresa.valorCafeTarde : 0) + (a.marmita ? empresa.valorMarmita : 0) + (a.lanche ? empresa.valorLanche : 0);
+                  return s + somaAlim(empresa, a);
                 }, 0).toFixed(2)}
               </div>
             </div>
@@ -427,7 +433,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                   alimentacao: { ...alimentacao },
                   totalAlimentacao: trabalhadores.filter(t => presencas[t.id] === "Presente").reduce((s, t) => {
                     const a = alimentacao[t.id] || {};
-                    return s + (a.cafeManha ? empresa.valorCafeManha : 0) + (a.cafeTarde ? empresa.valorCafeTarde : 0) + (a.marmita ? empresa.valorMarmita : 0) + (a.lanche ? empresa.valorLanche : 0);
+                    return s + somaAlim(empresa, a);
                   }, 0),
                 };
                 if (onAutoEmitirRDO) onAutoEmitirRDO(rdo);
@@ -826,7 +832,8 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
    GESTÃO DE EQUIPAMENTOS (adicionar/editar)
 ════════════════════════════════════ */
 
-export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, abastecimentos = [], ativos = [], empresa, onBack, onSalvarFolha, onMarcarPago }) {
+export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, abastecimentos = [], ativos = [], empresa, onBack, onSalvarFolha, onMarcarPago, onMarcarValesDescontados }) {
+  const [folhaArquivadaId, setFolhaArquivadaId] = useState(null); // folha arquivada nesta tela: seus vales continuam aparecendo (PDF depois de arquivar)
   const hoje = new Date();
   // ════ ESCOLHA DO REGIME DA FOLHA (definida pelo gestor) ════
   const [tipoRegime, setTipoRegime] = useState("quinzenal"); // diaria | semanal | quinzenal | mensal
@@ -835,8 +842,8 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
   const [quinzena, setQuinzena] = useState(hoje.getDate() <= 15 ? 1 : 2);
   // ════ NOVOS: datas de pagamento definidas pelo gestor ════
   const [dataPagamento, setDataPagamento] = useState(""); // data específica que o gestor escolhe pagar
-  const [diaPagDiario, setDiaPagDiario] = useState(hoje.toISOString().slice(0, 10)); // diária: dia específico
-  const [diaPagSemanal, setDiaPagSemanal] = useState(hoje.toISOString().slice(0, 10)); // semanal: dia que paga
+  const [diaPagDiario, setDiaPagDiario] = useState(dataLocalIso(hoje)); // diária: dia específico
+  const [diaPagSemanal, setDiaPagSemanal] = useState(dataLocalIso(hoje)); // semanal: dia que paga
   const [semanaSelecionada, setSemanaSelecionada] = useState(1); // 1-5 (qual semana do mês)
   const [diaPagQuinzenal1, setDiaPagQuinzenal1] = useState(""); // 1ª quinzena: data de pagamento
   const [diaPagQuinzenal2, setDiaPagQuinzenal2] = useState(""); // 2ª quinzena: data de pagamento
@@ -934,6 +941,19 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
 
   const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
 
+  // ════ VALES (adiantamentos) com data dentro do período [ini, fim] (ISO, inclusive), em qualquer regime.
+  // Vale que já tem descontadoEm (foi descontado em outra folha arquivada) é ignorado: cada vale desconta uma vez só. ════
+  const isoDoVale = (a) => {
+    const s = String(a?.data || "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const [d, m, an] = s.split("/");
+    if (!d || !m || !an) return "";
+    return `${an}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  };
+  const valesDoPeriodo = (trabId, ini, fim) => (adiantamentos || [])
+    .filter(a => String(a.trabId) === String(trabId) && (!a.descontadoEm || (folhaArquivadaId && String(a.folhaId) === String(folhaArquivadaId))))
+    .filter(a => { const iso = isoDoVale(a); return !!iso && iso >= ini && iso <= fim; });
+
   const calcularCiclo = (t) => {
     const tipo = t.tipoFolha || "quinzenal";
     const nUteis = tipo === "semanal" ? 5 : tipo === "mensal" ? 22 : 10;
@@ -966,14 +986,14 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     }
     const diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
     const bruto = diaria * diasPagos;
-    let adiantDesconto = 0;
+    let adiantDesconto = 0, adiantIds = [];
     if (adiantamentos && primeiroDiaUtil && ultimoDiaUtil) {
-      adiantDesconto = adiantamentos.filter(a => a.trabId === t.id).filter(a => {
-        try { const [d, m, an] = a.data.split("/"); const isoA = `${an}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; return isoA >= primeiroDiaUtil && isoA <= ultimoDiaUtil; } catch { return false; }
-      }).reduce((sm, a) => sm + a.valor, 0);
+      const vales = valesDoPeriodo(t.id, primeiroDiaUtil, ultimoDiaUtil);
+      adiantDesconto = vales.reduce((sm, a) => sm + a.valor, 0);
+      adiantIds = vales.map(a => a.id);
     }
     const liquido = Math.max(0, bruto - adiantDesconto);
-    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: ultimoDiaUtil };
+    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: ultimoDiaUtil };
   };
 
   const calcular = (t) => {
@@ -1037,29 +1057,20 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       bruto = diaria * diasPagos;
     }
 
-    // ────── ADIANTAMENTOS DO MÊS ──────
-    // Desconta na 2ª quinzena (quinzenal) ou no fechamento (mensal/semanal/diária)
-    let adiantDesconto = 0;
-    const aplicarDesconto = (tipoRegime === "quinzenal" && quinzena === 2) ||
-                            (tipoRegime === "mensal") ||
-                            (tipoRegime === "semanal") ||
-                            (tipoRegime === "diaria");
-    if (aplicarDesconto && adiantamentos) {
-      adiantDesconto = adiantamentos
-        .filter(a => a.trabId === t.id)
-        .filter(a => {
-          try {
-            const [d, m, an] = a.data.split("/");
-            return parseInt(m) - 1 === mes && parseInt(an) === ano;
-          } catch { return false; }
-        })
-        .reduce((s, a) => s + a.valor, 0);
-    }
+    // ────── ADIANTAMENTOS (VALES) DO PERÍODO ──────
+    // Desconta os vales com data dentro do período da folha, em qualquer regime (diária, semanal, quinzenal, mensal, personalizado).
+    // Vale já marcado com descontadoEm não entra de novo.
+    const periodoIniIso = `${periodo.anoInicio}-${String(periodo.mesInicio + 1).padStart(2, "0")}-${String(periodo.diaInicio).padStart(2, "0")}`;
+    const periodoFimIso = `${periodo.anoFim}-${String(periodo.mesFim + 1).padStart(2, "0")}-${String(periodo.diaFim).padStart(2, "0")}`;
+    const vales = valesDoPeriodo(t.id, periodoIniIso, periodoFimIso);
+    const adiantDesconto = vales.reduce((s, a) => s + a.valor, 0);
+    const adiantIds = vales.map(a => a.id);
 
     const liquido = Math.max(0, bruto - adiantDesconto); // nunca paga negativo
     return {
       presentes, faltas, atestados, feriados, diaria, salarioFixo,
-      diasPagos, diasTotaisPeriodo, bruto, adiantDesconto, liquido,
+      diasPagos, diasTotaisPeriodo, bruto, adiantDesconto, adiantIds, liquido,
+      periodoIni: periodoIniIso, periodoFim: periodoFimIso,
       tipoFolha: tipoRegime, descricaoPeriodo: periodo.descricao, formaCalculo,
       diaInicio: periodo.diaInicio, diaFim: periodo.diaFim,
       mesInicio: periodo.mesInicio, mesFim: periodo.mesFim,
@@ -1147,7 +1158,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     </div>
     <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
     </body></html>`;
-    abrirOuBaixarHTML(html, `Folha-KMZERO-${ehCiclo ? "ciclo" : tipoRegime}-${new Date().toISOString().slice(0, 10)}.html`);
+    abrirOuBaixarHTML(html, `Folha-KMZERO-${ehCiclo ? "ciclo" : tipoRegime}-${dataLocalIso()}.html`);
   };
 
   return (
@@ -1409,16 +1420,23 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
             const c = calcular(t);
             return { trabId: t.id, nome: t.nome, cargo: t.cargo, ...c };
           });
+          const idFolha = Date.now();
           onSalvarFolha({
-            id: Date.now(), mes, ano, quinzena, periodo,
+            id: idFolha, mes, ano, quinzena, periodo,
             obraId: obraId === "todas" ? null : obraId,
             itens, totalLiquido: totalFolha, totalAdiant: totalAdiantQuinzena,
             ts: Date.now(),
           });
+          // Marca os vales descontados nesta folha (descontadoEm) para não descontar de novo na próxima
+          const valesIds = itens.flatMap(i => i.adiantIds || []);
+          if (valesIds.length > 0 && onMarcarValesDescontados) {
+            onMarcarValesDescontados(valesIds, { descontadoEm: new Date().toLocaleDateString("pt-BR"), folhaId: idFolha, folhaPeriodo: periodo });
+          }
+          setFolhaArquivadaId(idFolha);
           setSalvoAviso(true);
           setTimeout(() => setSalvoAviso(false), 3000);
-        }} style={{ width: "100%", padding: 12, marginTop: 8, background: "#fff", color: NAVY, border: `1.5px solid ${NAVY}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-          📥 Arquivar esta folha no histórico
+        }} disabled={!!folhaArquivadaId} style={{ width: "100%", padding: 12, marginTop: 8, background: "#fff", color: NAVY, border: `1.5px solid ${NAVY}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: folhaArquivadaId ? "default" : "pointer", opacity: folhaArquivadaId ? 0.6 : 1 }}>
+          {folhaArquivadaId ? "✅ Folha arquivada no histórico" : "📥 Arquivar esta folha no histórico"}
         </button>
 
         {salvoAviso && (

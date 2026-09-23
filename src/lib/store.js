@@ -1,7 +1,7 @@
 import { getApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
-import { criarContaSecundaria, emailParaAuth, usuarioAtual } from "../firebase.js";
+import { usuarioAtual } from "../firebase.js";
 
 let _empresaId = null;
 
@@ -33,7 +33,7 @@ export async function enviarFotoNuvem(f) {
     await setDoc(doc(fb.db, "empresas", _empresaId, "fotosObras", id), {
       ...meta, id, fotoUrl: url, criadoEm: Date.now(),
     });
-    return true;
+    return url; // URL de download: quem chamou troca o base64 pela URL
   } catch (e) {
     console.error("enviarFotoNuvem:", e);
     return false;
@@ -144,20 +144,7 @@ export const aplicarPerfilNuvem = (u, p) => !p ? u : ({
 
 /* ── Funções multi-tenant ── */
 
-export async function buscarEmpresaIdDoUsuario(firebaseUid) {
-  const fb = cloudRefs();
-  if (!fb) return null;
-  try {
-    const snap = await getDoc(doc(fb.db, "usuarios", firebaseUid));
-    if (snap.exists()) return snap.data().empresaId;
-    return null;
-  } catch (e) {
-    console.error("buscarEmpresaIdDoUsuario:", e);
-    return null;
-  }
-}
-
-export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, emailGestor) {
+export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, emailGestor, fotoGestor = "") {
   const fb = cloudRefs();
   if (!fb) return null;
   try {
@@ -172,7 +159,8 @@ export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, em
       await setDoc(doc(fb.db, "usuarios", firebaseUid), {
         empresaId,
         nome: nomeGestor,
-        email: emailGestor,
+        email: String(emailGestor || "").trim().toLowerCase(),
+        foto: fotoGestor || "",
         perfil: "gestor",
         ativo: true,
         criadoEm: Date.now(),
@@ -186,21 +174,6 @@ export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, em
   } catch (e) {
     console.error("registrarEmpresa:", e);
     return null;
-  }
-}
-
-export async function registrarUsuarioEmpresa(firebaseUid, empresaId, nome, email, perfil) {
-  const fb = cloudRefs();
-  if (!fb) return false;
-  try {
-    await setDoc(doc(fb.db, "usuarios", firebaseUid), {
-      empresaId, nome, email, perfil,
-      criadoEm: Date.now(),
-    });
-    return true;
-  } catch (e) {
-    console.error("registrarUsuarioEmpresa:", e);
-    return false;
   }
 }
 
@@ -223,57 +196,6 @@ export async function carregarPerfilNuvem(firebaseUid) {
   }
 }
 
-/* Gestor cria o acesso de um lançador: conta no Firebase Auth + perfil em usuarios/{uid}.
-   A partir daí a pessoa entra em QUALQUER celular com e-mail e senha. */
-export async function criarAcessoLancador({ email, senha, nome, cargo, obraId, perfil, tel }) {
-  const fb = cloudRefs();
-  if (!fb || !_empresaId) return { ok: false, erro: "Empresa nao identificada. Saia e entre novamente como gestor." };
-  const emailAuth = emailParaAuth(email);
-  const conta = await criarContaSecundaria(emailAuth, senha);
-  if (!conta.ok) return conta;
-
-  // A conta já existia: garante que não estamos sobrescrevendo o perfil de outra pessoa
-  if (conta.jaExistia) {
-    const eu = usuarioAtual();
-    if (eu && eu.uid === conta.uid) {
-      return { ok: false, erro: "Esse e-mail e senha sao os da SUA conta de gestor. Crie o acesso da equipe com outro e-mail." };
-    }
-    let existente = null;
-    try {
-      const snap = await getDoc(doc(fb.db, "usuarios", conta.uid));
-      existente = snap.exists() ? snap.data() : null;
-    } catch (e) {
-      // Sem permissão de leitura = perfil de outra empresa
-      return { ok: false, erro: "Este login ja pertence a outra empresa. Use outro e-mail." };
-    }
-    if (existente && (existente.empresaId !== _empresaId || existente.perfil === "gestor")) {
-      return { ok: false, erro: "Este login ja pertence a outra conta ou empresa. Use outro e-mail." };
-    }
-  }
-
-  try {
-    await setDoc(doc(fb.db, "usuarios", conta.uid), semUndefined({
-      empresaId: _empresaId,
-      nome, email: emailAuth,
-      cargo: cargo || "Encarregado",
-      obraId: obraId ?? null,
-      perfil: perfil || "encarregado",
-      tel: tel || "",
-      ativo: true,
-      criadoEm: Date.now(),
-    }), { merge: true });
-    return { ok: true, uid: conta.uid, emailAuth, jaExistia: conta.jaExistia };
-  } catch (e) {
-    console.error("criarAcessoLancador (perfil):", e);
-    return {
-      ok: false, uid: conta.uid, codigo: e.code,
-      erro: e.code === "permission-denied"
-        ? "A conta foi criada, mas o perfil nao pode ser gravado: publique as regras do Firebase (npm run firebase:deploy-regras) e salve de novo."
-        : "A conta foi criada, mas o perfil nao pode ser gravado na nuvem. Tente novamente.",
-    };
-  }
-}
-
 export async function atualizarPerfilNuvem(firebaseUid, dados) {
   const fb = cloudRefs();
   if (!fb || !firebaseUid) return false;
@@ -286,6 +208,159 @@ export async function atualizarPerfilNuvem(firebaseUid, dados) {
 /* ativo=false bloqueia a pessoa em todos os aparelhos (as regras checam o campo) */
 export async function definirAcessoAtivo(firebaseUid, ativo) {
   return atualizarPerfilNuvem(firebaseUid, { ativo: !!ativo, atualizadoEm: Date.now() });
+}
+
+/* ── Convites e equipe (login só com Google) ──────────────────────────────
+   O gestor não cria conta para ninguém: registra o Gmail da pessoa em
+   convites/{email}. Quando ela entra com o Google pela 1ª vez, o app lê o
+   convite e cria usuarios/{uid} (as regras conferem e-mail verificado). */
+export const emailChave = e => String(e || "").trim().toLowerCase();
+
+export async function buscarConvite(email) {
+  const fb = cloudRefs();
+  if (!fb) return { ok: false, erro: "Firebase nao inicializado." };
+  try {
+    const snap = await getDoc(doc(fb.db, "convites", emailChave(email)));
+    return { ok: true, convite: snap.exists() ? snap.data() : null };
+  } catch (e) {
+    console.error("buscarConvite:", e);
+    return { ok: false, codigo: e.code, erro: e.code === "permission-denied"
+      ? "Sem permissao para ler o convite. As regras do Firebase precisam ser publicadas (npm run firebase:deploy-regras)."
+      : "Nao foi possivel consultar o convite. Verifique a conexao." };
+  }
+}
+
+/* Cria o perfil da pessoa convidada (chamado no 1º login com Google) */
+export async function aceitarConvite(userGoogle, convite) {
+  const fb = cloudRefs();
+  if (!fb) return { ok: false, erro: "Firebase nao inicializado." };
+  const perfil = semUndefined({
+    empresaId: convite.empresaId,
+    email: emailChave(userGoogle.email),
+    nome: convite.nome || userGoogle.nome || "Equipe",
+    foto: userGoogle.foto || "",
+    perfil: convite.perfil || "encarregado",
+    cargo: convite.cargo || (convite.perfil === "gestor" ? "Gestor" : "Encarregado"),
+    obraId: convite.obraId ?? null,
+    tel: convite.tel || "",
+    ativo: true,
+    criadoEm: Date.now(),
+  });
+  try {
+    await setDoc(doc(fb.db, "usuarios", userGoogle.uid), perfil);
+    return { ok: true, perfil };
+  } catch (e) {
+    console.error("aceitarConvite:", e);
+    return { ok: false, codigo: e.code, erro: e.code === "permission-denied"
+      ? "O convite existe, mas a nuvem recusou criar seu perfil. Confira se entrou com a MESMA conta Google do convite e se as regras do Firebase estao publicadas."
+      : "Nao foi possivel concluir seu acesso. Verifique a conexao e tente de novo." };
+  }
+}
+
+/* Gestor registra/atualiza o convite de um Gmail (a chave e o e-mail em minusculas) */
+export async function criarConvite({ email, nome, cargo, obraId, perfil, tel, empresaNome }) {
+  const fb = cloudRefs();
+  if (!fb || !_empresaId) return { ok: false, erro: "Empresa nao identificada. Saia e entre novamente como gestor." };
+  const chave = emailChave(email);
+  if (!chave.includes("@")) return { ok: false, erro: "Informe um e-mail valido (Gmail)." };
+  const eu = usuarioAtual();
+  try {
+    await setDoc(doc(fb.db, "convites", chave), semUndefined({
+      email: chave,
+      empresaId: _empresaId,
+      empresaNome: empresaNome || "",
+      nome: nome || "",
+      cargo: cargo || "Encarregado",
+      obraId: obraId ?? null,
+      perfil: perfil === "gestor" ? "gestor" : "encarregado",
+      tel: tel || "",
+      criadoPor: eu ? eu.uid : null,
+      criadoEm: Date.now(),
+    }), { merge: true });
+    return { ok: true, email: chave };
+  } catch (e) {
+    console.error("criarConvite:", e);
+    return { ok: false, codigo: e.code, erro: e.code === "permission-denied"
+      ? "A nuvem recusou o convite: publique as regras do Firebase (npm run firebase:deploy-regras) e tente de novo."
+      : "Nao foi possivel salvar o convite. Verifique a conexao." };
+  }
+}
+
+export async function removerConvite(email) {
+  const fb = cloudRefs();
+  if (!fb) return { ok: false, erro: "Firebase nao inicializado." };
+  try {
+    await deleteDoc(doc(fb.db, "convites", emailChave(email)));
+    return { ok: true };
+  } catch (e) {
+    console.error("removerConvite:", e);
+    return { ok: false, erro: "Nao foi possivel cancelar o convite. Verifique a conexao." };
+  }
+}
+
+/* Equipe da empresa (perfis em usuarios/) — qualquer usuario ativo pode ver */
+export function observarEquipeNuvem(callback, onErro) {
+  const fb = cloudRefs();
+  if (!fb || !_empresaId) return () => {};
+  const q = query(collection(fb.db, "usuarios"), where("empresaId", "==", _empresaId));
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => ({
+      id: d.id, firebaseUid: d.id,
+      nome: d.data().nome || "", email: d.data().email || "", foto: d.data().foto || "",
+      perfil: d.data().perfil || "encarregado", cargo: d.data().cargo || "",
+      obraId: d.data().obraId ?? null, tel: d.data().tel || "",
+      ativo: d.data().ativo !== false,
+    })));
+  }, e => { console.warn("observarEquipeNuvem:", e); onErro && onErro(e); });
+}
+
+/* Convites pendentes da empresa — so o gestor */
+export function observarConvitesNuvem(callback, onErro) {
+  const fb = cloudRefs();
+  if (!fb || !_empresaId) return () => {};
+  const q = query(collection(fb.db, "convites"), where("empresaId", "==", _empresaId));
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => ({
+      id: "convite:" + d.id, convite: true,
+      nome: d.data().nome || "", email: d.data().email || d.id,
+      perfil: d.data().perfil || "encarregado", cargo: d.data().cargo || "",
+      obraId: d.data().obraId ?? null, tel: d.data().tel || "",
+    })));
+  }, e => { console.warn("observarConvitesNuvem:", e); onErro && onErro(e); });
+}
+
+/* Decide o que fazer depois de "Entrar com Google":
+   - perfil existe e ativo → { tipo: "perfil", usuario }
+   - sem perfil, com convite → cria o perfil → { tipo: "perfil", usuario }
+   - sem perfil e sem convite → { tipo: "sem_convite" }
+   - desativado / erro → { tipo: "erro", erro } */
+export async function resolverEntradaGoogle(userGoogle) {
+  const p = await carregarPerfilNuvem(userGoogle.uid);
+  if (!p.ok) return { tipo: "erro", erro: p.erro };
+  const montar = perfil => ({
+    id: userGoogle.uid,
+    firebaseUid: userGoogle.uid,
+    email: emailChave(userGoogle.email),
+    foto: userGoogle.foto || perfil.foto || "",
+    nome: perfil.nome || userGoogle.nome || "Equipe",
+    perfil: perfil.perfil || "encarregado",
+    cargo: perfil.cargo || (perfil.perfil === "gestor" ? "Gestor" : "Encarregado"),
+    obraId: perfil.obraId ?? null,
+    tel: perfil.tel || "",
+    empresaId: perfil.empresaId,
+    ultimoLogin: Date.now(),
+  });
+  if (p.perfil) {
+    if (p.perfil.ativo === false) return { tipo: "erro", desativado: true, erro: "Seu acesso foi desativado pelo gestor da empresa." };
+    if (!p.perfil.empresaId) return { tipo: "sem_convite" };
+    return { tipo: "perfil", usuario: montar(p.perfil) };
+  }
+  const c = await buscarConvite(userGoogle.email);
+  if (!c.ok) return { tipo: "erro", erro: c.erro };
+  if (!c.convite) return { tipo: "sem_convite" };
+  const a = await aceitarConvite(userGoogle, c.convite);
+  if (!a.ok) return { tipo: "erro", erro: a.erro };
+  return { tipo: "perfil", usuario: montar(a.perfil) };
 }
 
 /* ── localStorage com prefixo dinâmico ── */

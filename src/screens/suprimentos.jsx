@@ -1,14 +1,14 @@
 import { CATEGORIAS_FORNECEDOR } from "./midia.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
+import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
 export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
   const [itens, setItens] = useState([]); // CESTA: lista de itens do pedido
@@ -482,8 +482,9 @@ export function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, o
             cor={BLUE}
           />
         ) : (
-          filtrados.map(f => (
-            <div key={f.id} onClick={() => abrirEdit(f)} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}`, cursor: "pointer" }}>
+          <Grade min={300} gap={8} style={{ marginBottom: 8 }}>
+          {filtrados.map(f => (
+            <div key={f.id} onClick={() => abrirEdit(f)} style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}`, cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
@@ -504,7 +505,8 @@ export function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, o
                 <span style={{ color: "#bbb", fontSize: 16 }}>›</span>
               </div>
             </div>
-          ))
+          ))}
+          </Grade>
         )}
       </div>
       <KMFooter />
@@ -936,12 +938,14 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
             subtitulo="Quando houver pedidos de compra criados pelos encarregados ou pelo gestor, eles aparecerão aqui."
             cor={ORANGE}
           />
-        ) : filtrados.sort((a, b) => b.id - a.id).map(p => {
+        ) : (
+          <Grade min={340} gap={8} style={{ marginBottom: 8 }}>
+          {filtrados.sort((a, b) => b.id - a.id).map(p => {
           const itens = p.itens || [{ material: p.material, qtd: p.qtd }];
           const cor = p.status === "Aprovado" ? GREEN : p.status === "Negado" ? RED : ORANGE;
           const numeroPedido = String(p.id).slice(-6);
           return (
-            <div key={p.id} onClick={() => onVerDetalhe && onVerDetalhe(p)} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
+            <div key={p.id} onClick={() => onVerDetalhe && onVerDetalhe(p)} style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 9, color: "#888", fontWeight: 600 }}>Nº {numeroPedido} • {p.data}</div>
@@ -989,6 +993,8 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
             </div>
           );
         })}
+          </Grade>
+        )}
       </div>
       <KMFooter />
 
@@ -1360,9 +1366,9 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
   const handleFoto = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => { setFoto(ev.target.result); setStep("confirmar"); };
-    r.readAsDataURL(f);
+    reduzirImagem(f)
+      .then(dataUrl => { setFoto(dataUrl); setStep("confirmar"); })
+      .catch(() => alert("Não foi possível ler a foto. Tente outra."));
   };
 
   const confirmar = () => {

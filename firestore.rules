@@ -4,12 +4,15 @@ rules_version = '2';
 // KMZERO — Regras do Firestore (multiempresa / SaaS)
 //
 // Modelo de dados:
-//   usuarios/{uid}                     perfil de cada login (empresaId, perfil, ativo...)
+//   usuarios/{uid}                     perfil de cada login Google (empresaId, perfil, ativo...)
+//   convites/{email}                   convite do gestor: "este Gmail entra na empresa X como Y"
 //   empresas/{empresaId}               cadastro da empresa (gestorUid = quem criou)
-//   empresas/{empresaId}/acessos/*     lista de acessos do app (só o gestor lê/escreve)
 //   empresas/{empresaId}/{colecao}/*   obras, trabalhadores, pedidos, rdos, presencas...
 //
-// Princípio: cada usuário só enxerga a empresa gravada no SEU perfil.
+// Princípios:
+//   - cada usuário só enxerga a empresa gravada no SEU perfil;
+//   - ninguém cria perfil para si mesmo, exceto (a) quem acabou de criar a própria
+//     empresa ou (b) quem tem um convite para o e-mail VERIFICADO da sua conta Google.
 // Publicar com:  npm run firebase:deploy-regras
 // ─────────────────────────────────────────────────────────────────────────────
 service cloud.firestore {
@@ -45,23 +48,45 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/empresas/$(empresaId))
         && get(/databases/$(database)/documents/empresas/$(empresaId)).data.gestorUid == request.auth.uid;
     }
+    // E-mail da conta Google de quem está logado, em minúsculas (é a chave do convite)
+    function meuEmail() {
+      return request.auth.token.email.lower();
+    }
+    function emailVerificado() {
+      return logado() && request.auth.token.get('email_verified', false) == true;
+    }
+    function caminhoConvite() {
+      return /databases/$(database)/documents/convites/$(meuEmail());
+    }
+    // Existe convite para o meu e-mail e ele bate com o perfil que estou criando
+    function conviteValeParaMim(novo) {
+      return emailVerificado()
+        && exists(caminhoConvite())
+        && get(caminhoConvite()).data.empresaId == novo.empresaId
+        && get(caminhoConvite()).data.perfil == novo.perfil;
+    }
 
     // ── Perfis de login ─────────────────────────────────────────────────────
     match /usuarios/{uid} {
-      // Ler: o próprio usuário, ou o gestor da mesma empresa
+      // Ler um perfil: o próprio usuário, ou o gestor da mesma empresa
       allow get: if logado() && (
         request.auth.uid == uid
         || (souGestor() && resource.data.empresaId == minhaEmpresa())
       );
-      allow list: if false;
+      // Listar a equipe: qualquer usuário ativo da empresa, filtrando pela própria empresa
+      allow list: if logado() && perfilAtivo() && resource.data.empresaId == minhaEmpresa();
 
       // Criar:
       //  (a) gestor concluindo o cadastro da própria empresa (empresa já criada por ele)
-      //  (b) gestor criando o acesso de um lançador (encarregado/apontador) da sua empresa
+      //  (b) pessoa convidada entrando pela 1ª vez com a conta Google do e-mail convidado
+      //  (c) gestor criando o perfil de alguém da sua empresa (uso administrativo/testes)
       allow create: if logado() && (
         (request.auth.uid == uid
           && request.resource.data.perfil == 'gestor'
           && empresaCriadaPorMim(request.resource.data.empresaId))
+        || (request.auth.uid == uid
+          && request.resource.data.get('ativo', true) == true
+          && conviteValeParaMim(request.resource.data))
         || (souGestor()
           && uid != request.auth.uid
           && request.resource.data.empresaId == minhaEmpresa()
@@ -88,6 +113,26 @@ service cloud.firestore {
       );
     }
 
+    // ── Convites (chave = e-mail em minúsculas) ─────────────────────────────
+    match /convites/{email} {
+      // A pessoa convidada lê o convite do PRÓPRIO e-mail; o gestor lê os da sua empresa
+      allow get: if logado() && (
+        email == meuEmail()
+        || (souGestor() && resource.data.empresaId == minhaEmpresa())
+      );
+      allow list: if logado() && souGestor() && resource.data.empresaId == minhaEmpresa();
+      // Só o gestor convida, sempre para a própria empresa, e a chave tem de ser o e-mail do documento
+      allow create: if logado() && souGestor()
+        && request.resource.data.empresaId == minhaEmpresa()
+        && request.resource.data.email == email
+        && request.resource.data.perfil in ['gestor', 'encarregado'];
+      allow update: if logado() && souGestor()
+        && resource.data.empresaId == minhaEmpresa()
+        && request.resource.data.empresaId == minhaEmpresa()
+        && request.resource.data.email == email;
+      allow delete: if logado() && souGestor() && resource.data.empresaId == minhaEmpresa();
+    }
+
     // ── Empresas ────────────────────────────────────────────────────────────
     match /empresas/{empresaId} {
       // Qualquer usuário logado pode criar a SUA empresa (cadastro)
@@ -100,14 +145,9 @@ service cloud.firestore {
       // Quem criou a empresa pode apagá-la (inclusive para desfazer um cadastro que parou no meio)
       allow delete: if logado() && resource.data.gestorUid == request.auth.uid;
 
-      // Lista de acessos do app (contém dados sensíveis): só o gestor
-      match /acessos/{docId} {
-        allow read, write: if logado() && souGestor() && minhaEmpresa() == empresaId;
-      }
-
-      // Todos os demais dados da empresa: qualquer usuário ativo DA empresa
+      // Todos os dados da empresa: qualquer usuário ativo DA empresa
       match /{colecao}/{docId} {
-        allow read, write: if logado() && colecao != 'acessos' && souDaEmpresa(empresaId);
+        allow read, write: if logado() && souDaEmpresa(empresaId);
       }
     }
   }

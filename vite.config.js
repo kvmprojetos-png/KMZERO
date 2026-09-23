@@ -1,6 +1,30 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// A vitrine (index.html da raiz) fica sem manifest e sem service worker: só o app em /app/ é PWA.
+// O vite-plugin-pwa injeta essas tags em TODO html do build; aqui elas são tiradas só da vitrine.
+function vitrineSemPwa() {
+  return {
+    name: 'kmzero:vitrine-sem-pwa',
+    enforce: 'post',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        const caminho = String((ctx && (ctx.path || ctx.filename)) || '').replace(/\\/g, '/');
+        if (/\/app\/index\.html$/.test(caminho)) return html;
+        return html
+          .replace(/<link rel="manifest"[^>]*>/g, '')
+          .replace(/<script id="vite-plugin-pwa:[^"]*"[^>]*>[\s\S]*?<\/script>/g, '');
+      }
+    }
+  };
+}
 
 export default defineConfig({
   plugins: [
@@ -9,11 +33,14 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
+        id: '/app/',
+        start_url: '/app/',
+        scope: '/app/',
         name: 'KMZERO - Gestão de Obras',
         short_name: 'KMZERO',
         description: 'Sistema de gestão inteligente de obras - KM Consultoria',
-        theme_color: '#0f2151',
-        background_color: '#0f2151',
+        theme_color: '#052f3d',
+        background_color: '#052f3d',
         display: 'standalone',
         orientation: 'portrait',
         lang: 'pt-BR',
@@ -34,12 +61,23 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        maximumFileSizeToCacheInBytes: 5000000
+        globIgnores: ['index.html'], // a vitrine (/) não entra no cache do app: sempre vem da rede
+        maximumFileSizeToCacheInBytes: 5000000,
+        // Só as navegações dentro de /app/ caem no app; a raiz (/) é a vitrine estática
+        navigateFallback: '/app/index.html',
+        navigateFallbackAllowlist: [/^\/app/]
       }
-    })
+    }),
+    vitrineSemPwa()
   ],
   build: {
     target: 'es2018',
-    chunkSizeWarningLimit: 2000
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      input: {
+        vitrine: resolve(__dirname, 'index.html'),
+        app: resolve(__dirname, 'app/index.html')
+      }
+    }
   }
 });
