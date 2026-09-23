@@ -582,13 +582,14 @@ export default function App() {
   // "Sair" chamado pelos botões da home/painel (confirmado=false) e pelo modal de
   // Minha Conta (confirmado=true, a pessoa já confirmou lá).
   const logout = (confirmado = false) => {
-    // TODO(human): regra do botão "Sair" no campo.
-    // Depois de sair, só se entra de novo com internet (login pelo Google).
-    // Decida: (A) se navigator.onLine === false, BLOQUEAR com alert("...") e não sair;
-    //         (B) deixar sair mesmo sem sinal, avisando no texto da confirmação.
-    // Escolha também o texto da confirmação e chame:
-    //   confirmar(texto, () => sairDaConta());      // pede confirmação (janela do app)
-    //   if (confirmado) return sairDaConta();        // veio do modal de Minha Conta: sai direto
+    // Regra escolhida pelo gestor (opção A): sem internet NÃO deixa sair, porque só se
+    // entra de novo com o Google e a pessoa ficaria trancada fora do app no canteiro.
+    if (navigator.onLine === false) {
+      alert("📵 Sem internet você não conseguiria entrar de novo.\n\nSaia quando tiver sinal.");
+      return;
+    }
+    if (confirmado) return sairDaConta(); // veio do modal de Minha Conta: já confirmou lá
+    confirmar("Sair da conta?\n\nPara entrar de novo você vai precisar de internet e da mesma conta Google.", () => sairDaConta());
   };
   const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
 
