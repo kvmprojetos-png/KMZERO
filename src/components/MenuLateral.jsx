@@ -8,7 +8,7 @@ const FONTE = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica N
 // nav = nome exato da tela no switch de KMZeroApp.jsx
 const GRUPOS = [
   { titulo: "Visão geral", itens: [
-    ["gestor", "Painel"], ["alertas", "Alertas"], ["dashboard", "Dashboard"], ["mensagens", "Mensagens"],
+    ["gestor", "Painel"], ["avisos", "Avisos"], ["alertas", "Alertas"], ["dashboard", "Dashboard"], ["mensagens", "Mensagens"],
   ] },
   { titulo: "Obras", itens: [
     ["obras", "Obras"], ["cronograma", "Cronograma"], ["mapa", "Mapa"], ["clientes", "Clientes"],

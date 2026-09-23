@@ -65,7 +65,9 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5000000,
         // Só as navegações dentro de /app/ caem no app; a raiz (/) é a vitrine estática
         navigateFallback: '/app/index.html',
-        navigateFallbackAllowlist: [/^\/app/]
+        navigateFallbackAllowlist: [/^\/app/],
+        // Notificações (push) — o código fica em public/push-sw.js
+        importScripts: ['push-sw.js']
       }
     }),
     vitrineSemPwa()

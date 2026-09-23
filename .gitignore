@@ -12,3 +12,8 @@ ui-debug.log
 .env
 .env.*
 dist-preview/
+
+# Chave privada do Firebase (conta de serviço) — vai só na Vercel, nunca no Git
+*-firebase-adminsdk-*.json
+*service-account*.json
+.env*.local

@@ -124,6 +124,26 @@ Não precisa programar. Tenha em mãos o login da Vercel e do Firebase; leva uns
 
 > **Depois do domínio, reinstale o app no celular pelo endereço novo**: abrir `https://kmzero.com.br/app/` no navegador → menu → "Adicionar à tela inicial" / "Instalar app". O ícone antigo, instalado por `kmzero.vercel.app`, continua abrindo o endereço antigo (que segue funcionando); remova-o para a equipe não confundir.
 
+## 🔔 Avisos e notificações
+
+- **No app**: sininho (🔔) com contador em todas as telas iniciais e "Avisos" no menu lateral. O gestor escreve aviso para *todos*, *gestores e diretores*, *encarregados*, *uma obra* ou *uma pessoa*; o encarregado escreve para o escritório.
+- **Automáticos**: pedido de material novo (→ gestores) e aprovado/negado (→ quem pediu); e, pelo servidor, duas vezes por dia:
+  - **~16h (seg–sex)**: obra sem ponto lançado → lembrete para o encarregado da obra;
+  - **~19h**: ponto ainda não lançado, pagamento no próximo dia útil (Equipe 1/2, mensal) e prazos (contrato perto do fim/vencido, etapa atrasada, ASO, equipamento quebrado) → gestores. Cada alerta de prazo é avisado **uma vez**.
+- **No celular com o app fechado**: Firebase Cloud Messaging + `api/notificar.js` e `api/cron-avisos.js` (funções da Vercel). No iPhone só funciona com o app **instalado na Tela de Início** (iOS 16.4+).
+
+### Ligar as notificações no celular (uma vez)
+
+São 3 variáveis na Vercel → projeto → **Settings → Environment Variables** (ambiente *Production*):
+
+| Variável | De onde vem |
+|---|---|
+| `VITE_FCM_VAPID_KEY` | Firebase → ⚙️ Configurações do projeto → **Cloud Messaging** → *Certificados push da Web* → **Gerar par de chaves** → copiar a chave (é pública) |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase → ⚙️ Configurações do projeto → **Contas de serviço** → **Gerar nova chave privada** → abrir o `.json` baixado e colar **o conteúdo inteiro**. É secreta: não mande por e-mail/WhatsApp, não suba no GitHub e apague o arquivo depois de colar |
+| `CRON_SECRET` | Uma senha longa inventada por você (ex.: 40 letras e números). A Vercel a usa para chamar a verificação das 16h/19h |
+
+Depois: **Deployments → ⋯ → Redeploy**. Para conferir: app → 🔔 Avisos → **Ativar notificações** → **Testar**.
+
 ## � Documentação Técnica
 
 - [Dossiê Técnico KMZero](./docs/DOSSIE_TECNICO_KMZERO.md)
