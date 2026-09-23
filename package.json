@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "firebase:login": "npx -y firebase-tools@15 login",
+    "firebase:deploy-regras": "npx -y firebase-tools@15 deploy --only firestore:rules,storage",
+    "firebase:testar": "node scripts/testar-firebase.mjs"
   },
   "dependencies": {
     "firebase": "^10.14.1",

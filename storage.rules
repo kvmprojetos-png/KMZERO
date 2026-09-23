@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// KMZERO — Regras do Storage (fotos das obras)
+// Caminho usado pelo app: empresas/{empresaId}/fotosObras/{id}.jpg
+//
+// Isolamento por empresa igual ao do Firestore: o perfil usuarios/{uid} diz a
+// empresa da pessoa e se o acesso está ativo (regras cross-service Storage → Firestore).
+// Na 1ª publicação o Firebase pede para liberar a conta de serviço que faz essa
+// leitura — confirme com "sim" no terminal ou no console.
+// Publicar com:  npm run firebase:deploy-regras
+service firebase.storage {
+  match /b/{bucket}/o {
+    function temPerfil() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid));
+    }
+    function perfil() {
+      return firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    function daEmpresaAtivo(empresaId) {
+      return temPerfil()
+        && perfil().empresaId == empresaId
+        && perfil().get('ativo', true) != false;
+    }
+
+    match /empresas/{empresaId}/{caminho=**} {
+      // Baixar uma foto: só quem é da empresa e está ativo
+      allow get: if daEmpresaAtivo(empresaId);
+      // Nunca listar pastas
+      allow list: if false;
+      // Enviar: da empresa, ativo, só imagem, até 10 MB
+      allow create, update: if daEmpresaAtivo(empresaId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      // Apagar: só o gestor da empresa (o app hoje não apaga fotos da nuvem)
+      allow delete: if daEmpresaAtivo(empresaId) && perfil().perfil == 'gestor';
+    }
+  }
+}

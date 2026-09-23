@@ -1,14 +1,13 @@
 import { MODELOS_CRONOGRAMA } from "./equipe.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
-import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
+import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
 export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
@@ -33,8 +32,8 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
         id: Date.now() + i,
         nome: e.nome,
         ordem: i,
-        inicio: ini.toISOString().split("T")[0],
-        fim: fim.toISOString().split("T")[0],
+        inicio: dataLocalIso(ini),
+        fim: dataLocalIso(fim),
         progresso: 0,
         responsavel: "",
         obs: "",
@@ -399,7 +398,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
   const [progressoInput, setProgressoInput] = useState(0);
 
   const obra = obras.find(o => o.id === obraId);
-  const hojeIso = new Date().toISOString().split("T")[0];
+  const hojeIso = dataLocalIso();
   const etapasRaw = cronogramas[obraId] || [];
 
   const etapas = etapasRaw.map(e => ({
@@ -784,24 +783,24 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
       </tr>
       ${trabalhadores.filter(t => presencas[t.id] === "Presente").map(t => {
         const a = alimentacao[t.id] || {};
-        const totalDia = (a.cafeManha ? (empresa.valorCafeManha || 4) : 0)
-          + (a.cafeTarde ? (empresa.valorCafeTarde || 4) : 0)
-          + (a.marmita ? (empresa.valorMarmita || 18) : 0)
-          + (a.lanche ? (empresa.valorLanche || 10) : 0);
+        // Só soma o que tem preço configurado; refeição marcada sem preço sai como "✓ —"
+        const totalDia = somaAlim(empresa, a);
+        const cel = (k) => { if (!a[k]) return "—"; const p = precoAlim(empresa, k); return p === null ? "✓ —" : "✓ R$ " + p.toFixed(2); };
         return `<tr>
           <td>${t.nome}</td>
-          <td class="num" style="color:${a.cafeManha ? '#2aa84f' : '#ccc'}">${a.cafeManha ? "✓ R$ " + (empresa.valorCafeManha || 4).toFixed(2) : "—"}</td>
-          <td class="num" style="color:${a.cafeTarde ? '#2aa84f' : '#ccc'}">${a.cafeTarde ? "✓ R$ " + (empresa.valorCafeTarde || 4).toFixed(2) : "—"}</td>
-          <td class="num" style="color:${a.marmita ? '#dc2626' : '#ccc'}">${a.marmita ? "✓ R$ " + (empresa.valorMarmita || 18).toFixed(2) : "—"}</td>
-          <td class="num" style="color:${a.lanche ? '#0891b2' : '#ccc'}">${a.lanche ? "✓ R$ " + (empresa.valorLanche || 10).toFixed(2) : "—"}</td>
+          <td class="num" style="color:${a.cafeManha ? '#2aa84f' : '#ccc'}">${cel("cafeManha")}</td>
+          <td class="num" style="color:${a.cafeTarde ? '#2aa84f' : '#ccc'}">${cel("cafeTarde")}</td>
+          <td class="num" style="color:${a.marmita ? '#dc2626' : '#ccc'}">${cel("marmita")}</td>
+          <td class="num" style="color:${a.lanche ? '#0891b2' : '#ccc'}">${cel("lanche")}</td>
           <td class="num"><b>R$ ${totalDia.toFixed(2)}</b></td>
         </tr>`;
       }).join("")}
       <tr style="background:#fef9e7;font-weight:800">
         <td colspan="5" style="text-align:right">TOTAL DO DIA</td>
-        <td class="num" style="color:#dc7e00">R$ ${(totalAlimentacao || 0).toFixed(2)}</td>
+        <td class="num" style="color:#dc7e00">R$ ${trabalhadores.filter(t => presencas[t.id] === "Presente").reduce((s, t) => s + somaAlim(empresa, alimentacao[t.id]), 0).toFixed(2)}</td>
       </tr>
     </table>
+    ${faltaPrecoAlim(empresa) ? `<div style="font-size:9px;color:#b91c1c;margin-top:4px">Refeição sem preço configurado aparece como "—" e não entra no total. Configure os preços em Sistema → Empresa.</div>` : ""}
     ` : ""}
 
     <h2>${alimentacao && Object.keys(alimentacao).length > 0 ? "6" : "5"}. Ocorrências Técnicas do Dia</h2>
@@ -959,10 +958,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
           trabPres[tid].horas += (r.horasTrabalhadas?.[tid] || 9);
           // Soma alimentação por trabalhador
           const ali = (r.alimentacao || {})[tid] || {};
-          const valDia = (ali.cafeManha ? (empresa.valorCafeManha || 4) : 0)
-            + (ali.cafeTarde ? (empresa.valorCafeTarde || 4) : 0)
-            + (ali.marmita ? (empresa.valorMarmita || 18) : 0)
-            + (ali.lanche ? (empresa.valorLanche || 10) : 0);
+          const valDia = somaAlim(empresa, ali); // só o que tem preço configurado (sem valor inventado)
           trabPres[tid].alimentacao += valDia;
         }
         else if (st === "Falta") { trabPres[tid].f++; totalFalt++; }
@@ -1477,6 +1473,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         {rdosEmitidos.length > 0 && (
           <div style={{ marginTop: 16 }}>
             <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosEmitidos.length})</div>
+            <Grade min={320} gap={6} style={{ marginBottom: 6 }}>
             {rdosEmitidos.slice(0, 10).map(r => {
               const o = obras.find(x => x.id === r.obraId);
               const baixar = () => {
@@ -1501,7 +1498,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                 });
               };
               return (
-                <div key={r.id} style={{ background: "#fff", borderRadius: 10, padding: "10px 14px", marginBottom: 6, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
+                <div key={r.id} style={{ background: "#fff", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                     <div style={{ fontSize: 22, marginRight: 10 }}>📄</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -1536,6 +1533,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                 </div>
               );
             })}
+            </Grade>
           </div>
         )}
 

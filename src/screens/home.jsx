@@ -2,14 +2,14 @@ import { TabelaResumoEquipe } from "./equipe.jsx";
 import { gerarSolicitacaoPedidoPDF } from "./suprimentos.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { useModoEscritorio } from "../lib/useLargura.js";
 
 export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, onNav, onLogout }) {
   const presentes = Object.values(presencasHoje).filter(v => v === "Presente").length;
@@ -176,7 +176,20 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
    FLUXO DIÁRIO
 ════════════════════════════════════ */
 
-export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, onNav, onLogout, onAprovar, onNegar }) {
+/* Momento (ms) de um lançamento: usa ts/id (gravados com Date.now()) e, se não houver, a data dd/mm/aaaa */
+function tsLancamento(r) {
+  const n = Number(r?.ts) || Number(r?.id);
+  if (n && n > 1e11) return n;
+  try {
+    const [d, m, a] = String(r?.data || "").split("/");
+    const t = new Date(parseInt(a), parseInt(m) - 1, parseInt(d)).getTime();
+    return isNaN(t) ? 0 : t;
+  } catch { return 0; }
+}
+const maisRecentes = (lista, n) => [...(lista || [])].sort((a, b) => tsLancamento(b) - tsLancamento(a)).slice(0, n);
+
+export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, rdosEmitidos = [], fotosObras = [], onNav, onLogout, onAprovar, onNegar }) {
+  const escritorio = useModoEscritorio(); // largura >= 1024: versão de escritório; abaixo, o app de campo continua igual
   const pendentes = pedidos.filter(p => p.status === "Aguardando").length;
   const movPendentes = (movimentacoes || []).filter(m => m.status === "Aguardando").length;
   const movEquipPendentes = (movEquip || []).filter(m => m.status === "Aguardando").length;
@@ -306,6 +319,249 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
   // Total de avisos pra mostrar no resumo
   const totalAvisos = totalAlertas + movPendentes + pendentes + novasMsgs;
 
+  // MODAL APROVAÇÃO COM PAGAMENTO E PRAZO — o mesmo nas duas versões (celular e escritório)
+  const modalAprovacao = (
+    <Modal show={!!pedidoAprovando} title="✓ Aprovar Pedido" onClose={() => setPedidoAprovando(null)}>
+      {pedidoAprovando && (() => {
+        const itens = pedidoAprovando.itens || [{ material: pedidoAprovando.material, qtd: pedidoAprovando.qtd }];
+        const obraDoPedido = obras.find(o => o.id === pedidoAprovando.obraId);
+        return (
+          <>
+            <div style={{ background: "#f0fdf4", borderRadius: 10, padding: "10px 12px", marginBottom: 12, borderLeft: `3px solid ${GREEN}` }}>
+              <div style={{ fontSize: 11, color: "#166534", fontWeight: 700, marginBottom: 4 }}>📋 Pedido</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{pedidoAprovando.obra}</div>
+              <div style={{ fontSize: 10, color: "#666", marginBottom: 6 }}>👷 {pedidoAprovando.enc} • {pedidoAprovando.data}</div>
+              {itens.map((it, i) => (
+                <div key={i} style={{ fontSize: 11, color: "#444", paddingLeft: 8 }}>{i + 1}) <b>{it.material}</b> — <span style={{ color: GREEN, fontWeight: 700 }}>{it.qtd}</span></div>
+              ))}
+            </div>
+
+            <div style={{ background: "#fef9e7", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: "#8b6f00" }}>
+              💡 Preencha forma de pagamento e prazo para o fornecedor. Após aprovar, o app pergunta se você quer gerar a <b>Solicitação de Pedido de Compra</b> em PDF para enviar.
+            </div>
+
+            <label style={labelS}>💰 Forma de pagamento</label>
+            <select value={formaPag} onChange={e => setFormaPag(e.target.value)} style={selS}>
+              <option value="">— Selecione —</option>
+              <option>À vista</option>
+              <option>Boleto 7 dias</option>
+              <option>Boleto 15 dias</option>
+              <option>Boleto 30 dias</option>
+              <option>30/60 dias</option>
+              <option>30/60/90 dias</option>
+              <option>Faturado mensal</option>
+              <option>PIX antecipado</option>
+              <option>A combinar</option>
+            </select>
+
+            <label style={labelS}>📅 Prazo de entrega</label>
+            <input value={prazo} onChange={e => setPrazo(e.target.value)} placeholder="Ex: até 02/05/2026 ou 3 dias úteis" style={inputS} />
+
+            {!obraDoPedido?.endereco && (
+              <div style={{ background: "#fef2f2", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: RED }}>
+                ⚠️ Atenção: a obra <b>{pedidoAprovando.obra}</b> ainda não tem endereço completo cadastrado. Edite a obra para incluir endereço de entrega.
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setPedidoAprovando(null)} style={{ flex: 1, padding: 12, borderRadius: 10, border: "none", background: "#eee", color: NAVY, fontWeight: 800, cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+              <button onClick={confirmarAprovacao} style={{ flex: 2, padding: 12, borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 13 }}>✓ Aprovar Pedido</button>
+            </div>
+          </>
+        );
+      })()}
+    </Modal>
+  );
+
+  /* ══════════ VERSÃO DE ESCRITÓRIO (largura >= 1024) ══════════
+     Mesmos cálculos de cima; sem a lista de categorias (o menu lateral já faz isso). */
+  if (escritorio) {
+    const hoje = hojeStr();
+    const presHoje = (historico || {})[hoje] || {};
+    const presentesHoje = Object.values(presHoje).filter(v => v === "Presente").length;
+    const obrasAtivas = obras.filter(o => o.status === "Ativa");
+    const pedidosAguardando = pedidos.filter(p => p.status === "Aguardando");
+    const rdosRecentes = maisRecentes(rdosEmitidos, 8);
+    const fotosRecentes = maisRecentes(fotosObras, 8);
+    const limite7d = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const nomeObra = (obraId, alternativa) => obras.find(o => String(o.id) === String(obraId))?.nome || alternativa || "Obra";
+    const nomeEmpresa = empresa?.nomeFantasia || empresa?.razaoSocial || "";
+    const dataExtenso = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    const cartaoS = { background: "#fff", borderRadius: 14, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" };
+    const tituloSecaoS = { fontSize: 12, color: NAVY, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 800, marginBottom: 10 };
+    const btnPeqS = (cor) => ({ background: cor, color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 800, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" });
+    const textoVazio = "Nada ainda: os lançamentos da equipe aparecem aqui.";
+    const indicadores = [
+      { v: obrasAtivas.length,    l: "Obras ativas",       nav: "obras",      c: BLUE },
+      { v: trabalhadores.length,  l: "Trabalhadores",      nav: "equipe",     c: NAVY },
+      { v: presentesHoje,         l: "Presentes hoje",     nav: "calendario", c: GREEN },
+      { v: pendentes,             l: "Pedidos aguardando", nav: "pedidos",    c: pendentes > 0 ? ORANGE : "#9ca3af" },
+      { v: totalAvisos,           l: "Avisos",             nav: "alertas",    c: totalAvisos > 0 ? RED : GREEN },
+    ];
+    const outrasPendencias = [
+      { icon: "🔄", l: "Movimentações de pessoal",      v: movPendentes,      nav: "aprovar_mov" },
+      { icon: "🔧", l: "Movimentações de equipamentos", v: movEquipPendentes, nav: "mov_equip" },
+      { icon: "💬", l: "Mensagens novas",               v: novasMsgs,         nav: "mensagens" },
+      { icon: "🚨", l: "Alertas",                       v: totalAlertas,      nav: "alertas" },
+    ];
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+        <KMHeader right={
+          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button>
+        } />
+        <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 24 }}>
+          <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+
+            {/* (1) Cabeçalho da página + indicadores */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 26, fontWeight: 900, color: NAVY, lineHeight: 1.1 }}>Painel</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#444", marginTop: 4 }}>{[nomeEmpresa, usuario?.nome || "Gestor"].filter(Boolean).join(" · ")}</div>
+                <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{dataExtenso}</div>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {indicadores.map(i => (
+                  <div key={i.l} onClick={() => onNav(i.nav)} style={{ background: "#fff", border: "1px solid #e3e9ee", borderRadius: 12, padding: "10px 16px", minWidth: 118, cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                    <div style={{ fontSize: 24, fontWeight: 900, color: i.c, lineHeight: 1.1 }}>{i.v}</div>
+                    <div style={{ fontSize: 11, color: "#666", fontWeight: 600, marginTop: 2 }}>{i.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* (2) Obras (esquerda) + Pendências (direita) */}
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 20, alignItems: "start" }}>
+              <div>
+                <div style={tituloSecaoS}>Obras</div>
+                {obrasAtivas.length === 0 ? (
+                  <div style={{ ...cartaoS, color: "#888", fontSize: 13 }}>Nenhuma obra ativa. Cadastre em Obras.</div>
+                ) : (
+                  <Grade min={300} gap={12}>
+                    {obrasAtivas.map(o => {
+                      const trabObra = trabalhadores.filter(t => String(t.obraId) === String(o.id));
+                      const presentesObra = trabObra.filter(t => presHoje[t.id] === "Presente").length;
+                      const ultimoRdo = maisRecentes((rdosEmitidos || []).filter(r => String(r.obraId) === String(o.id)), 1)[0];
+                      const fotos7d = (fotosObras || []).filter(f => String(f.obraId) === String(o.id) && tsLancamento(f) >= limite7d).length;
+                      const local = [o.cliente, o.endereco || o.local].filter(Boolean).join(" · ");
+                      return (
+                        <div key={o.id} onClick={() => onNav("obras")} style={{ ...cartaoS, cursor: "pointer", borderTop: `4px solid ${BLUE}` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                            <div style={{ fontWeight: 800, color: NAVY, fontSize: 14, lineHeight: 1.3 }}>{o.nome}</div>
+                            <Badge label={o.status} color={GREEN} small />
+                          </div>
+                          {local && <div style={{ fontSize: 11, color: "#777", marginTop: 4 }}>{local}</div>}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                            <div style={{ background: LIGHT, borderRadius: 8, padding: "8px 10px" }}>
+                              <div style={{ fontSize: 18, fontWeight: 900, color: GREEN }}>{presentesObra}<span style={{ fontSize: 11, color: "#888", fontWeight: 600 }}> / {trabObra.length}</span></div>
+                              <div style={{ fontSize: 10, color: "#666" }}>Presentes hoje</div>
+                            </div>
+                            <div style={{ background: LIGHT, borderRadius: 8, padding: "8px 10px" }}>
+                              <div style={{ fontSize: 18, fontWeight: 900, color: BLUE }}>{fotos7d}</div>
+                              <div style={{ fontSize: 10, color: "#666" }}>Fotos (7 dias)</div>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#555", marginTop: 10 }}>
+                            {ultimoRdo
+                              ? <>📄 Último RDO: <b style={{ color: NAVY }}>nº {ultimoRdo.numero ?? "—"}</b> em {ultimoRdo.data || "—"}</>
+                              : <span style={{ color: "#999" }}>📄 Nenhum RDO emitido ainda</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Grade>
+                )}
+              </div>
+
+              <div>
+                <div style={tituloSecaoS}>Pendências</div>
+                <div style={cartaoS}>
+                  <div style={{ fontWeight: 800, color: NAVY, fontSize: 13, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                    📦 Pedidos aguardando
+                    {pendentes > 0 && <span style={{ background: RED, color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11, fontWeight: 800 }}>{pendentes}</span>}
+                  </div>
+                  {pendentes === 0 && <div style={{ fontSize: 12, color: "#999" }}>Nenhum pedido aguardando.</div>}
+                  {pedidosAguardando.slice(0, 5).map(p => {
+                    const itens = p.itens || [{ material: p.material, qtd: p.qtd }];
+                    const resumo = itens.slice(0, 2).map(it => `${it.material} (${it.qtd})`).join(", ") + (itens.length > 2 ? ` +${itens.length - 2}` : "");
+                    return (
+                      <div key={p.id} style={{ borderLeft: `3px solid ${ORANGE}`, background: "#fffaf3", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+                        <div style={{ fontWeight: 700, color: NAVY, fontSize: 12 }}>{p.obra}</div>
+                        <div style={{ fontSize: 10, color: "#888" }}>👷 {p.enc} • {p.data}</div>
+                        <div style={{ fontSize: 11, color: "#444", marginTop: 3 }}>{resumo}</div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button onClick={() => abrirAprovacao(p)} style={{ ...btnPeqS(GREEN), flex: 2 }}>✓ Aprovar</button>
+                          <button onClick={() => onNegar(p.id)} style={{ ...btnPeqS(RED), flex: 1 }}>✕ Negar</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {pendentes > 5 && (
+                    <button onClick={() => onNav("pedidos")} style={{ width: "100%", padding: 8, borderRadius: 8, border: `1.5px solid ${NAVY}`, background: "#fff", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 11 }}>
+                      Ver todos os {pendentes} pedidos →
+                    </button>
+                  )}
+                  <div style={{ borderTop: "1px solid #eef1f4", marginTop: 12, paddingTop: 10 }}>
+                    {outrasPendencias.map(i => (
+                      <div key={i.nav} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
+                        <span style={{ fontSize: 16 }}>{i.icon}</span>
+                        <span style={{ flex: 1, fontSize: 12, color: "#444" }}>{i.l}</span>
+                        <span style={{ fontSize: 14, fontWeight: 900, color: i.v > 0 ? RED : "#9ca3af", minWidth: 22, textAlign: "right" }}>{i.v}</span>
+                        <button onClick={() => onNav(i.nav)} style={btnPeqS(i.v > 0 ? NAVY : "#9ca3af")}>Ver</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* (3) Atividade recente */}
+            <div style={tituloSecaoS}>Atividade recente</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={cartaoS}>
+                <div style={{ fontWeight: 800, color: NAVY, fontSize: 13, marginBottom: 8 }}>📄 Últimos RDOs</div>
+                {rdosRecentes.length === 0
+                  ? <div style={{ fontSize: 12, color: "#999" }}>{textoVazio}</div>
+                  : rdosRecentes.map(r => (
+                    <div key={r.id} onClick={() => onNav("rdo")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f2f5", cursor: "pointer" }}>
+                      <span style={{ background: GOLD, color: NAVY, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>nº {r.numero ?? "—"}</span>
+                      <span style={{ flex: 1, fontSize: 12, color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nomeObra(r.obraId, r.obra)}</span>
+                      <span style={{ fontSize: 11, color: "#888", whiteSpace: "nowrap" }}>{r.data || "—"}</span>
+                    </div>
+                  ))}
+              </div>
+              <div style={cartaoS}>
+                <div style={{ fontWeight: 800, color: NAVY, fontSize: 13, marginBottom: 8 }}>📷 Últimas fotos</div>
+                {fotosRecentes.length === 0
+                  ? <div style={{ fontSize: 12, color: "#999" }}>{textoVazio}</div>
+                  : (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      {fotosRecentes.map(f => {
+                        const src = f.fotoUrl || f.foto;
+                        return (
+                          <div key={f.id} onClick={() => onNav("galeria")} style={{ width: 96, cursor: "pointer" }}>
+                            {src
+                              ? <img src={src} alt={f.legenda || ""} style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, background: "#e5e7eb", display: "block" }} />
+                              : <div style={{ width: 96, height: 96, borderRadius: 8, background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📷</div>}
+                            <div style={{ fontSize: 10, color: NAVY, fontWeight: 600, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.obraNome || nomeObra(f.obraId)}</div>
+                            <div style={{ fontSize: 10, color: "#888" }}>{f.data || "—"}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <KMFooter />
+        {modalAprovacao}
+      </div>
+    );
+  }
+
+  /* ══════════ VERSÃO DE CAMPO (celular) — igual à de sempre ══════════ */
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader right={
@@ -427,57 +683,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       </div>
       <KMFooter />
 
-      {/* MODAL APROVAÇÃO COM PAGAMENTO E PRAZO */}
-      <Modal show={!!pedidoAprovando} title="✓ Aprovar Pedido" onClose={() => setPedidoAprovando(null)}>
-        {pedidoAprovando && (() => {
-          const itens = pedidoAprovando.itens || [{ material: pedidoAprovando.material, qtd: pedidoAprovando.qtd }];
-          const obraDoPedido = obras.find(o => o.id === pedidoAprovando.obraId);
-          return (
-            <>
-              <div style={{ background: "#f0fdf4", borderRadius: 10, padding: "10px 12px", marginBottom: 12, borderLeft: `3px solid ${GREEN}` }}>
-                <div style={{ fontSize: 11, color: "#166534", fontWeight: 700, marginBottom: 4 }}>📋 Pedido</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{pedidoAprovando.obra}</div>
-                <div style={{ fontSize: 10, color: "#666", marginBottom: 6 }}>👷 {pedidoAprovando.enc} • {pedidoAprovando.data}</div>
-                {itens.map((it, i) => (
-                  <div key={i} style={{ fontSize: 11, color: "#444", paddingLeft: 8 }}>{i + 1}) <b>{it.material}</b> — <span style={{ color: GREEN, fontWeight: 700 }}>{it.qtd}</span></div>
-                ))}
-              </div>
-
-              <div style={{ background: "#fef9e7", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: "#8b6f00" }}>
-                💡 Preencha forma de pagamento e prazo para o fornecedor. Após aprovar, o app pergunta se você quer gerar a <b>Solicitação de Pedido de Compra</b> em PDF para enviar.
-              </div>
-
-              <label style={labelS}>💰 Forma de pagamento</label>
-              <select value={formaPag} onChange={e => setFormaPag(e.target.value)} style={selS}>
-                <option value="">— Selecione —</option>
-                <option>À vista</option>
-                <option>Boleto 7 dias</option>
-                <option>Boleto 15 dias</option>
-                <option>Boleto 30 dias</option>
-                <option>30/60 dias</option>
-                <option>30/60/90 dias</option>
-                <option>Faturado mensal</option>
-                <option>PIX antecipado</option>
-                <option>A combinar</option>
-              </select>
-
-              <label style={labelS}>📅 Prazo de entrega</label>
-              <input value={prazo} onChange={e => setPrazo(e.target.value)} placeholder="Ex: até 02/05/2026 ou 3 dias úteis" style={inputS} />
-
-              {!obraDoPedido?.endereco && (
-                <div style={{ background: "#fef2f2", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: RED }}>
-                  ⚠️ Atenção: a obra <b>{pedidoAprovando.obra}</b> ainda não tem endereço completo cadastrado. Edite a obra para incluir endereço de entrega.
-                </div>
-              )}
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setPedidoAprovando(null)} style={{ flex: 1, padding: 12, borderRadius: 10, border: "none", background: "#eee", color: NAVY, fontWeight: 800, cursor: "pointer", fontSize: 13 }}>Cancelar</button>
-                <button onClick={confirmarAprovacao} style={{ flex: 2, padding: 12, borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 13 }}>✓ Aprovar Pedido</button>
-              </div>
-            </>
-          );
-        })()}
-      </Modal>
+      {modalAprovacao}
     </div>
   );
 }

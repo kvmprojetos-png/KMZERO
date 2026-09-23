@@ -1,12 +1,12 @@
 import { CATEGORIAS_DESPESA } from "./equipamentos.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
+import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
 
@@ -55,9 +55,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
   const tirarFoto = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => set("foto", ev.target.result);
-    r.readAsDataURL(f);
+    reduzirImagem(f).then(dataUrl => set("foto", dataUrl)).catch(() => alert("Não foi possível ler a foto. Tente outra."));
   };
 
   // Filtrar despesas
@@ -264,8 +262,8 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
     })
     .reduce((s, a) => s + (parseFloat(a.valor) || 0), 0);
 
-  // Custo de materiais aprovados
-  const custoMateriais = pedidos
+  // Custo de materiais aprovados — só soma valor REAL informado no pedido; sem valor, mostra "—" (nada inventado)
+  const pedidosAprovMes = pedidos
     .filter(p => p.obraId === obraId && p.status === "Aprovado")
     .filter(p => {
       if (!p.data) return false;
@@ -274,8 +272,10 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
         if (partes.length < 3) return false;
         return parseInt(partes[1]) - 1 === mes && parseInt(partes[2]) === ano;
       } catch { return false; }
-    })
-    .length * 100; // estimativa simples — pode ser refinado depois
+    });
+  const valorPedido = p => { const n = parseFloat(p.valor ?? p.valorTotal); return Number.isFinite(n) ? n : null; };
+  const pedidosComValor = pedidosAprovMes.filter(p => valorPedido(p) !== null);
+  const custoMateriais = pedidosComValor.length ? pedidosComValor.reduce((s, p) => s + valorPedido(p), 0) : null;
 
   // 💸 Despesas avulsas (PIPA, frete, almoço motorista, etc)
   const despesasObra = (despesasAvulsas || []).filter(d => {
@@ -289,7 +289,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
   });
   const custoDespesasAvulsas = despesasObra.reduce((s, d) => s + (parseFloat(d.valor) || 0), 0);
 
-  const total = custoMaoObra + custoCombustivel + custoMateriais + custoDespesasAvulsas;
+  const total = custoMaoObra + custoCombustivel + (custoMateriais || 0) + custoDespesasAvulsas;
   const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
   return (
@@ -312,6 +312,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
           <div style={{ fontSize: 11, opacity: 0.8 }}>📍 {obra?.nome}</div>
           <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>Custo total apropriado</div>
           <div style={{ fontSize: 32, fontWeight: 900, color: GOLD }}>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+          {custoMateriais === null && <div style={{ fontSize: 10, opacity: 0.7 }}>Sem o custo de materiais (informe o valor nos pedidos aprovados)</div>}
         </div>
 
         <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", borderLeft: `4px solid ${GREEN}` }}>
@@ -338,9 +339,9 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>📦 Materiais</div>
-              <div style={{ fontSize: 11, color: "#888" }}>Pedidos aprovados (estimado)</div>
+              <div style={{ fontSize: 11, color: "#888" }}>{custoMateriais === null ? `${pedidosAprovMes.length} pedido(s) aprovado(s) — informe o valor nos pedidos aprovados` : `${pedidosComValor.length} de ${pedidosAprovMes.length} pedido(s) aprovado(s) com valor`}</div>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: BLUE }}>R$ {custoMateriais.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: BLUE }}>{custoMateriais === null ? "—" : `R$ ${custoMateriais.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</div>
           </div>
         </div>
 
