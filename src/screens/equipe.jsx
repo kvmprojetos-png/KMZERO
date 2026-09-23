@@ -1592,6 +1592,16 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           <option value="mensal">🗓️ Mensal (30 dias)</option>
           <option value="personalizado">⚙️ Personalizado (cliente define)</option>
         </select>
+        <label style={labelS}>Equipe de pagamento</label>
+        <select value={form.equipe ? String(form.equipe) : ""} onChange={e => set("equipe", e.target.value ? Number(e.target.value) : null)} style={selS}>
+          <option value="">Sem equipe (paga à parte)</option>
+          <option value="1">Equipe 1</option>
+          <option value="2">Equipe 2</option>
+          <option value="3">Equipe 3</option>
+        </select>
+        <div style={{ fontSize: 10, color: "#888", marginTop: -4, marginBottom: 10, lineHeight: 1.4 }}>
+          Quem é da mesma equipe recebe no mesmo dia. Na Folha "Por Ciclo" dá para filtrar e fechar a equipe inteira de uma vez.
+        </div>
         {form.tipoFolha === "semanal" && (
           <>
             <label style={labelS}>Dia de pagamento da semana</label>
