@@ -241,6 +241,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
       const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const s = (historico[iso] || {})[t.id];
       if (s === "Presente" || s === "Atestado") diasPagos++;
+      else if (s === "Meia") diasPagos += 0.5;
     }
     const diaria = parseFloat(t.diaria) || 0;
     custoMaoObra += diasPagos * diaria;
