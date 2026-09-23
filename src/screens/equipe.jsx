@@ -50,7 +50,7 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
 
       {!colapsada && (
         <>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: `1px solid ${T.borda}`, fontSize: 12, fontWeight: 600, color: T.titulo, background: "#fafbfc" }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: `1px solid ${T.borda}`, fontSize: 12, fontWeight: 600, color: T.titulo, background: T.superficie2 }}>
             <option value="todas">🏗️ Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -78,9 +78,9 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
                       <div style={{ fontSize: 9, color: T.texto2 }}>{d.cargo} • {d._obra?.nome?.substring(0, 22) || "—"}</div>
                     </td>
                     <td style={{ padding: "8px 6px", textAlign: "center", color: GREEN, fontWeight: 700, fontSize: 11 }}>{d._calc.pres}</td>
-                    <td style={{ padding: "8px 6px", textAlign: "center", color: d._calc.falt > 0 ? RED : "#ccc", fontWeight: 700, fontSize: 11 }}>{d._calc.falt}</td>
-                    <td style={{ padding: "8px 6px", textAlign: "center", color: d._calc.atest > 0 ? ORANGE : "#ccc", fontWeight: 700, fontSize: 11 }}>{d._calc.atest}</td>
-                    <td style={{ padding: "8px 8px", textAlign: "right", color: d._calc.diaria === 0 ? "#ccc" : "#666", fontSize: 10, fontStyle: d._calc.diaria === 0 ? "italic" : "normal" }}>{d._calc.diaria === 0 ? "—" : "R$ " + d._calc.diaria.toFixed(2)}</td>
+                    <td style={{ padding: "8px 6px", textAlign: "center", color: d._calc.falt > 0 ? RED : T.desabilitado, fontWeight: 700, fontSize: 11 }}>{d._calc.falt}</td>
+                    <td style={{ padding: "8px 6px", textAlign: "center", color: d._calc.atest > 0 ? ORANGE : T.desabilitado, fontWeight: 700, fontSize: 11 }}>{d._calc.atest}</td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", color: d._calc.diaria === 0 ? T.desabilitado : T.texto2, fontSize: 10, fontStyle: d._calc.diaria === 0 ? "italic" : "normal" }}>{d._calc.diaria === 0 ? "—" : "R$ " + d._calc.diaria.toFixed(2)}</td>
                     <td style={{ padding: "8px 8px", textAlign: "right", color: GREEN, fontWeight: 800, fontSize: 11 }}>R$ {d._calc.total.toFixed(2)}</td>
                   </tr>
                 ))}
@@ -173,22 +173,22 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
       <KMHeader title="Equipe" sub={`${trabalhadores.length} trabalhador(es)`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
 
-        {/* Indicadores rápidos clicáveis (filtros) */}
+        {/* Indicadores rápidos clicáveis (filtros) — borda do "Todos" ativo em T.contorno: navy no claro, ciano no escuro (navy sumiria sobre superfície escura) */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          <button onClick={() => setFiltroStatus("todos")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "todos" ? `2px solid ${NAVY}` : "1px solid #dde2ef", background: filtroStatus === "todos" ? "#dde6f5" : "#fff", cursor: "pointer" }}>
+          <button onClick={() => setFiltroStatus("todos")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "todos" ? `2px solid ${T.contorno}` : `1px solid ${T.borda}`, background: filtroStatus === "todos" ? T.infoFundo : T.superficie, cursor: "pointer" }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: T.titulo }}>{trabalhadores.length}</div>
             <div style={{ fontSize: 9, color: T.texto2 }}>Todos</div>
           </button>
-          <button onClick={() => setFiltroStatus(filtroStatus === "aso_vencido" ? "todos" : "aso_vencido")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "aso_vencido" ? `2px solid ${RED}` : "1px solid #dde2ef", background: filtroStatus === "aso_vencido" ? "#fef2f2" : "#fff", cursor: "pointer" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: totalAsoVencido > 0 ? RED : "#888" }}>{totalAsoVencido}</div>
+          <button onClick={() => setFiltroStatus(filtroStatus === "aso_vencido" ? "todos" : "aso_vencido")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "aso_vencido" ? `2px solid ${RED}` : `1px solid ${T.borda}`, background: filtroStatus === "aso_vencido" ? T.erroFundo : T.superficie, cursor: "pointer" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: totalAsoVencido > 0 ? RED : T.texto3 }}>{totalAsoVencido}</div>
             <div style={{ fontSize: 9, color: T.texto2 }}>ASO 30d</div>
           </button>
-          <button onClick={() => setFiltroStatus(filtroStatus === "sem_epi" ? "todos" : "sem_epi")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "sem_epi" ? `2px solid ${ORANGE}` : "1px solid #dde2ef", background: filtroStatus === "sem_epi" ? "#fff8f0" : "#fff", cursor: "pointer" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: totalSemEPI > 0 ? ORANGE : "#888" }}>{totalSemEPI}</div>
+          <button onClick={() => setFiltroStatus(filtroStatus === "sem_epi" ? "todos" : "sem_epi")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "sem_epi" ? `2px solid ${ORANGE}` : `1px solid ${T.borda}`, background: filtroStatus === "sem_epi" ? T.avisoFundo : T.superficie, cursor: "pointer" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: totalSemEPI > 0 ? ORANGE : T.texto3 }}>{totalSemEPI}</div>
             <div style={{ fontSize: 9, color: T.texto2 }}>S/ EPI</div>
           </button>
-          <button onClick={() => setFiltroStatus(filtroStatus === "inapto" ? "todos" : "inapto")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "inapto" ? `2px solid ${RED}` : "1px solid #dde2ef", background: filtroStatus === "inapto" ? "#fef2f2" : "#fff", cursor: "pointer" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: totalInapto > 0 ? RED : "#888" }}>{totalInapto}</div>
+          <button onClick={() => setFiltroStatus(filtroStatus === "inapto" ? "todos" : "inapto")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "inapto" ? `2px solid ${RED}` : `1px solid ${T.borda}`, background: filtroStatus === "inapto" ? T.erroFundo : T.superficie, cursor: "pointer" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: totalInapto > 0 ? RED : T.texto3 }}>{totalInapto}</div>
             <div style={{ fontSize: 9, color: T.texto2 }}>Inapto</div>
           </button>
         </div>
@@ -358,7 +358,8 @@ export function TelaFicha({ obras, onBack, onAdd }) {
             <div style={{ fontSize: 20, fontWeight: 700, color: GREEN, marginTop: 12 }}>Ficha Salva!</div>
             <div style={{ color: T.texto2, marginTop: 6, fontSize: 13 }}>{form.nome} cadastrado com sucesso.</div>
             <Btn label="Nova Ficha" color={NAVY} onClick={() => { setSalvo(false); setForm({ nome: "", cpf: "", rg: "", nasc: "", tel: "", cargo: "", obraId: "", inicio: "", diaria: "", tamCamisa: "", tamCalca: "", tamBota: "", tamLuva: "", tamCapacete: "", epiEntregue: false, epiData: "", foto: null, asoData: "", asoValidade: "", asoStatus: "Apto", docCtps: null, docCpf: null, docComprov: null }); }} style={{ marginTop: 24 }} />
-            <Btn label="Voltar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 10 }} />
+            {/* Botão secundário: Btn cola alfa em `${color}55` na sombra, então a sombra é sobrescrita por T.sombra para o var() não gerar CSS inválido */}
+            <Btn label="Voltar" color={T.superficie2} text={T.titulo} onClick={onBack} style={{ marginTop: 10, boxShadow: T.sombra }} />
           </div>
         ) : (
           <>
@@ -431,7 +432,7 @@ export function TelaFicha({ obras, onBack, onAdd }) {
                   { v: "Apto com restrições", c: ORANGE, icon: "⚠️" },
                   { v: "Inapto", c: RED, icon: "❌" },
                 ].map(s => (
-                  <button key={s.v} onClick={() => set("asoStatus", s.v)} style={{ flex: 1, padding: "8px 4px", borderRadius: 10, border: `2px solid ${form.asoStatus === s.v ? s.c : "#dde2ef"}`, background: form.asoStatus === s.v ? s.c : "#fff", color: form.asoStatus === s.v ? "#fff" : "#666", fontWeight: 700, cursor: "pointer", fontSize: 11 }}>
+                  <button key={s.v} onClick={() => set("asoStatus", s.v)} style={{ flex: 1, padding: "8px 4px", borderRadius: 10, border: `2px solid ${form.asoStatus === s.v ? s.c : T.borda}`, background: form.asoStatus === s.v ? s.c : T.superficie, color: form.asoStatus === s.v ? "#fff" : T.texto2, fontWeight: 700, cursor: "pointer", fontSize: 11 }}>
                     <div style={{ fontSize: 18 }}>{s.icon}</div>
                     {s.v}
                   </button>
@@ -1106,14 +1107,14 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
     if (st === "Falta") return "#fee2e2";
     if (st === "Atestado") return "#fef3c7";
     if (st === "Meia") return "#e0f2fe";
-    return "#f8fafc";
+    return T.superficie2; // dia sem registro segue o tema; os status mantêm as cores fixas
   };
   const corTexto = (st) => {
     if (st === "Presente") return "#15803d";
     if (st === "Falta") return "#b91c1c";
     if (st === "Atestado") return "#a16207";
     if (st === "Meia") return "#0369a1";
-    return "#cbd5e1";
+    return T.texto3;
   };
 
   const celulas = [];
@@ -1137,7 +1138,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
         <button
           onClick={() => setMesOffset(mesOffset - 1)}
           aria-label="Mês anterior"
-          style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer", color: T.titulo, fontWeight: 700 }}
+          style={{ background: T.superficie2, border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer", color: T.titulo, fontWeight: 700 }}
         >
           ‹
         </button>
@@ -1149,7 +1150,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
           onClick={() => setMesOffset(Math.min(0, mesOffset + 1))}
           aria-label="Próximo mês"
           disabled={ehMesAtual}
-          style={{ background: ehMesAtual ? "#f8fafc" : "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: ehMesAtual ? "default" : "pointer", color: ehMesAtual ? "#cbd5e1" : NAVY, fontWeight: 700 }}
+          style={{ background: ehMesAtual ? T.superficie : T.superficie2, border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: ehMesAtual ? "default" : "pointer", color: ehMesAtual ? T.desabilitado : T.titulo, fontWeight: 700 }}
         >
           ›
         </button>
@@ -1178,12 +1179,12 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                border: ehHoje ? `2px solid ${NAVY}` : "1px solid #f1f5f9",
+                border: ehHoje ? `2px solid ${T.contorno}` : `1px solid ${T.borda}`,
                 minHeight: 34,
                 cursor: podeEditar && !(ehMesAtual && dia > hoje.getDate()) ? "pointer" : "default",
               }}
             >
-              <div style={{ fontSize: 12, fontWeight: 700, color: st ? corTexto(st) : "#94a3b8" }}>{dia}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: st ? corTexto(st) : T.texto3 }}>{dia}</div>
               {st && (
                 <div style={{ fontSize: 9, lineHeight: 1 }}>
                   {st === "Presente" ? "✓" : st === "Meia" ? "½" : st === "Falta" ? "✕" : "⚕"}
@@ -1204,7 +1205,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
           <div style={{ fontSize: 9, color: T.texto2 }}>Faltas</div>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#a16207" }}>{contAtestado}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.avisoTexto }}>{contAtestado}</div>
           <div style={{ fontSize: 9, color: T.texto2 }}>Atestados</div>
         </div>
       </div>
@@ -1215,7 +1216,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
         <span><span style={{ display: "inline-block", width: 8, height: 8, background: T.avisoFundo, borderRadius: 2, marginRight: 3 }}></span>Atestado</span>
       </div>
       {podeEditar && (
-        <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: T.titulo, fontWeight: 600, background: "#f0f6ff", borderRadius: 8, padding: "6px 8px" }}>
+        <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: T.titulo, fontWeight: 600, background: T.infoFundo, borderRadius: 8, padding: "6px 8px" }}>
           ✏️ Modo gestor: toque no dia para corrigir (Presente → Falta → Atestado → limpar)
         </div>
       )}
@@ -1291,7 +1292,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
             <div style={{ marginTop: 8 }}>
               <span style={{
                 display: "inline-block", padding: "4px 12px", borderRadius: 14, fontSize: 11, fontWeight: 700,
-                background: trabalhador.asoStatus === "Apto" ? "#f0fdf4" : trabalhador.asoStatus === "Inapto" ? "#fef2f2" : "#fff8f0",
+                background: trabalhador.asoStatus === "Apto" ? T.sucessoFundo : trabalhador.asoStatus === "Inapto" ? T.erroFundo : T.avisoFundo,
                 color: trabalhador.asoStatus === "Apto" ? GREEN : trabalhador.asoStatus === "Inapto" ? RED : ORANGE,
                 border: `1px solid ${trabalhador.asoStatus === "Apto" ? GREEN : trabalhador.asoStatus === "Inapto" ? RED : ORANGE}33`,
               }}>
@@ -1341,7 +1342,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: trabalhador.epiEntregue ? "#f0fdf4" : "#fef2f2", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: trabalhador.epiEntregue ? T.sucessoFundo : T.erroFundo, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 16 }}>{trabalhador.epiEntregue ? "✅" : "⚠️"}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: trabalhador.epiEntregue ? GREEN : RED }}>
@@ -1399,7 +1400,8 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
             <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ fontWeight: 800, color: T.titulo, fontSize: 14, flex: 1 }}>☕ Alimentação no mês</div>
-                <div style={{ background: "#dc7e00", color: "#fff", padding: "4px 10px", borderRadius: 6, fontWeight: 800, fontSize: 13 }}>R$ {totalAli.toFixed(2)}</div>
+                {/* Badge de destaque: laranja fixo da paleta (texto branco), igual nos dois temas */}
+                <div style={{ background: ORANGE, color: "#fff", padding: "4px 10px", borderRadius: 6, fontWeight: 800, fontSize: 13 }}>R$ {totalAli.toFixed(2)}</div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
                 <div style={{ background: T.avisoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
@@ -1407,7 +1409,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
                   <div style={{ fontSize: 9, color: T.texto2 }}>☕ Manhã</div>
                 </div>
                 <div style={{ background: T.avisoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#b45309" }}>{qtdTarde}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: T.avisoTexto }}>{qtdTarde}</div>
                   <div style={{ fontSize: 9, color: T.texto2 }}>☕ Tarde</div>
                 </div>
                 <div style={{ background: T.erroFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
@@ -1415,7 +1417,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
                   <div style={{ fontSize: 9, color: T.texto2 }}>🍱 Marmita</div>
                 </div>
                 <div style={{ background: T.infoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#0891b2" }}>{qtdLanche}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: T.infoTexto }}>{qtdLanche}</div>
                   <div style={{ fontSize: 9, color: T.texto2 }}>🥪 Lanche</div>
                 </div>
               </div>
@@ -1439,7 +1441,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
                 <span style={{ fontSize: 13, color: T.titulo, fontWeight: 600 }}>{trabalhador.asoValidade ? new Date(trabalhador.asoValidade).toLocaleDateString("pt-BR") : "—"}</span>
               </div>
               {asoStatusInfo && (
-                <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: asoStatusInfo.cor === RED ? "#fef2f2" : asoStatusInfo.cor === ORANGE ? "#fff8f0" : "#f0fdf4", color: asoStatusInfo.cor, fontWeight: 700, fontSize: 13, textAlign: "center" }}>
+                <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: asoStatusInfo.cor === RED ? T.erroFundo : asoStatusInfo.cor === ORANGE ? T.avisoFundo : T.sucessoFundo, color: asoStatusInfo.cor, fontWeight: 700, fontSize: 13, textAlign: "center" }}>
                   {asoStatusInfo.icon} {asoStatusInfo.texto}
                 </div>
               )}
@@ -1669,8 +1671,8 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
             return (
               <button key={o.k} type="button" onClick={() => set(o.k, !ativo)} style={{
                 flex: 1, padding: "10px 8px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center",
-                border: ativo ? "2px solid #15803d" : "1.5px solid #dde2ef",
-                background: ativo ? "#15803d15" : "#f9fafb", color: ativo ? "#15803d" : "#888",
+                border: ativo ? `2px solid ${GREEN}` : `1.5px solid ${T.borda}`,
+                background: ativo ? T.sucessoFundo : T.superficie2, color: ativo ? T.sucessoTexto : T.texto3, // verde escuro fixo sumiria no tema escuro
               }}>
                 {o.l}<br />{ativo ? "✓ Paga" : "Não paga"}
               </button>
@@ -1835,7 +1837,7 @@ export function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemo
           <div style={{ fontSize: 11, color, fontWeight: 700, marginTop: 2 }}>{new Date(f.inicio).toLocaleDateString("pt-BR")} → {new Date(f.fim).toLocaleDateString("pt-BR")}</div>
           {f.obs && <div style={{ fontSize: 10, color: T.texto3, fontStyle: "italic" }}>{f.obs}</div>}
         </div>
-        <button onClick={() => onRemove(f.id)} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+        <button onClick={() => onRemove(f.id)} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
       </div>
     );
   };
@@ -1869,7 +1871,7 @@ export function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemo
         </>}
         {passadas.length > 0 && <>
           <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13, marginTop: 12 }}>✓ Concluídas</div>
-          {passadas.slice(0, 5).map(f => renderItem(f, "#888"))}
+          {passadas.slice(0, 5).map(f => renderItem(f, T.texto3))}
         </>}
 
         <Btn label="➕ Programar Férias" color={NAVY} onClick={() => setModal(true)} style={{ marginTop: 12 }} />
@@ -1933,10 +1935,10 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
         ].map(a => (
           <button key={a.v} onClick={() => setAba(a.v)} style={{
             flex: 1, padding: "12px 0", background: "none", border: "none",
-            borderBottom: aba === a.v ? `3px solid ${NAVY}` : "3px solid transparent",
-            color: aba === a.v ? NAVY : "#888", fontWeight: aba === a.v ? 800 : 600, fontSize: 13, cursor: "pointer"
+            borderBottom: aba === a.v ? `3px solid ${T.contorno}` : "3px solid transparent", // navy sumiria sobre a superfície escura
+            color: aba === a.v ? T.titulo : T.texto3, fontWeight: aba === a.v ? 800 : 600, fontSize: 13, cursor: "pointer"
           }}>
-            {a.l} {a.n > 0 && <span style={{ background: aba === a.v ? NAVY : "#ccc", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, marginLeft: 4 }}>{a.n}</span>}
+            {a.l} {a.n > 0 && <span style={{ background: aba === a.v ? NAVY : T.desabilitadoFundo, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, marginLeft: 4 }}>{a.n}</span>}
           </button>
         ))}
       </div>
@@ -1957,9 +1959,9 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
               const obra = obras.find(o => o.id === t.obraId);
               const eHoje = t.dia === hoje.getDate();
               return (
-                <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: eHoje ? "#fef3c7" : "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${eHoje ? "#f59e0b" : "#fbbf24"}` }}>
+                <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: eHoje ? T.avisoFundo : T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${eHoje ? "#f59e0b" : "#fbbf24"}` }}>
                   <div style={{ width: 50, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: eHoje ? "#92400e" : NAVY }}>{String(t.dia).padStart(2, "0")}</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: eHoje ? T.avisoTexto : T.titulo }}>{String(t.dia).padStart(2, "0")}</div>
                     <div style={{ fontSize: 9, color: T.texto2, textTransform: "uppercase" }}>{meses[mesAtual].slice(0, 3)}</div>
                   </div>
                   <div style={{ flex: 1, marginLeft: 10 }}>
@@ -2090,10 +2092,10 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
         ].map(a => (
           <button key={a.v} onClick={() => setAba(a.v)} style={{
             flex: 1, padding: "12px 0", background: "none", border: "none",
-            borderBottom: aba === a.v ? `3px solid ${NAVY}` : "3px solid transparent",
-            color: aba === a.v ? NAVY : "#888", fontWeight: aba === a.v ? 800 : 600, fontSize: 13, cursor: "pointer"
+            borderBottom: aba === a.v ? `3px solid ${T.contorno}` : "3px solid transparent", // navy sumiria sobre a superfície escura
+            color: aba === a.v ? T.titulo : T.texto3, fontWeight: aba === a.v ? 800 : 600, fontSize: 13, cursor: "pointer"
           }}>
-            {a.l} <span style={{ background: aba === a.v ? NAVY : "#ccc", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, marginLeft: 4 }}>{a.n}</span>
+            {a.l} <span style={{ background: aba === a.v ? NAVY : T.desabilitadoFundo, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, marginLeft: 4 }}>{a.n}</span>
           </button>
         ))}
       </div>
@@ -2202,7 +2204,7 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: ORANGE }}>R$ {a.valor.toFixed(2)}</div>
-                  <button onClick={() => { confirmar("Remover este adiantamento?", () => { onRemove(a.id); }); }} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, cursor: "pointer", fontSize: 16, marginTop: 2, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+                  <button onClick={() => { confirmar("Remover este adiantamento?", () => { onRemove(a.id); }); }} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, cursor: "pointer", fontSize: 16, marginTop: 2, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
                 </div>
               </div>
             </div>
@@ -2303,11 +2305,11 @@ export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
   };
 
   const cores = {
-    vencido: { bg: RED, light: "#fef2f2", icon: "❌", titulo: "ASO Vencido" },
-    vence_30: { bg: ORANGE, light: "#fff8f0", icon: "⚠️", titulo: "Vencendo em 30 dias" },
-    apto: { bg: GREEN, light: "#f0fdf4", icon: "✅", titulo: "Aptos" },
-    inapto: { bg: RED, light: "#fef2f2", icon: "🚫", titulo: "Inaptos / Restrições" },
-    sem_aso: { bg: "#888", light: "#f5f5f5", icon: "❓", titulo: "Sem ASO" },
+    vencido: { bg: RED, light: T.erroFundo, icon: "❌", titulo: "ASO Vencido" },
+    vence_30: { bg: ORANGE, light: T.avisoFundo, icon: "⚠️", titulo: "Vencendo em 30 dias" },
+    apto: { bg: GREEN, light: T.sucessoFundo, icon: "✅", titulo: "Aptos" },
+    inapto: { bg: RED, light: T.erroFundo, icon: "🚫", titulo: "Inaptos / Restrições" },
+    sem_aso: { bg: "#888", light: T.superficie2, icon: "❓", titulo: "Sem ASO" }, // bg fica hex: recebe sufixo alfa (`${c.bg}33`)
   };
 
   return (
@@ -2320,7 +2322,7 @@ export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
           {Object.entries(grupos).map(([k, l]) => {
             const c = cores[k];
             return (
-              <button key={k} onClick={() => setFiltro(k)} style={{ background: filtro === k ? c.bg : "#fff", color: filtro === k ? "#fff" : NAVY, border: filtro === k ? "none" : `1.5px solid ${c.bg}33`, borderRadius: 12, padding: "10px 8px", cursor: "pointer", textAlign: "left", boxShadow: filtro === k ? `0 4px 14px ${c.bg}55` : "none" }}>
+              <button key={k} onClick={() => setFiltro(k)} style={{ background: filtro === k ? c.bg : T.superficie, color: filtro === k ? "#fff" : T.titulo, border: filtro === k ? "none" : `1.5px solid ${c.bg}33`, borderRadius: 12, padding: "10px 8px", cursor: "pointer", textAlign: "left", boxShadow: filtro === k ? `0 4px 14px ${c.bg}55` : "none" }}>
                 <div style={{ fontSize: 22 }}>{c.icon}</div>
                 <div style={{ fontSize: 22, fontWeight: 900, marginTop: 2 }}>{l.length}</div>
                 <div style={{ fontSize: 10, opacity: filtro === k ? 0.9 : 0.7 }}>{c.titulo}</div>

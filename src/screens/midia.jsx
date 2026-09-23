@@ -213,7 +213,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
               </div>
               <Grade min={160} gap={6} style={escritorio ? undefined : { gridTemplateColumns: "repeat(3, 1fr)" }}>
                 {porData[data].map(f => (
-                  <div key={f.id} onClick={() => setFotoExpandida(f)} style={{ position: "relative", aspectRatio: "1", background: "#ddd", borderRadius: 8, overflow: "hidden", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                  <div key={f.id} onClick={() => setFotoExpandida(f)} style={{ position: "relative", aspectRatio: "1", background: T.superficie2, borderRadius: 8, overflow: "hidden", cursor: "pointer", boxShadow: T.sombra }}>
                     <img src={f.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     {f.numero && (
                       <div style={{ position: "absolute", top: 4, left: 4, background: "rgba(15,33,81,0.9)", color: GOLD, padding: "2px 6px", borderRadius: 4, fontSize: 9, fontWeight: 800 }}>#{String(f.numero).padStart(3, "0")}</div>
@@ -240,7 +240,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
             <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
               <div style={{ flex: 1, color: "#fff" }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>
-                  {fotoExpandida.numero && <span style={{ background: GOLD, color: T.titulo, padding: "2px 8px", borderRadius: 4, fontSize: 11, marginRight: 8, fontWeight: 900 }}>#{String(fotoExpandida.numero).padStart(3, "0")}</span>}
+                  {fotoExpandida.numero && <span style={{ background: GOLD, color: NAVY /* badge dourado: texto navy nos dois temas (T.titulo clareia no escuro e sumiria) */, padding: "2px 8px", borderRadius: 4, fontSize: 11, marginRight: 8, fontWeight: 900 }}>#{String(fotoExpandida.numero).padStart(3, "0")}</span>}
                   {fotoExpandida.obraNome}
                 </div>
                 <div style={{ fontSize: 11, opacity: 0.7 }}>📅 {fotoExpandida.data} • 🕐 {fotoExpandida.hora} • 👷 {fotoExpandida.autor}</div>
@@ -308,7 +308,7 @@ export function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, 
             <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={5} placeholder="Escreva sua mensagem..." style={{ ...inputS, resize: "none", fontFamily: "inherit" }} />
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setComposicao(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 800, cursor: "pointer" }}>Cancelar</button>
-              <button onClick={enviar} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: destinatario && texto.trim() ? GREEN : "#ccc", color: "#fff", fontWeight: 800, cursor: "pointer" }}>📤 Enviar</button>
+              <button onClick={enviar} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: destinatario && texto.trim() ? GREEN : T.desabilitadoFundo, color: "#fff", fontWeight: 800, cursor: "pointer" }}>📤 Enviar</button>
             </div>
           </>
         ) : (
@@ -319,7 +319,7 @@ export function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, 
               const enviada = m.de === usuario.id;
               const outro = usuarios.find(u => u.id === (enviada ? m.para : m.de));
               return (
-                <div key={m.id} style={{ background: enviada ? "#dde6f5" : "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, marginLeft: enviada ? 30 : 0, marginRight: enviada ? 0 : 30, boxShadow: T.sombra }}>
+                <div key={m.id} style={{ background: enviada ? T.infoFundo : T.superficie /* balão enviado: tom informativo; recebido: cartão comum */, borderRadius: 12, padding: "10px 14px", marginBottom: 8, marginLeft: enviada ? 30 : 0, marginRight: enviada ? 0 : 30, boxShadow: T.sombra }}>
                   <div style={{ fontSize: 11, color: T.texto2, marginBottom: 4 }}>
                     {enviada ? `Para: ${outro?.nome}` : `De: ${outro?.nome}`} • {new Date(m.ts).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                   </div>
@@ -380,7 +380,7 @@ export function TelaLinks({ links, onBack, onAdd, onRemover }) {
                     <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{l.nome}</div>
                     <div style={{ fontSize: 10, color: T.texto2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.url}</div>
                   </div>
-                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); confirmar(`Remover "${l.nome}"?`, () => { onRemover(l.id); }); }} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, cursor: "pointer", fontSize: 16, marginRight: 4, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); confirmar(`Remover "${l.nome}"?`, () => { onRemover(l.id); }); }} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, cursor: "pointer", fontSize: 16, marginRight: 4, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
                   <span style={{ color: BLUE, fontSize: 16 }}>↗</span>
                 </div>
               </a>
@@ -404,7 +404,7 @@ export function TelaLinks({ links, onBack, onAdd, onRemover }) {
         <label style={labelS}>Ícone</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
           {ICONS.map(i => (
-            <button key={i} onClick={() => set("icon", i)} style={{ width: 40, height: 40, fontSize: 20, border: form.icon === i ? `2px solid ${NAVY}` : "1px solid #ddd", borderRadius: 8, background: form.icon === i ? "#dde6f5" : "#fff", cursor: "pointer" }}>{i}</button>
+            <button key={i} onClick={() => set("icon", i)} style={{ width: 40, height: 40, fontSize: 20, border: form.icon === i ? `2px solid ${T.contorno}` : `1px solid ${T.borda}` /* contorno: navy no claro, ciano no escuro (NAVY sumiria) */, borderRadius: 8, background: form.icon === i ? T.infoFundo : T.superficie, cursor: "pointer" }}>{i}</button>
           ))}
         </div>
         <Btn label="✓ ADICIONAR" color={GREEN} onClick={salvar} />
@@ -597,10 +597,10 @@ export function TelaAnexosObra({ obra, usuario, onBack }) {
             onClick={() => setFiltroCat("todas")}
             style={{
               padding: "8px 14px", borderRadius: 20,
-              background: filtroCat === "todas" ? NAVY : "#fff",
-              color: filtroCat === "todas" ? "#fff" : NAVY,
+              background: filtroCat === "todas" ? NAVY : T.superficie,
+              color: filtroCat === "todas" ? "#fff" : T.titulo,
               fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
-              border: filtroCat === "todas" ? "none" : "1px solid #e5e7eb",
+              border: filtroCat === "todas" ? "none" : `1px solid ${T.borda}`,
             }}
           >
             Todas ({arquivos.length})
@@ -614,7 +614,7 @@ export function TelaAnexosObra({ obra, usuario, onBack }) {
                 onClick={() => setFiltroCat(c.id)}
                 style={{
                   padding: "8px 14px", borderRadius: 20,
-                  background: filtroCat === c.id ? c.cor : "#fff",
+                  background: filtroCat === c.id ? c.cor : T.superficie,
                   color: filtroCat === c.id ? "#fff" : c.cor,
                   fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
                   border: filtroCat === c.id ? "none" : "1px solid " + c.cor + "55",
@@ -693,8 +693,8 @@ export function TelaAnexosObra({ obra, usuario, onBack }) {
           <div style={{ padding: 20, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⬆️</div>
             <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 10 }}>{progresso.fase}</div>
-            <div style={{ background: "#e5e7eb", borderRadius: 8, height: 10, overflow: "hidden", marginBottom: 8 }}>
-              <div style={{ background: NAVY, height: "100%", width: progresso.atual + "%", transition: "width 0.3s" }}></div>
+            <div style={{ background: T.superficie2, borderRadius: 8, height: 10, overflow: "hidden", marginBottom: 8 }}>
+              <div style={{ background: T.contorno /* barra de progresso: NAVY sumiria na trilha escura; contorno = navy no claro, ciano no escuro */, height: "100%", width: progresso.atual + "%", transition: "width 0.3s" }}></div>
             </div>
             <div style={{ fontSize: 11, color: T.texto2 }}>{progresso.atual}%</div>
           </div>
@@ -734,7 +734,7 @@ export function TelaAnexosObra({ obra, usuario, onBack }) {
 
             <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
               <button onClick={() => { setModalUpload(false); setArquivoSelecionado(null); setDescricaoUpload(""); }} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
-              <button onClick={fazerUpload} disabled={!arquivoSelecionado} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: arquivoSelecionado ? NAVY : "#9ca3af", color: "#fff", fontWeight: 700, cursor: arquivoSelecionado ? "pointer" : "not-allowed", fontSize: 12 }}>⬆️ Anexar</button>
+              <button onClick={fazerUpload} disabled={!arquivoSelecionado} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: arquivoSelecionado ? NAVY : T.desabilitadoFundo, color: "#fff", fontWeight: 700, cursor: arquivoSelecionado ? "pointer" : "not-allowed", fontSize: 12 }}>⬆️ Anexar</button>
             </div>
           </>
         )}

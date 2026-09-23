@@ -42,14 +42,14 @@ export function TelaClientes({ clientes = [], onBack, onAdd, onEditar, onRemover
       } />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {clientes.length === 0 ? (
-            <div style={{ background: T.superficie, borderRadius: 14, padding: 18, textAlign: "center", color: T.texto, boxShadow: "0 1px 5px rgba(0,0,0,0.08)" }}>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 18, textAlign: "center", color: T.texto, boxShadow: T.sombra }}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Nenhum cliente cadastrado</div>
             <div style={{ fontSize: 13, color: T.texto2, marginBottom: 14 }}>Cadastre clientes aqui para vincular a obras e contratos.</div>
             <button type="button" data-test="empty-add-cliente" onClick={abrirNovo} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>+ Adicionar Cliente</button>
           </div>
         ) : (
           clientes.sort((a, b) => String(a.nome).localeCompare(String(b.nome))).map(cliente => (
-            <div key={cliente.id} data-test={`cliente-card-${cliente.id}`} style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
+            <div key={cliente.id} data-test={`cliente-card-${cliente.id}`} style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: T.titulo }}>{cliente.nome}</div>

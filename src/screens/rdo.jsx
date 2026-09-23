@@ -2,6 +2,7 @@ import { MODELOS_CRONOGRAMA } from "./equipe.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
+import { useTema } from "../lib/useTema.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -172,7 +173,8 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
             cor={ORANGE}
           />
         ) : etapas.map((e, i) => {
-          const cor = e.progresso === 100 ? GREEN : e.progresso > 0 ? ORANGE : "#aaa";
+          // Etapa não iniciada: cinza do tema (o #aaa fixo sumia no fundo escuro e era fraco no claro)
+          const cor = e.progresso === 100 ? GREEN : e.progresso > 0 ? ORANGE : T.texto3;
           const concluida = e.progresso === 100;
           return (
             <div key={e.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, opacity: concluida ? 0.75 : 1 }}>
@@ -187,8 +189,8 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
                     {e.responsavel && ` • ${e.responsavel}`}
                   </div>
                 </div>
-                <button onClick={() => moverEtapa(e.id, -1)} disabled={i === 0} style={{ background: "none", border: "none", color: i === 0 ? "#ddd" : "#666", cursor: i === 0 ? "default" : "pointer", fontSize: 16 }}>↑</button>
-                <button onClick={() => moverEtapa(e.id, 1)} disabled={i === etapas.length - 1} style={{ background: "none", border: "none", color: i === etapas.length - 1 ? "#ddd" : "#666", cursor: i === etapas.length - 1 ? "default" : "pointer", fontSize: 16 }}>↓</button>
+                <button onClick={() => moverEtapa(e.id, -1)} disabled={i === 0} style={{ background: "none", border: "none", color: i === 0 ? T.desabilitado : T.texto2, cursor: i === 0 ? "default" : "pointer", fontSize: 16 }}>↑</button>
+                <button onClick={() => moverEtapa(e.id, 1)} disabled={i === etapas.length - 1} style={{ background: "none", border: "none", color: i === etapas.length - 1 ? T.desabilitado : T.texto2, cursor: i === etapas.length - 1 ? "default" : "pointer", fontSize: 16 }}>↓</button>
               </div>
 
               {/* Barra de progresso */}
@@ -350,6 +352,7 @@ export function gerarPontosCurvaS(etapas, hojeIso) {
 
 
 export function CurvaSChart({ pontos }) {
+  const { paleta } = useTema(); // hex do tema atual para o SVG (var() não funciona em atributo SVG)
   if (!pontos || pontos.length === 0) {
     return <div style={{ padding: 30, textAlign: "center", color: T.texto2, fontSize: 12 }}>Adicione etapas com datas pra ver a curva.</div>;
   }
@@ -366,8 +369,8 @@ export function CurvaSChart({ pontos }) {
     <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ background: T.superficie, borderRadius: 8 }}>
       {[0, 25, 50, 75, 100].map(v => (
         <g key={v}>
-          <line x1={padX} y1={py(v)} x2={W - padX} y2={py(v)} stroke="#e5e7eb" strokeDasharray="2 2" />
-          <text x={padX - 4} y={py(v) + 3} fontSize="9" fill="#999" textAnchor="end">{v}%</text>
+          <line x1={padX} y1={py(v)} x2={W - padX} y2={py(v)} stroke={paleta.grade} strokeDasharray="2 2" />
+          <text x={padX - 4} y={py(v) + 3} fontSize="9" fill={paleta.texto2} textAnchor="end">{v}%</text>
         </g>
       ))}
       {idxHoje >= 0 && (
@@ -382,7 +385,7 @@ export function CurvaSChart({ pontos }) {
         <circle key={i} cx={px(pontos.indexOf(p))} cy={py(p.executado)} r="3" fill={GOLD} />
       ))}
       {pontos.filter((_, i) => i % 3 === 0).map((p, i) => (
-        <text key={i} x={px(pontos.indexOf(p))} y={H - 4} fontSize="8" fill="#888" textAnchor="middle">{p.data}</text>
+        <text key={i} x={px(pontos.indexOf(p))} y={H - 4} fontSize="8" fill={paleta.texto2} textAnchor="middle">{p.data}</text>
       ))}
     </svg>
   );
@@ -478,9 +481,9 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
           ].map(t => (
             <button key={t.id} onClick={() => setAba(t.id)} style={{
               flex: 1, padding: "8px 4px", borderRadius: 8,
-              background: aba === t.id ? NAVY : "#fff",
-              color: aba === t.id ? "#fff" : NAVY,
-              border: aba === t.id ? "none" : "1px solid #ddd",
+              background: aba === t.id ? NAVY : T.superficie,
+              color: aba === t.id ? "#fff" : T.titulo,
+              border: aba === t.id ? "none" : `1px solid ${T.borda}`,
               cursor: "pointer", fontSize: 11, fontWeight: 700,
             }}>{t.label}</button>
           ))}
@@ -511,7 +514,8 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
                     <div style={{ position: "relative", height: 14, background: T.superficie2, borderRadius: 4, overflow: "hidden" }}>
                       <div style={{ position: "absolute", inset: 0, background: corBarra + "22" }} />
                       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${e.progresso || 0}%`, background: corBarra }} />
-                      <div style={{ position: "absolute", left: `${e.pctPrevisto || 0}%`, top: 0, bottom: 0, width: 2, background: NAVY }} title="Previsto" />
+                      {/* Marcador do previsto: T.contorno é navy no claro e ciano no escuro (NAVY fixo sumia na barra escura) */}
+                      <div style={{ position: "absolute", left: `${e.pctPrevisto || 0}%`, top: 0, bottom: 0, width: 2, background: T.contorno }} title="Previsto" />
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, fontSize: 9, color: T.texto2 }}>
                       <span>{e.inicio || "—"} → {e.fim || "—"}</span>
@@ -556,7 +560,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
               {alertas.map((a, i) => {
                 const cor = a.severidade === "alta" ? RED : a.severidade === "media" ? ORANGE : BLUE;
                 return (
-                  <div key={i} style={{ background: T.superficie, borderRadius: 10, padding: 12, marginBottom: 8, borderLeft: `4px solid ${cor}`, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                  <div key={i} style={{ background: T.superficie, borderRadius: 10, padding: 12, marginBottom: 8, borderLeft: `4px solid ${cor}`, boxShadow: T.sombra }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: T.titulo }}>{a.etapa}</div>
                       <span style={{ background: cor, color: "#fff", padding: "1px 6px", borderRadius: 4, fontSize: 8, fontWeight: 800, textTransform: "uppercase" }}>{a.severidade}</span>
@@ -582,7 +586,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
             <input type="number" min="0" max="100" value={progressoInput} onChange={e => setProgressoInput(e.target.value)} style={inputS} />
             <label style={labelS}>💰 Custo Base (R$)</label>
             <input type="number" value={custoInput} onChange={e => setCustoInput(e.target.value)} placeholder="0" style={inputS} />
-            <label style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, background: criticaInput ? "#fef9e7" : "#f9fafb", borderRadius: 8, cursor: "pointer", marginBottom: 10 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, background: criticaInput ? T.avisoFundo : T.superficie2, borderRadius: 8, cursor: "pointer", marginBottom: 10 }}>
               <input type="checkbox" checked={criticaInput} onChange={e => setCriticaInput(e.target.checked)} />
               <span style={{ fontSize: 12, fontWeight: 700, color: T.titulo }}>⚠️ Etapa do Caminho Crítico</span>
             </label>
@@ -1661,7 +1665,7 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
                 <div style={{ fontSize: 11, color: T.texto2 }}>{p.autor} • {p.data}</div>
                 {p.obs && <div style={{ fontSize: 10, color: T.texto2, fontStyle: "italic" }}>{p.obs}</div>}
               </div>
-              <button onClick={() => onRemove(p.id)} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+              <button onClick={() => onRemove(p.id)} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
             </div>
           );
         })}

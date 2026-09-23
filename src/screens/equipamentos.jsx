@@ -6,6 +6,7 @@ import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDoc
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { reduzirImagem } from "../lib/imagem.js";
+import { useTema } from "../lib/useTema.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
@@ -82,7 +83,7 @@ export function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar,
               </div>
               <Badge label={eq.status} color={EQUIP_COLOR[eq.status] || "#888"} small />
               <button onClick={() => abrirEdit(eq)} style={{ background: "none", border: "none", color: BLUE, fontSize: 16, marginLeft: 8, cursor: "pointer" }}>✏️</button>
-              <button onClick={() => onRemover(eq.id)} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+              <button onClick={() => onRemover(eq.id)} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
             </div>
           );
         })}
@@ -121,9 +122,10 @@ export function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar,
           <option>Disponível</option><option>Em Uso</option><option>Quebrada</option>
         </select>
         <label style={labelS}>Ícone</label>
+        {/* Chips de seleção (aqui e nos modais abaixo): borda NAVY sumiria no escuro, então o selecionado usa T.contorno (navy no claro / teal no escuro) + T.infoFundo */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
           {ICONS.map(i => (
-            <button key={i} onClick={() => set("icon", i)} style={{ width: 40, height: 40, fontSize: 22, border: form.icon === i ? `2px solid ${NAVY}` : "1px solid #ddd", borderRadius: 8, background: form.icon === i ? "#dde6f5" : "#fff", cursor: "pointer" }}>{i}</button>
+            <button key={i} onClick={() => set("icon", i)} style={{ width: 40, height: 40, fontSize: 22, border: form.icon === i ? `2px solid ${T.contorno}` : `1px solid ${T.borda2}`, borderRadius: 8, background: form.icon === i ? T.infoFundo : T.superficie, cursor: "pointer" }}>{i}</button>
           ))}
         </div>
         <Btn label={editandoId ? "SALVAR ALTERAÇÕES" : "ADICIONAR"} color={GREEN} onClick={salvar} />
@@ -208,7 +210,7 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
                   <div style={{ fontSize: 11, color: BLUE }}>📍 {obra?.nome || "—"}</div>
                 </div>
                 <button onClick={() => abrirEdit(a)} style={{ background: "none", border: "none", color: BLUE, fontSize: 16, cursor: "pointer" }}>✏️</button>
-                <button onClick={() => { confirmar(`Remover ${a.nome}?`, () => { onRemover(a.id); }); }} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, fontSize: 16, cursor: "pointer", marginLeft: 4, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+                <button onClick={() => { confirmar(`Remover ${a.nome}?`, () => { onRemover(a.id); }); }} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, fontSize: 16, cursor: "pointer", marginLeft: 4, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
               </div>
               <div style={{ display: "flex", gap: 6, marginBottom: 8, fontSize: 11 }}>
                 <span style={{ background: T.infoFundo, color: BLUE, padding: "3px 8px", borderRadius: 4, fontWeight: 700 }}>⏱️ {a.horimetro}h</span>
@@ -315,6 +317,7 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
 export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
   const [periodo, setPeriodo] = useState("mes"); // semana | mes | trimestre | ano
   const [filtroAtivo, setFiltroAtivo] = useState("todos");
+  const { paleta } = useTema(); // hex do tema atual para o Recharts (var() não funciona em atributo SVG)
 
   const hoje = new Date();
   const calcDataInicio = () => {
@@ -397,8 +400,8 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
               <button key={p.v} onClick={() => setPeriodo(p.v)} style={{
                 flex: 1, padding: "6px 4px", borderRadius: 6,
                 border: "none",
-                background: periodo === p.v ? NAVY : "#f3f4f6",
-                color: periodo === p.v ? "#fff" : "#666",
+                background: periodo === p.v ? NAVY : T.superficie2,
+                color: periodo === p.v ? "#fff" : T.texto2,
                 fontSize: 11, fontWeight: 700, cursor: "pointer"
               }}>{p.l}</button>
             ))}
@@ -432,10 +435,10 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
           ) : (
             <ResponsiveContainer width="100%" height={140}>
               <LineChart data={evolucao}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                <XAxis dataKey="dia" tick={{ fontSize: 9 }} interval={1} />
-                <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => "R$ " + v} />
-                <Tooltip formatter={(v) => "R$ " + v.toFixed(2)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={paleta.grade} />
+                <XAxis dataKey="dia" tick={{ fontSize: 9, fill: paleta.texto2 }} stroke={paleta.texto2} interval={1} />
+                <YAxis tick={{ fontSize: 9, fill: paleta.texto2 }} stroke={paleta.texto2} tickFormatter={(v) => "R$ " + v} />
+                <Tooltip formatter={(v) => "R$ " + v.toFixed(2)} contentStyle={{ background: paleta.superficie, border: `1px solid ${paleta.borda}`, color: paleta.texto }} labelStyle={{ color: paleta.texto }} />
                 <Line type="monotone" dataKey="valor" stroke={ORANGE} strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -483,7 +486,7 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
             {porObra.map((o, i) => {
               const pct = (o.gasto / totalGasto) * 100;
               return (
-                <div key={o.obra.id} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: i < porObra.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+                <div key={o.obra.id} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: i < porObra.length - 1 ? `1px solid ${T.borda}` : "none" }}>
                   <div style={{ width: 8, height: 36, borderRadius: 4, background: cores[i % cores.length], marginRight: 10 }}></div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: T.titulo }}>{o.obra.nome}</div>
@@ -577,7 +580,8 @@ export function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSoli
             <div style={{ fontSize: 20, fontWeight: 700, color: GREEN, marginTop: 12 }}>Solicitação Enviada!</div>
             <div style={{ color: T.texto2, marginTop: 6, fontSize: 13 }}>O gestor receberá o pedido para aprovação.</div>
             <Btn label="Nova Solicitação" color={NAVY} onClick={() => { setOk(false); setTrabId(""); setObraDestino(""); setMotivo(""); }} style={{ marginTop: 24 }} />
-            <Btn label="Voltar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 10 }} />
+            {/* Botão secundário: Btn cola sufixo alfa no color para a sombra (inválido com var()), por isso a sombra é zerada aqui — no #eee ela já era imperceptível */}
+            <Btn label="Voltar" color={T.superficie2} text={T.titulo} onClick={onBack} style={{ marginTop: 10, boxShadow: "none" }} />
           </div>
         ) : (
           <>
@@ -602,12 +606,13 @@ export function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSoli
               </select>
 
               <label style={labelS}>Tipo de movimentação</label>
+              {/* Selecionado: T.contorno + T.infoFundo + T.titulo; não selecionado: T.borda + T.superficie + T.texto2 (era NAVY/#dde6f5 e #dde2ef/#fff/#666) */}
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 {[
                   { v: "hoje", l: "Apenas hoje", icon: "📅" },
                   { v: "definitivo", l: "Definitivo", icon: "🔄" },
                 ].map(t => (
-                  <button key={t.v} onClick={() => setTipo(t.v)} style={{ flex: 1, padding: "12px 8px", borderRadius: 10, border: `2px solid ${tipo === t.v ? NAVY : "#dde2ef"}`, background: tipo === t.v ? "#dde6f5" : "#fff", color: tipo === t.v ? NAVY : "#666", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                  <button key={t.v} onClick={() => setTipo(t.v)} style={{ flex: 1, padding: "12px 8px", borderRadius: 10, border: `2px solid ${tipo === t.v ? T.contorno : T.borda}`, background: tipo === t.v ? T.infoFundo : T.superficie, color: tipo === t.v ? T.titulo : T.texto2, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
                     <div style={{ fontSize: 22 }}>{t.icon}</div>
                     {t.l}
                   </button>
@@ -730,7 +735,7 @@ export function TelaMovEquipDetalhe({ mov, obras, equips, ferramentas, usuario, 
 
         {/* INFO DO ITEM */}
         {item && (
-          <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${NAVY}` }}>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${T.contorno}` }}>
             <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>🔍 Sobre o item</div>
             {item.tipo && <div style={{ fontSize: 11, color: T.texto2 }}>Tipo: <b style={{ color: T.titulo }}>{item.tipo}</b></div>}
             {item.numeroSerie && <div style={{ fontSize: 11, color: T.texto2 }}>Nº Série: <b style={{ color: T.titulo }}>{item.numeroSerie}</b></div>}
@@ -856,8 +861,8 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
         ].map(a => (
           <button key={a.v} onClick={() => setAba(a.v)} style={{
             flex: 1, padding: "10px 0", background: "none", border: "none",
-            borderBottom: aba === a.v ? `3px solid ${NAVY}` : "3px solid transparent",
-            color: aba === a.v ? NAVY : "#888", fontWeight: aba === a.v ? 800 : 600, fontSize: 12, cursor: "pointer"
+            borderBottom: aba === a.v ? `3px solid ${T.contorno}` : "3px solid transparent",
+            color: aba === a.v ? T.titulo : T.texto3, fontWeight: aba === a.v ? 800 : 600, fontSize: 12, cursor: "pointer"
           }}>{a.l}</button>
         ))}
       </div>
@@ -939,7 +944,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
             { v: "equipamento", l: "⚙️ Equipamento" },
             { v: "ferramenta", l: "🔨 Ferramenta" },
           ].map(t => (
-            <button key={t.v} onClick={() => { set("tipoItem", t.v); set("itemId", ""); }} style={{ flex: 1, padding: "10px 4px", borderRadius: 10, border: `2px solid ${form.tipoItem === t.v ? NAVY : "#dde2ef"}`, background: form.tipoItem === t.v ? "#dde6f5" : "#fff", cursor: "pointer", fontSize: 12, fontWeight: 700, color: form.tipoItem === t.v ? NAVY : "#666" }}>{t.l}</button>
+            <button key={t.v} onClick={() => { set("tipoItem", t.v); set("itemId", ""); }} style={{ flex: 1, padding: "10px 4px", borderRadius: 10, border: `2px solid ${form.tipoItem === t.v ? T.contorno : T.borda}`, background: form.tipoItem === t.v ? T.infoFundo : T.superficie, cursor: "pointer", fontSize: 12, fontWeight: 700, color: form.tipoItem === t.v ? T.titulo : T.texto2 }}>{t.l}</button>
           ))}
         </div>
 
@@ -970,7 +975,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
             { v: "emprestimo", l: "🔁 Empréstimo", desc: "Volta depois" },
             { v: "transferencia", l: "↪️ Transferência", desc: "Definitiva" },
           ].map(t => (
-            <button key={t.v} onClick={() => set("tipo", t.v)} style={{ flex: 1, padding: "10px 6px", borderRadius: 10, border: `2px solid ${form.tipo === t.v ? NAVY : "#dde2ef"}`, background: form.tipo === t.v ? "#dde6f5" : "#fff", cursor: "pointer", color: form.tipo === t.v ? NAVY : "#666", textAlign: "center" }}>
+            <button key={t.v} onClick={() => set("tipo", t.v)} style={{ flex: 1, padding: "10px 6px", borderRadius: 10, border: `2px solid ${form.tipo === t.v ? T.contorno : T.borda}`, background: form.tipo === t.v ? T.infoFundo : T.superficie, cursor: "pointer", color: form.tipo === t.v ? T.titulo : T.texto2, textAlign: "center" }}>
               <div style={{ fontSize: 12, fontWeight: 700 }}>{t.l}</div>
               <div style={{ fontSize: 9, opacity: 0.7 }}>{t.desc}</div>
             </button>
@@ -1085,7 +1090,7 @@ export function TelaMovPessoalDetalhe({ mov, obras, trabalhadores, onBack, onApr
 
         {/* INFO TRABALHADOR */}
         {trab && (
-          <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${NAVY}` }}>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${T.contorno}` }}>
             <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>👤 Sobre o trabalhador</div>
             {trab.funcao && <div style={{ fontSize: 11, color: T.texto2 }}>Função: <b style={{ color: T.titulo }}>{trab.funcao}</b></div>}
             {trab.diaria && <div style={{ fontSize: 11, color: T.texto2 }}>Diária: <b style={{ color: GREEN }}>R$ {parseFloat(trab.diaria).toFixed(2)}</b></div>}
@@ -1220,7 +1225,7 @@ export function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, o
               </div>
               <Badge label={f.estado} color={COR_ESTADO[f.estado] || "#888"} small />
               <button onClick={() => abrirEdit(f)} style={{ background: "none", border: "none", color: BLUE, fontSize: 16, marginLeft: 8, cursor: "pointer" }}>✏️</button>
-              <button onClick={() => onRemover(f.id)} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+              <button onClick={() => onRemover(f.id)} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
             </div>
           );
         })}
@@ -1251,7 +1256,7 @@ export function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, o
         <label style={labelS}>Ícone</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
           {ICONS.map(i => (
-            <button key={i} onClick={() => set("icon", i)} style={{ width: 40, height: 40, fontSize: 22, border: form.icon === i ? `2px solid ${NAVY}` : "1px solid #ddd", borderRadius: 8, background: form.icon === i ? "#dde6f5" : "#fff", cursor: "pointer" }}>{i}</button>
+            <button key={i} onClick={() => set("icon", i)} style={{ width: 40, height: 40, fontSize: 22, border: form.icon === i ? `2px solid ${T.contorno}` : `1px solid ${T.borda2}`, borderRadius: 8, background: form.icon === i ? T.infoFundo : T.superficie, cursor: "pointer" }}>{i}</button>
           ))}
         </div>
 
@@ -1326,10 +1331,10 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
         ].map(a => (
           <button key={a.v} onClick={() => setAba(a.v)} style={{
             flex: 1, padding: "12px 0", background: "none", border: "none",
-            borderBottom: aba === a.v ? `3px solid ${NAVY}` : "3px solid transparent",
-            color: aba === a.v ? NAVY : "#888", fontWeight: aba === a.v ? 800 : 600, fontSize: 13, cursor: "pointer"
+            borderBottom: aba === a.v ? `3px solid ${T.contorno}` : "3px solid transparent",
+            color: aba === a.v ? T.titulo : T.texto3, fontWeight: aba === a.v ? 800 : 600, fontSize: 13, cursor: "pointer"
           }}>
-            {a.l} <span style={{ background: aba === a.v ? NAVY : "#ccc", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, marginLeft: 4 }}>{a.n}</span>
+            {a.l} <span style={{ background: aba === a.v ? NAVY : T.desabilitadoFundo, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, marginLeft: 4 }}>{a.n}</span>
           </button>
         ))}
       </div>
@@ -1400,7 +1405,7 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
             { v: "ferramenta", l: "🔨 Ferramenta" },
             { v: "equipamento", l: "⚙️ Equipamento" },
           ].map(t => (
-            <button key={t.v} onClick={() => set("tipoItem", t.v)} style={{ flex: 1, padding: "10px 4px", borderRadius: 10, border: `2px solid ${form.tipoItem === t.v ? NAVY : "#dde2ef"}`, background: form.tipoItem === t.v ? "#dde6f5" : "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700, color: form.tipoItem === t.v ? NAVY : "#666" }}>{t.l}</button>
+            <button key={t.v} onClick={() => set("tipoItem", t.v)} style={{ flex: 1, padding: "10px 4px", borderRadius: 10, border: `2px solid ${form.tipoItem === t.v ? T.contorno : T.borda}`, background: form.tipoItem === t.v ? T.infoFundo : T.superficie, cursor: "pointer", fontSize: 11, fontWeight: 700, color: form.tipoItem === t.v ? T.titulo : T.texto2 }}>{t.l}</button>
           ))}
         </div>
 

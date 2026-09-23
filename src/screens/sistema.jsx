@@ -48,7 +48,8 @@ export function TelaGerarSimulacao({ onGerar, onBack }) {
         </div>
 
         <Btn label="🎬 GERAR 30 DIAS DE DADOS" color="#7c3aed" onClick={onGerar} />
-        <Btn label="Cancelar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 8 }} />
+        {/* Botão neutro segue o tema; o Btn cola `${color}55` na sombra (inválido com var()), por isso a sombra vem do token */}
+        <Btn label="Cancelar" color={T.superficie2} text={T.titulo} onClick={onBack} style={{ marginTop: 8, boxShadow: T.sombra }} />
       </div>
       <KMFooter />
     </div>
@@ -288,7 +289,7 @@ export function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar,
             cor="#7c3aed"
           />
         ) : funcEscritorio.map(f => (
-          <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${f.ativo ? "#7c3aed" : "#ccc"}`, opacity: f.ativo ? 1 : 0.6 }}>
+          <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${f.ativo ? "#7c3aed" : T.desabilitado}`, opacity: f.ativo ? 1 : 0.6 }}>
             <div style={{ display: "flex", alignItems: "center" }}>
               <div style={{ fontSize: 32, marginRight: 12 }}>📐</div>
               <div style={{ flex: 1 }}>
@@ -484,9 +485,9 @@ export function TelaAjuda({ empresa, onBack }) {
               style={{
                 flex: "1 1 90px",
                 padding: "10px 6px",
-                background: aba === t.k ? t.c : "#fff",
-                color: aba === t.k ? "#fff" : "#666",
-                border: aba === t.k ? "none" : "1px solid #e5e7eb",
+                background: aba === t.k ? t.c : T.superficie,
+                color: aba === t.k ? "#fff" : T.texto2,
+                border: aba === t.k ? "none" : `1px solid ${T.borda}`,
                 borderRadius: 10,
                 fontSize: 11,
                 fontWeight: 800,
@@ -547,8 +548,8 @@ export function TelaAjuda({ empresa, onBack }) {
               </div>
 
               <div style={{
-                background: "#FFF7E6",
-                borderLeft: "4px solid #F5A623",
+                background: T.avisoFundo,
+                borderLeft: `4px solid ${GOLD}`,
                 padding: "10px 14px",
                 fontSize: 12,
                 color: T.texto,
@@ -588,7 +589,7 @@ export function TelaAjuda({ empresa, onBack }) {
                     background: T.superficie2,
                     padding: "8px 10px",
                     borderRadius: 8,
-                    borderLeft: "3px solid #0F2151",
+                    borderLeft: `3px solid ${T.contorno}`, // navy no claro, ciano no escuro (navy fixo sumia sobre a superfície escura)
                   }}>
                     <div style={{ fontWeight: 700, color: T.titulo }}>{k}</div>
                     <div style={{ color: T.texto2, fontSize: 10 }}>{v}</div>
@@ -638,13 +639,13 @@ export function TelaAjuda({ empresa, onBack }) {
               Toque em uma pergunta para ver a resposta. Se não encontrar o que precisa, fale com o suporte pelos canais acima.
             </div>
             {faqs.map(f => (
-              <div key={f.id} style={{ background: T.superficie, borderRadius: 12, marginBottom: 8, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+              <div key={f.id} style={{ background: T.superficie, borderRadius: 12, marginBottom: 8, overflow: "hidden", boxShadow: T.sombra }}>
                 <button
                   onClick={() => toggleFaq(f.id)}
                   style={{
                     width: "100%",
                     padding: "12px 14px",
-                    background: abertos[f.id] ? "#f0fdf4" : "#fff",
+                    background: abertos[f.id] ? T.sucessoFundo : T.superficie,
                     border: "none",
                     cursor: "pointer",
                     textAlign: "left",
@@ -1054,11 +1055,11 @@ export function TelaDiagnostico({ onNav, onBack }) {
             {grupo.itens.map(t => {
               const status = resultados[t.nav];
               return (
-                <div key={t.nav} style={{ background: status === "ok" ? "#f0fdf4" : status === "erro" ? "#fef2f2" : "#fff", borderRadius: 10, padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
+                <div key={t.nav} style={{ background: status === "ok" ? T.sucessoFundo : status === "erro" ? T.erroFundo : T.superficie, borderRadius: 10, padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
                   <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: T.titulo }}>{t.l}</div>
                   <button onClick={() => onNav(t.nav)} style={{ background: BLUE, color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginRight: 6 }}>Abrir</button>
-                  <button onClick={() => marcar(t.nav, "ok")} style={{ background: status === "ok" ? GREEN : "#f0fdf4", color: status === "ok" ? "#fff" : GREEN, border: `1.5px solid ${GREEN}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginRight: 4 }}>✓</button>
-                  <button onClick={() => marcar(t.nav, "erro")} style={{ background: status === "erro" ? RED : "#fef2f2", color: status === "erro" ? "#fff" : RED, border: `1.5px solid ${RED}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕</button>
+                  <button onClick={() => marcar(t.nav, "ok")} style={{ background: status === "ok" ? GREEN : T.sucessoFundo, color: status === "ok" ? "#fff" : GREEN, border: `1.5px solid ${GREEN}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginRight: 4 }}>✓</button>
+                  <button onClick={() => marcar(t.nav, "erro")} style={{ background: status === "erro" ? RED : T.erroFundo, color: status === "erro" ? "#fff" : RED, border: `1.5px solid ${RED}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕</button>
                 </div>
               );
             })}
@@ -1150,12 +1151,12 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
             </div>
 
             {/* Opção 1: Lançamentos */}
-            <button onClick={() => setEtapa(1)} style={{ width: "100%", textAlign: "left", padding: 16, background: T.superficie, border: "2px solid #f97316", borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
+            <button onClick={() => setEtapa(1)} style={{ width: "100%", textAlign: "left", padding: 16, background: T.superficie, border: `2px solid ${ORANGE}`, borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                 <div style={{ fontSize: 28 }}>🧹</div>
-                <div style={{ fontWeight: 800, color: "#9a3412", fontSize: 14 }}>Apagar Lançamentos</div>
+                <div style={{ fontWeight: 800, color: T.avisoTexto, fontSize: 14 }}>Apagar Lançamentos</div>
               </div>
-              <div style={{ fontSize: 11, color: "#7c2d12", lineHeight: 1.5, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: T.avisoTexto, lineHeight: 1.5, marginBottom: 6 }}>
                 Apaga só os dados de movimento (RDOs, pedidos, fotos, presenças, despesas, etc).<br/>
                 <b>Com a nuvem ativa, apaga também na nuvem e nos celulares de toda a equipe.</b>
               </div>
@@ -1165,7 +1166,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
             </button>
 
             {/* Opção 2: Reset Total */}
-            <button onClick={() => setEtapa(3)} style={{ width: "100%", textAlign: "left", padding: 16, background: T.superficie, border: "2px solid #dc2626", borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
+            <button onClick={() => setEtapa(3)} style={{ width: "100%", textAlign: "left", padding: 16, background: T.superficie, border: `2px solid ${RED}`, borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                 <div style={{ fontSize: 28 }}>💣</div>
                 <div style={{ fontWeight: 800, color: T.erroTexto, fontSize: 14 }}>Reset Total</div>
@@ -1187,10 +1188,10 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
         {/* ETAPA 1: AVISO LANCAMENTOS */}
         {etapa === 1 && (
           <>
-            <div style={{ background: "#fff7ed", border: "2px solid #f97316", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+            <div style={{ background: T.avisoFundo, border: `2px solid ${ORANGE}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
               <div style={{ fontSize: 22, marginBottom: 6 }}>🧹</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#9a3412", marginBottom: 6 }}>Apagar Lançamentos</div>
-              <div style={{ fontSize: 13, color: "#7c2d12", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.avisoTexto, marginBottom: 6 }}>Apagar Lançamentos</div>
+              <div style={{ fontSize: 13, color: T.avisoTexto, lineHeight: 1.5 }}>
                 Será apagado:
                 <ul style={{ margin: "8px 0 0 20px", padding: 0, lineHeight: 1.7 }}>
                   <li>RDOs emitidos</li>
@@ -1207,7 +1208,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               </div>
             </div>
 
-            <div style={{ background: T.sucessoFundo, border: "1px solid #16a34a", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+            <div style={{ background: T.sucessoFundo, border: `1px solid ${GREEN}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.sucessoTexto, marginBottom: 6 }}>✅ NÃO será apagado:</div>
               <ul style={{ margin: "0 0 0 20px", padding: 0, fontSize: 12, color: T.sucessoTexto, lineHeight: 1.6 }}>
                 <li>Obras cadastradas</li>
@@ -1232,12 +1233,12 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
         {/* ETAPA 2: SENHA LANCAMENTOS */}
         {etapa === 2 && (
           <>
-            <div style={{ background: "#fff7ed", border: "2px solid #f97316", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+            <div style={{ background: T.avisoFundo, border: `2px solid ${ORANGE}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
               <div style={{ fontSize: 32, marginBottom: 8, textAlign: "center" }}>🔐</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#9a3412", marginBottom: 8, textAlign: "center" }}>Confirmação</div>
-              <div style={{ fontSize: 13, color: "#7c2d12", lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.avisoTexto, marginBottom: 8, textAlign: "center" }}>Confirmação</div>
+              <div style={{ fontSize: 13, color: T.avisoTexto, lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
                 Digite a palavra<br/>
-                <b style={{ fontSize: 18, color: "#f97316", fontFamily: "monospace", letterSpacing: 2 }}>ZERAR</b>
+                <b style={{ fontSize: 18, color: ORANGE, fontFamily: "monospace", letterSpacing: 2 }}>ZERAR</b>
               </div>
 
               <input
@@ -1252,14 +1253,14 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
                   boxSizing: "border-box",
                   padding: "14px 16px",
                   borderRadius: 10,
-                  border: erro ? "2px solid #dc2626" : "2px solid #fed7aa",
+                  border: erro ? `2px solid ${RED}` : `2px solid ${T.avisoBorda}`,
                   fontSize: 18,
                   fontWeight: 700,
                   textAlign: "center",
                   letterSpacing: 2,
                   marginBottom: 8,
                   background: T.superficie,
-                  color: "#f97316",
+                  color: ORANGE,
                   textTransform: "uppercase",
                 }}
               />
@@ -1288,7 +1289,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
         {/* ETAPA 3: AVISO RESET TOTAL */}
         {etapa === 3 && (
           <>
-            <div style={{ background: T.erroFundo, border: "3px solid #dc2626", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+            <div style={{ background: T.erroFundo, border: `3px solid ${RED}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
               <div style={{ fontSize: 36, marginBottom: 8, textAlign: "center" }}>💣</div>
               <div style={{ fontSize: 17, fontWeight: 900, color: T.erroTexto, marginBottom: 10, textAlign: "center" }}>RESET TOTAL</div>
               <div style={{ fontSize: 13, color: T.erroTexto, lineHeight: 1.6 }}>
@@ -1331,7 +1332,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
         {/* ETAPA 4: SENHA RESET TOTAL */}
         {etapa === 4 && (
           <>
-            <div style={{ background: T.erroFundo, border: "3px solid #dc2626", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+            <div style={{ background: T.erroFundo, border: `3px solid ${RED}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
               <div style={{ fontSize: 36, marginBottom: 8, textAlign: "center" }}>🔐💣</div>
               <div style={{ fontSize: 16, fontWeight: 900, color: T.erroTexto, marginBottom: 8, textAlign: "center" }}>Confirmação Final</div>
               <div style={{ fontSize: 13, color: T.erroTexto, lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
@@ -1351,7 +1352,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
                   boxSizing: "border-box",
                   padding: "14px 16px",
                   borderRadius: 10,
-                  border: erro ? "2px solid #dc2626" : "2px solid #fca5a5",
+                  border: erro ? `2px solid ${RED}` : `2px solid ${T.erroBorda}`,
                   fontSize: 16,
                   fontWeight: 700,
                   textAlign: "center",

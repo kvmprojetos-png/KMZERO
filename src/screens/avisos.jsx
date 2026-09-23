@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NAVY, GOLD, GREEN, RED, ORANGE, LIGHT, labelS, inputS, selS, T } from "../theme.js";
+import { NAVY, GOLD, GREEN, RED, ORANGE, labelS, inputS, selS, T } from "../theme.js";
 import { KMHeader, KMFooter, EmptyState } from "../components/ui.jsx";
 import { TIPOS_AVISO, descreverPara, uidDe } from "../lib/avisosRegras.js";
 import { situacaoNotificacoes, ativarNotificacoes, desligarNotificacoes } from "../lib/avisos.js";
@@ -23,7 +23,8 @@ const TEXTO_SITUACAO = {
   bloqueada:    { cor: RED,    txt: "⛔ O navegador bloqueou as notificações do KMZERO. Toque no cadeado ao lado do endereço → Notificações → Permitir." },
   instalar_ios: { cor: ORANGE, txt: "📱 No iPhone, as notificações só chegam com o app instalado: toque em Compartilhar → \"Adicionar à Tela de Início\" e abra o KMZERO pelo ícone." },
   sem_suporte:  { cor: RED,    txt: "Este navegador não recebe notificações. Use o Chrome (Android/PC) ou o app instalado (iPhone)." },
-  sem_config:   { cor: "#888", txt: "As notificações no celular ainda não foram configuradas no servidor. Os avisos aparecem aqui no app normalmente." },
+  // Cinza neutro da borda "sem configuração": segue o tema em vez do #888 fixo
+  sem_config:   { cor: T.texto3, txt: "As notificações no celular ainda não foram configuradas no servidor. Os avisos aparecem aqui no app normalmente." },
 };
 
 export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ultimaLeitura = 0, onEnviar, onMarcarLidos, onNav, onBack }) {
@@ -90,7 +91,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
               {situacao === "desligada" && <button onClick={ligar} disabled={ligando} style={btn(NAVY)}>{ligando ? "Ligando…" : "🔔 Ativar notificações"}</button>}
               {situacao === "ligada" && <button onClick={testar} style={btn(NAVY)}>Testar</button>}
-              {situacao === "ligada" && <button onClick={desligar} style={btn("#eee", NAVY)}>Desligar neste aparelho</button>}
+              {situacao === "ligada" && <button onClick={desligar} style={btn(T.superficie2, T.titulo)}>Desligar neste aparelho</button>}
             </div>
             {msgAparelho && <div style={{ fontSize: 12, color: T.texto2, marginTop: 8 }}>{msgAparelho}</div>}
           </div>
@@ -131,7 +132,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
               <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0, 500))} rows={3} placeholder="Detalhes do aviso" style={{ ...inputS, fontFamily: "inherit", resize: "vertical" }} />
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 <button onClick={enviar} disabled={enviando} style={{ ...btn(NAVY), flex: 1 }}>{enviando ? "Enviando…" : "Enviar aviso"}</button>
-                <button onClick={() => setEscrevendo(false)} style={btn("#eee", NAVY)}>Cancelar</button>
+                <button onClick={() => setEscrevendo(false)} style={btn(T.superficie2, T.titulo)}>Cancelar</button>
               </div>
             </div>
           )}
@@ -147,13 +148,14 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   <div style={{ fontSize: 20, lineHeight: 1 }}>{tipo.icone}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, color: NAVY, fontSize: 14 }}>{a.titulo}{novo && <span style={{ marginLeft: 6, fontSize: 10, background: GOLD, color: NAVY, borderRadius: 6, padding: "1px 6px" }}>NOVO</span>}</div>
+                    <div style={{ fontWeight: 800, color: T.titulo, fontSize: 14 }}>{a.titulo}{novo && <span style={{ marginLeft: 6, fontSize: 10, background: GOLD, color: NAVY, borderRadius: 6, padding: "1px 6px" }}>NOVO</span>}</div>
                     {a.texto && <div style={{ fontSize: 13, color: T.texto, whiteSpace: "pre-wrap", marginTop: 4, lineHeight: 1.45 }}>{a.texto}</div>}
                     <div style={{ fontSize: 11, color: T.texto2, marginTop: 6 }}>
                       {a.de === eu ? "Você" : a.deNome || "KMZERO"} → {descreverPara(a.para, { obras, usuarios })} · {quandoFoi(a.criadoEm)}
                       {a.de === eu && a.push?.aparelhos !== undefined && ` · tocou em ${a.push.aparelhos} aparelho(s)`}
                     </div>
-                    {a.navegarPara && onNav && <button onClick={() => onNav(a.navegarPara)} style={{ ...btn(LIGHT, NAVY), marginTop: 8, padding: "6px 10px", fontSize: 12 }}>Abrir →</button>}
+                    {/* Botão "fantasma" sobre o cartão: superfície2 no lugar do LIGHT fixo (ficaria branco no escuro) */}
+                    {a.navegarPara && onNav && <button onClick={() => onNav(a.navegarPara)} style={{ ...btn(T.superficie2, T.titulo), marginTop: 8, padding: "6px 10px", fontSize: 12 }}>Abrir →</button>}
                   </div>
                 </div>
               </div>

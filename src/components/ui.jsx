@@ -13,8 +13,9 @@ export const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, sty
     onClick={onClick}
     disabled={disabled}
     style={css({
-      background: disabled ? "#ccc" : color,
-      color: text,
+      // Desabilitado segue o tema (cinza fixo sumia no escuro); habilitado continua na cor do botão
+      background: disabled ? T.desabilitadoFundo : color,
+      color: disabled ? T.desabilitado : text,
       border: danger ? "2px solid " + RED : "none",
       borderRadius: 10,
       padding: "14px 0",
@@ -51,7 +52,8 @@ export function EmptyState({ icon = "📦", titulo, subtitulo, botaoLabel, onBot
       <div style={{
         fontSize: 15,
         fontWeight: 800,
-        color: cor,
+        // `cor` também é o fundo do botão, então só o NAVY (texto invisível no escuro) vira T.titulo
+        color: cor === NAVY ? T.titulo : cor,
         marginBottom: 4,
       }}>{titulo}</div>
       {subtitulo && (
@@ -295,8 +297,9 @@ export function Modal({ show, title, children, onClose }) {
   if (!show) return null;
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16, overscrollBehavior: "contain" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.superficie, borderRadius: 20, padding: 20, width: "100%", maxWidth: 400, maxHeight: "85vh", overflowY: "auto", boxShadow: T.sombra2, WebkitOverflowScrolling: "touch" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, position: "sticky", top: -20, background: T.superficie, padding: "16px 0 12px 0", marginTop: -20, borderBottom: `1px solid ${T.borda}`, zIndex: 1 }}>
+      {/* superficie3: o modal flutua acima das cartelas, então fica um tom acima delas no escuro */}
+      <div onClick={e => e.stopPropagation()} style={{ background: T.superficie3, borderRadius: 20, padding: 20, width: "100%", maxWidth: 400, maxHeight: "85vh", overflowY: "auto", boxShadow: T.sombra2, WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, position: "sticky", top: -20, background: T.superficie3, padding: "16px 0 12px 0", marginTop: -20, borderBottom: `1px solid ${T.borda}`, zIndex: 1 }}>
           <div style={{ fontWeight: 800, color: T.titulo, fontSize: 16 }}>{title}</div>
           <button type="button" onClick={onClose} style={{ background: T.superficie2, border: "none", fontSize: 18, cursor: "pointer", color: T.texto2, width: 32, height: 32, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>✕</button>
         </div>
@@ -319,13 +322,14 @@ export function confirmar(mensagem, onConfirm) {
   overlay.id = "km-confirm-overlay";
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,Arial,sans-serif;-webkit-tap-highlight-color:transparent;";
 
+  // DOM criado à mão: var(--km-*) direto na string (T.* é a mesma coisa, mas aqui não há JSX)
   const card = document.createElement("div");
-  card.style.cssText = "background:#fff;border-radius:16px;padding:24px 20px;max-width:340px;width:100%;color:#222;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.3);";
+  card.style.cssText = "background:var(--km-superficie3);border-radius:16px;padding:24px 20px;max-width:340px;width:100%;color:var(--km-texto);text-align:center;box-shadow:var(--km-sombra2);";
   card.innerHTML = `
     <div style="font-size:42px;margin-bottom:10px;">⚠️</div>
-    <div style="font-size:14px;color:#333;margin-bottom:18px;line-height:1.5;white-space:pre-line;font-weight:500;">${String(mensagem).replace(/</g, "&lt;")}</div>
+    <div style="font-size:14px;color:var(--km-texto);margin-bottom:18px;line-height:1.5;white-space:pre-line;font-weight:500;">${String(mensagem).replace(/</g, "&lt;")}</div>
     <div style="display:flex;gap:8px;">
-      <button id="km-cnf-no" type="button" style="flex:1;padding:14px;background:#e5e7eb;color:#333;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;touch-action:manipulation;">Cancelar</button>
+      <button id="km-cnf-no" type="button" style="flex:1;padding:14px;background:var(--km-superficie2);color:var(--km-texto);border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;touch-action:manipulation;">Cancelar</button>
       <button id="km-cnf-yes" type="button" style="flex:1;padding:14px;background:#d63b3b;color:#fff;border:none;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;touch-action:manipulation;">Confirmar</button>
     </div>
   `;
@@ -410,14 +414,16 @@ export function Assinatura({ valor, onChange, label = "Assine abaixo" }) {
   return (
     <div>
       <label style={labelS}>{label}</label>
-      <div style={{ background: T.superficie2, border: `1.5px dashed ${T.borda2}`, borderRadius: 10, position: "relative" }}>
+      {/* Papel da assinatura: fixo claro nos dois temas — o canvas é transparente e a tinta navy
+          (#0f2151) sumiria sobre superfície escura; o PNG exportado também é lido sobre branco */}
+      <div style={{ background: "#f9fafb", border: "1.5px dashed #c5d0e5", borderRadius: 10, position: "relative" }}>
         <canvas
           ref={setupCanvas}
           onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
           onTouchStart={start} onTouchMove={move} onTouchEnd={end}
           style={{ width: "100%", height: 140, display: "block", cursor: "crosshair", touchAction: "none" }}
         />
-        {!valor && !desenhando && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: T.desabilitado, fontSize: 13, pointerEvents: "none" }}>✍️ Assine aqui com o dedo ou mouse</div>}
+        {!valor && !desenhando && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#bbb", fontSize: 13, pointerEvents: "none" }}>✍️ Assine aqui com o dedo ou mouse</div>}
       </div>
       <button onClick={limpar} style={{ background: "none", border: "none", color: BLUE, fontSize: 12, cursor: "pointer", marginTop: 4, fontWeight: 600 }}>🗑️ Limpar</button>
     </div>

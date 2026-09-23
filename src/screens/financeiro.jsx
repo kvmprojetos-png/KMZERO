@@ -346,14 +346,14 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
           </div>
         </div>
 
-        {/* DESPESAS AVULSAS */}
-        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid #ea580c` }}>
+        {/* DESPESAS AVULSAS — laranja fixo #ea580c trocado por ORANGE da paleta (legível nos dois temas; mesma cor do cartão Combustível) */}
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${ORANGE}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>💸 Despesas avulsas</div>
               <div style={{ fontSize: 11, color: T.texto2 }}>{despesasObra.length} despesa{despesasObra.length === 1 ? "" : "s"} (PIPA, frete, almoço motorista...)</div>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: "#ea580c" }}>R$ {custoDespesasAvulsas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: ORANGE }}>R$ {custoDespesasAvulsas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
           </div>
           {despesasObra.length > 0 && (
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.borda}` }}>
@@ -363,7 +363,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
                   <div key={d.id} style={{ display: "flex", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
                     <span style={{ background: cat.cor, color: "#fff", padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, marginRight: 6 }}>{cat.nome}</span>
                     <span style={{ flex: 1, color: T.texto2 }}>{d.descricao || cat.nome}</span>
-                    <span style={{ fontWeight: 700, color: "#ea580c" }}>R$ {(parseFloat(d.valor) || 0).toFixed(2)}</span>
+                    <span style={{ fontWeight: 700, color: ORANGE }}>R$ {(parseFloat(d.valor) || 0).toFixed(2)}</span>
                   </div>
                 );
               })}
@@ -469,7 +469,7 @@ export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
             <label style={labelS}>Observações do contrato</label>
             <textarea value={form.obsContrato} onChange={e => set("obsContrato", e.target.value)} rows={3} placeholder="Cláusulas, retenções, encargos..." style={{ ...inputS, resize: "vertical", fontFamily: "inherit" }} />
 
-            <button onClick={salvar} disabled={!alterado} style={{ width: "100%", marginTop: 14, padding: 12, background: alterado ? GREEN : "#d1d5db", color: "#fff", border: "none", borderRadius: 12, fontWeight: 700, cursor: alterado ? "pointer" : "not-allowed" }}>
+            <button onClick={salvar} disabled={!alterado} style={{ width: "100%", marginTop: 14, padding: 12, background: alterado ? GREEN : T.desabilitadoFundo /* cinza fixo #d1d5db virava mancha clara no tema escuro */, color: "#fff", border: "none", borderRadius: 12, fontWeight: 700, cursor: alterado ? "pointer" : "not-allowed" }}>
               {alterado ? "Salvar alterações" : "Sem alterações"}
             </button>
           </div>

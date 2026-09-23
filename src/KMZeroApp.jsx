@@ -1207,7 +1207,8 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: T.superficie, position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
+        // Wrapper do celular é a "página" do app de campo (T.fundo), não um cartão; a sombra fica porque o fundo externo é escuro nos dois temas
+        <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: T.fundo, position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
           <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             {render()}
           </div>

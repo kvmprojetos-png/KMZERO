@@ -81,7 +81,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
           <div style={{ background: T.superficie, borderRadius: 12, boxShadow: T.sombra, marginBottom: 14, overflowX: "auto" }}>
             <table data-test="obras-tabela" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#eef6f8", textAlign: "left" }}>
+                <tr style={{ background: T.superficie2, textAlign: "left" }}>
                   {["Obra", "Cliente", "Status", "Encarregado", "Trabalhadores", "Início", "Prazo"].map(h => (
                     <th key={h} style={{ padding: "10px 12px", color: T.titulo, fontWeight: 800, fontSize: 12, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
@@ -120,7 +120,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
           const cron = (cronogramas || {})[o.id] || [];
           const progresso = cron.length > 0 ? Math.round(cron.reduce((s, e) => s + (e.progresso || 0), 0) / cron.length) : 0;
           return (
-            <div key={o.id} data-test={`obra-card-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}`, boxShadow: T.sombra, cursor: "pointer" }}>
+            <div key={o.id} data-test={`obra-card-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : T.desabilitado}`, boxShadow: T.sombra, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, color: T.titulo, fontSize: 15 }}>{o.nome}</div>
@@ -472,7 +472,8 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
             </div>
             <div style={{ background: T.avisoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
               <div style={{ fontSize: 9, color: T.texto2 }}>☕ Alimentação</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#dc7e00" }}>R$ {totalAlimentacaoMes.toFixed(2)}</div>
+              {/* Âmbar mais escuro que o ORANGE do combustível: o token de aviso mantém a distinção e lê nos dois temas */}
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.avisoTexto }}>R$ {totalAlimentacaoMes.toFixed(2)}</div>
             </div>
             <div style={{ background: T.infoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
               <div style={{ fontSize: 9, color: T.texto2 }}>📦 Materiais</div>
@@ -644,10 +645,10 @@ export function TelaMapa({ obras, trabalhadores, onBack, onEditar }) {
         {/* Mapa visual estilizado */}
         <div style={{ background: T.infoFundo, borderRadius: 14, padding: 14, marginBottom: 14, position: "relative", height: 200, overflow: "hidden", border: `1px solid ${T.borda2}` }}>
           <div style={{ position: "absolute", top: 8, left: 12, fontSize: 11, color: T.texto2, fontWeight: 700 }}>📍 Mapa visual</div>
-          {/* Grid de fundo */}
+          {/* Grid de fundo — stroke via style (var() não funciona em atributo SVG); borda2 ≈ o #c5d0e5 original no claro */}
           <svg width="100%" height="100%" style={{ position: "absolute", top: 0, left: 0 }}>
-            {[...Array(8)].map((_, i) => <line key={"h" + i} x1="0" y1={i * 25} x2="100%" y2={i * 25} stroke="#c5d0e5" strokeWidth="0.5" />)}
-            {[...Array(10)].map((_, i) => <line key={"v" + i} x1={`${i * 10}%`} y1="0" x2={`${i * 10}%`} y2="100%" stroke="#c5d0e5" strokeWidth="0.5" />)}
+            {[...Array(8)].map((_, i) => <line key={"h" + i} x1="0" y1={i * 25} x2="100%" y2={i * 25} style={{ stroke: T.borda2 }} strokeWidth="0.5" />)}
+            {[...Array(10)].map((_, i) => <line key={"v" + i} x1={`${i * 10}%`} y1="0" x2={`${i * 10}%`} y2="100%" style={{ stroke: T.borda2 }} strokeWidth="0.5" />)}
           </svg>
           {/* Pinos das obras */}
           {ativas.map((o, i) => {
@@ -666,7 +667,7 @@ export function TelaMapa({ obras, trabalhadores, onBack, onEditar }) {
         {obras.map(o => {
           const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
           return (
-            <div key={o.id} onClick={() => onEditar && onEditar(o)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}` }}>
+            <div key={o.id} onClick={() => onEditar && onEditar(o)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : T.desabilitado}` }}>
               <div style={{ fontSize: 28, marginRight: 12 }}>📍</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{o.nome}</div>

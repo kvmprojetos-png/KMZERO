@@ -160,7 +160,8 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
               ))}
             </div>
             <Btn label="Novo Pedido" color={NAVY} onClick={() => { setOk(false); setItens([]); setObsGeral(""); }} style={{ marginTop: 24 }} />
-            <Btn label="Voltar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 10 }} />
+            {/* Botão secundário segue o tema (cinza fixo virava mancha clara no escuro); a sombra `${color}55` do Btn é ignorada com var(), sem prejuízo */}
+            <Btn label="Voltar" color={T.superficie2} text={T.titulo} onClick={onBack} style={{ marginTop: 10 }} />
           </div>
         ) : (
           <>
@@ -172,7 +173,7 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
                   <button onClick={() => { confirmar("Limpar todos os itens?", () => { setItens([]); }); }} style={{ background: "none", border: "none", color: RED, fontSize: 11, cursor: "pointer", fontWeight: 700 }}>Limpar</button>
                 </div>
                 {itens.map((i, idx) => (
-                  <div key={i.idLocal} style={{ display: "flex", alignItems: "flex-start", padding: "8px 0", borderBottom: idx < itens.length - 1 ? "1px solid #f0f0f0" : "none" }}>
+                  <div key={i.idLocal} style={{ display: "flex", alignItems: "flex-start", padding: "8px 0", borderBottom: idx < itens.length - 1 ? `1px solid ${T.borda}` : "none" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: T.titulo, fontWeight: 700 }}>{idx + 1}) {i.material}</div>
                       <div style={{ fontSize: 11, color: GREEN, fontWeight: 700, marginTop: 2 }}>📏 {i.qtd}</div>
@@ -212,7 +213,7 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
                     </div>
                   ) : (
                     sugestoes.map(s => (
-                      <div key={(s.idCatalogo || "") + s.nome} onClick={() => selecionarMaterial(s.nome)} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${T.borda}`, background: s.doCatalogo ? "#fefce8" : "transparent" }}>
+                      <div key={(s.idCatalogo || "") + s.nome} onClick={() => selecionarMaterial(s.nome)} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${T.borda}`, background: s.doCatalogo ? T.avisoFundo : "transparent" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
                           {s.doCatalogo && <span style={{ fontSize: 9, background: "#854d0e", color: "#fff", padding: "1px 5px", borderRadius: 3, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>PRO</span>}
                           <div style={{ flex: 1, fontSize: 13, color: T.titulo, fontWeight: 600, lineHeight: 1.3 }}>{s.nome}</div>
@@ -260,7 +261,7 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
 
                   <button onClick={adicionarNaCesta} disabled={!mat || !qtd} style={{
                     width: "100%", padding: 12, borderRadius: 10, border: "none",
-                    background: mat && qtd ? GOLD : "#ccc",
+                    background: mat && qtd ? GOLD : T.desabilitadoFundo,
                     color: "#fff", fontWeight: 800, fontSize: 13, cursor: mat && qtd ? "pointer" : "default"
                   }}>
                     ➕ Adicionar à cesta
@@ -669,7 +670,7 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
         <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
           <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>📦 Itens solicitados ({itens.length})</div>
           {itens.map((it, i) => (
-            <div key={i} style={{ padding: "10px 0", borderBottom: i < itens.length - 1 ? "1px solid #f0f0f0" : "none" }}>
+            <div key={i} style={{ padding: "10px 0", borderBottom: i < itens.length - 1 ? `1px solid ${T.borda}` : "none" }}>
               <div style={{ display: "flex", alignItems: "flex-start" }}>
                 <div style={{ background: NAVY, color: "#fff", width: 22, height: 22, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, marginRight: 8, flexShrink: 0, marginTop: 2 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}>
@@ -790,7 +791,8 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
           </div>
         ))}
 
-        <button onClick={adicionarItem} style={{ width: "100%", padding: 10, background: T.superficie2, color: T.titulo, border: `1px dashed ${NAVY}66`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 12 }}>
+        {/* Tracejado navy com alfa sumia sobre a superfície escura; borda2 acompanha o tema */}
+        <button onClick={adicionarItem} style={{ width: "100%", padding: 10, background: T.superficie2, color: T.titulo, border: `1px dashed ${T.borda2}`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 12 }}>
           ➕ Adicionar Item
         </button>
 
@@ -899,23 +901,24 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
 
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
-          <div onClick={() => setFiltro("Aguardando")} style={{ background: filtro === "Aguardando" ? ORANGE : "#fff", color: filtro === "Aguardando" ? "#fff" : NAVY, borderRadius: 10, padding: 10, textAlign: "center", cursor: "pointer", border: `1.5px solid ${ORANGE}` }}>
+          <div onClick={() => setFiltro("Aguardando")} style={{ background: filtro === "Aguardando" ? ORANGE : T.superficie, color: filtro === "Aguardando" ? "#fff" : T.titulo, borderRadius: 10, padding: 10, textAlign: "center", cursor: "pointer", border: `1.5px solid ${ORANGE}` }}>
             <div style={{ fontSize: 22, fontWeight: 900 }}>{totalPendentes}</div>
             <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>⏳ Aguardando</div>
           </div>
-          <div onClick={() => setFiltro("Aprovado")} style={{ background: filtro === "Aprovado" ? GREEN : "#fff", color: filtro === "Aprovado" ? "#fff" : NAVY, borderRadius: 10, padding: 10, textAlign: "center", cursor: "pointer", border: `1.5px solid ${GREEN}` }}>
+          <div onClick={() => setFiltro("Aprovado")} style={{ background: filtro === "Aprovado" ? GREEN : T.superficie, color: filtro === "Aprovado" ? "#fff" : T.titulo, borderRadius: 10, padding: 10, textAlign: "center", cursor: "pointer", border: `1.5px solid ${GREEN}` }}>
             <div style={{ fontSize: 22, fontWeight: 900 }}>{totalAprovados}</div>
             <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>✓ Aprovados</div>
           </div>
-          <div onClick={() => setFiltro("Negado")} style={{ background: filtro === "Negado" ? RED : "#fff", color: filtro === "Negado" ? "#fff" : NAVY, borderRadius: 10, padding: 10, textAlign: "center", cursor: "pointer", border: `1.5px solid ${RED}` }}>
+          <div onClick={() => setFiltro("Negado")} style={{ background: filtro === "Negado" ? RED : T.superficie, color: filtro === "Negado" ? "#fff" : T.titulo, borderRadius: 10, padding: 10, textAlign: "center", cursor: "pointer", border: `1.5px solid ${RED}` }}>
             <div style={{ fontSize: 22, fontWeight: 900 }}>{totalNegados}</div>
             <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>✕ Negados</div>
           </div>
         </div>
 
         <button onClick={() => setFiltro("todos")} style={{
-          width: "100%", padding: 8, background: filtro === "todos" ? NAVY : "#fff", color: filtro === "todos" ? "#fff" : NAVY,
-          border: `1.5px solid ${NAVY}`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 11, marginBottom: 8
+          width: "100%", padding: 8, background: filtro === "todos" ? NAVY : T.superficie, color: filtro === "todos" ? "#fff" : T.titulo,
+          // Borda navy sumia sobre a superfície escura; contorno é navy no claro e ciano no escuro
+          border: `1.5px solid ${T.contorno}`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 11, marginBottom: 8
         }}>📋 Ver todos ({total})</button>
 
         {/* BOTÃO NOVO PEDIDO (gestor) */}
@@ -1422,7 +1425,7 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Validar Recebimento" sub={pedidoSel?.material} onBack={() => setStep("foto")} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        {foto && <img src={foto} alt="" style={{ width: "100%", borderRadius: 12, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }} />}
+        {foto && <img src={foto} alt="" style={{ width: "100%", borderRadius: 12, marginBottom: 12, boxShadow: T.sombra }} />}
 
         <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>✓ Conformidade da Entrega</div>
@@ -1431,7 +1434,7 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
             { v: "Divergência",     l: "⚠️ Divergência — quantidade ou qualidade",   c: ORANGE },
             { v: "Não Conforme",    l: "❌ Não Conforme — material errado",          c: RED },
           ].map(o => (
-            <button key={o.v} onClick={() => setConformidade(o.v)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `2px solid ${conformidade === o.v ? o.c : "#dde2ef"}`, background: conformidade === o.v ? o.c : "#fff", color: conformidade === o.v ? "#fff" : "#666", fontWeight: 700, cursor: "pointer", fontSize: 13, marginBottom: 8, textAlign: "left" }}>
+            <button key={o.v} onClick={() => setConformidade(o.v)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `2px solid ${conformidade === o.v ? o.c : T.borda2}`, background: conformidade === o.v ? o.c : T.superficie, color: conformidade === o.v ? "#fff" : T.texto2, fontWeight: 700, cursor: "pointer", fontSize: 13, marginBottom: 8, textAlign: "left" }}>
               {o.l}
             </button>
           ))}

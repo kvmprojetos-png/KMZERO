@@ -3,275 +3,658 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KMZERO Obras — gestão de obras no celular e no escritório</title>
-    <meta name="description" content="A equipe lança presença, fotos, pedidos e RDO no canteiro pelo celular. O escritório acompanha tudo na hora. KMZERO Obras, da KM Consultoria — Alegre/ES." />
+    <title>KMZERO Obras — gestão de obras no celular e no escritório | KM Consultoria</title>
+    <meta name="description" content="Presença, fotos carimbadas, pedidos, RDO em PDF e folha de pagamento da obra em um lugar só. Funciona sem sinal. Feito por engenheiro civil em Alegre/ES." />
+    <link rel="canonical" href="https://kmzero.vercel.app/" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="pt_BR" />
     <meta property="og:site_name" content="KMZERO Obras" />
+    <meta property="og:url" content="https://kmzero.vercel.app/" />
     <meta property="og:title" content="KMZERO Obras — gestão de obras no celular e no escritório" />
-    <meta property="og:description" content="A equipe lança presença, fotos, pedidos e RDO no canteiro. Você acompanha tudo na hora, de onde estiver." />
-    <meta name="theme-color" content="#052f3d" />
+    <meta property="og:description" content="Presença, fotos carimbadas, pedidos, RDO em PDF e folha de pagamento da obra em um lugar só. Funciona sem sinal. Feito por engenheiro civil em Alegre/ES." />
+    <!-- og.png (1200×630) é gerado na fase de capturas a partir do hero -->
+    <meta property="og:image" content="https://kmzero.vercel.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="KMZERO Obras: a obra inteira no seu celular, o escritório vê tudo na hora" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="KMZERO Obras — gestão de obras no celular e no escritório" />
+    <meta name="twitter:description" content="Presença, fotos carimbadas, pedidos, RDO em PDF e folha de pagamento da obra em um lugar só. Funciona sem sinal." />
+    <meta name="twitter:image" content="https://kmzero.vercel.app/og.png" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#081a21" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script>
-      // Quem já entrou no sistema vai direto para o app
-      try { if (localStorage.getItem("_kmzero_sessao") === "1") location.replace("/app/"); } catch (e) {}
+      // Quem já entrou no sistema vai direto para o app; ?site abre a vitrine mesmo logado
+      try { if (localStorage.getItem("_kmzero_sessao") === "1" && !location.search.includes("site")) location.replace("/app/"); } catch (e) {}
+      // Tema da vitrine (chave própria: o app divide a origem e no celular é claro). Escuro é o padrão.
+      try {
+        if (localStorage.getItem("_kmzero_tema_site") === "claro") {
+          document.documentElement.setAttribute("data-tema", "claro");
+          var mtc = document.querySelector('meta[name="theme-color"]'); if (mtc) mtc.content = "#f7fbfc";
+        }
+      } catch (e) {}
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <style>
+      /* Tokens --km-*: espelho de src/tema.css (claro → escuro). Escuro é o padrão da vitrine. */
       :root {
-        --navy: #052f3d;
-        --navy2: #0b7285;
-        --ouro: #ffb830;
-        --verde: #25b579;
-        --azul: #2094ff;
-        --claro: #f7fbfc;
-        --branco: #ffffff;
-        --texto: #0e2a33;
-        --texto2: #4d6670;
-        --borda: #dbe6ea;
+        --km-fundo: #081a21;
+        --km-superficie: #0f242c;
+        --km-superficie2: #163039;
+        --km-superficie3: #1a3641;
+        --km-borda: rgba(255,255,255,0.10);
+        --km-borda2: rgba(255,255,255,0.22);
+        --km-contorno: #3fc1d6;
+        --km-titulo: #eaf3f5;
+        --km-texto: #d5e1e5;
+        --km-texto2: #9fb3bb;
+        --km-texto3: #7f939b;
+        --km-acento: #ffb830;
+        --km-barra: #052f3d;
+        --km-menu-fundo: #04161d;
+        --km-menu-fundo2: #071f28;
+        --km-menu-borda: rgba(255,255,255,0.06);
+        --km-menu-texto: rgba(255,255,255,0.86);
+        --km-menu-texto2: rgba(255,255,255,0.62);
+        --km-menu-ativo: rgba(255,184,48,0.14);
+        --km-sombra: 0 2px 8px rgba(0,0,0,0.35);
+        --km-sombra2: 0 20px 60px rgba(0,0,0,0.60);
+        --km-sucesso-fundo: rgba(37,181,121,0.14);
+        --km-sucesso-borda: rgba(37,181,121,0.38);
+        --km-sucesso-texto: #7fe0b6;
+        --km-aviso-fundo: rgba(255,184,48,0.14);
+        --km-aviso-borda: rgba(255,184,48,0.38);
+        --km-aviso-texto: #ffd27a;
+        /* Cores fixas da marca (iguais nos dois temas) */
+        --navy: #052f3d; --navy2: #04161d; --teal: #0b7285; --ouro: #ffb830;
+        --verde: #25b579; --vermelho: #ef476f; --laranja: #ff9f1c; --azul: #2094ff; --claro: #f7fbfc;
+        --malha: rgba(255,255,255,0.035);
         --topo: 64px;
+        color-scheme: dark;
       }
-      * { box-sizing: border-box; }
-      html { scroll-behavior: smooth; scroll-padding-top: calc(var(--topo) + 16px); }
-      body {
-        margin: 0;
-        padding-top: var(--topo);
-        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 16px;
-        line-height: 1.55;
-        color: var(--texto);
-        background: var(--branco);
-        -webkit-font-smoothing: antialiased;
+      [data-tema="claro"] {
+        --km-fundo: #f7fbfc;
+        --km-superficie: #ffffff;
+        --km-superficie2: #eef4f6;
+        --km-superficie3: #ffffff;
+        --km-borda: #e0e9ed;
+        --km-borda2: #c6d3d9;
+        --km-contorno: #052f3d;
+        --km-titulo: #052f3d;
+        --km-texto: #22343b;
+        --km-texto2: #5c6b73;
+        --km-texto3: #6f7d84;
+        --km-menu-fundo: #052f3d;
+        --km-menu-fundo2: #06384a;
+        --km-menu-borda: rgba(255,255,255,0.08);
+        --km-sombra: 0 2px 8px rgba(0,0,0,0.06);
+        --km-sombra2: 0 20px 60px rgba(0,0,0,0.30);
+        --km-sucesso-fundo: #f0fdf4;
+        --km-sucesso-borda: #bbf0d2;
+        --km-sucesso-texto: #14532d;
+        --km-aviso-fundo: #fef9e7;
+        --km-aviso-borda: #f5dfa0;
+        --km-aviso-texto: #8b6f00;
+        --malha: rgba(5,47,61,0.05);
+        color-scheme: light;
       }
-      h1, h2, h3, p, ul { margin: 0; }
-      i { font-style: normal; }
-      svg { display: block; }
-      a:focus-visible { outline: 3px solid var(--ouro); outline-offset: 3px; border-radius: 6px; }
-      .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 16px; }
 
-      /* Botões */
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; scroll-padding-top: calc(var(--topo) + 16px); background: var(--km-fundo); }
+      body {
+        margin: 0; padding-top: var(--topo);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 16px; line-height: 1.55; color: var(--km-texto); background: var(--km-fundo);
+        -webkit-font-smoothing: antialiased; overflow-x: hidden;
+      }
+      h1, h2, h3, h4, p, ul, figure { margin: 0; }
+      h1, h2, h3, .lockup { font-family: Barlow, Inter, sans-serif; }
+      h1, h2, h3 { color: var(--km-titulo); letter-spacing: -.01em; }
+      i, cite { font-style: normal; }
+      svg { display: block; }
+      img { max-width: 100%; }
+      a { color: var(--km-contorno); }
+      :focus-visible { outline: 3px solid var(--ouro); outline-offset: 3px; border-radius: 6px; }
+      .ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+      .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+      .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+      /* Lockup KM|ZERO + tagline (mesmo desenho do LogoKM do app) */
+      .lockup { display: inline-flex; flex-direction: column; text-decoration: none; line-height: 1; padding: 10px 0; }
+      .lockup b { font-weight: 800; font-size: 24px; letter-spacing: -.02em; color: var(--km-titulo); }
+      .lockup b span { color: var(--ouro); }
+      .lockup small { margin-top: 3px; font-family: Inter, sans-serif; font-size: 8px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--km-texto2); }
+
+      /* Botões (alvos ≥ 44px) */
       .btn {
-        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        padding: 13px 22px; border-radius: 10px; border: 1.5px solid transparent;
-        font-weight: 700; font-size: 15px; line-height: 1.2; text-decoration: none; white-space: nowrap;
-        transition: transform .12s ease, background .12s ease, border-color .12s ease;
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
+        padding: 12px 18px; border-radius: 12px; border: 1.5px solid transparent; cursor: pointer;
+        font: 700 15px/1.2 Inter, sans-serif; text-decoration: none; white-space: nowrap;
+        transition: transform .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
       }
       .btn:hover { transform: translateY(-1px); }
       .btn-ouro { background: var(--ouro); color: var(--navy); }
       .btn-ouro:hover { background: #ffc24d; }
-      .btn-contorno { border-color: rgba(255,255,255,.4); color: #fff; }
-      .btn-contorno:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.7); }
-      .btn-navy { background: var(--navy); color: #fff; }
-      .btn-navy:hover { background: var(--navy2); }
-      .btn-p { padding: 9px 14px; font-size: 14px; }
+      .btn-contorno { border-color: var(--km-contorno); color: var(--km-contorno); background: transparent; }
+      .btn-contorno:hover { background: rgba(63,193,214,.08); }
+      .btn-p { min-height: 40px; padding: 9px 14px; font-size: 14px; }
+      .btn-ico { width: 44px; height: 44px; padding: 0; border-radius: 12px; border: 1px solid var(--km-borda); background: transparent; color: var(--km-titulo); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+      .btn-ico:hover { background: var(--km-superficie2); }
 
-      /* Barra fixa */
-      .topo {
-        position: fixed; top: 0; left: 0; right: 0; height: var(--topo); z-index: 50;
-        background: var(--navy); border-bottom: 1px solid rgba(255,255,255,.08);
+      /* Topo fixo */
+      .topo { position: fixed; top: 0; left: 0; right: 0; height: var(--topo); z-index: 50; background: var(--km-fundo); border-bottom: 1px solid var(--km-borda); }
+      .topo .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .topo-nav { display: none; gap: 22px; font-size: 14px; font-weight: 600; }
+      .topo-nav a { color: var(--km-texto2); text-decoration: none; padding: 10px 0; }
+      .topo-nav a:hover { color: var(--km-titulo); }
+      .topo-acoes { display: flex; align-items: center; gap: 8px; }
+      .entrar { display: none; font-size: 13px; font-weight: 600; color: var(--km-texto2); text-decoration: none; padding: 10px 4px; white-space: nowrap; }
+      .entrar:hover { color: var(--km-titulo); }
+      .zap-topo { display: none; }
+      .zap-topo-ico { background: var(--ouro); color: var(--navy); border-color: var(--ouro); }
+      .zap-topo-ico:hover { background: #ffc24d; }
+      #tema .lua { display: none; }
+      [data-tema="claro"] #tema .lua { display: block; }
+      [data-tema="claro"] #tema .sol { display: none; }
+      /* Painel do celular */
+      .painel-menu { display: none; position: fixed; top: var(--topo); left: 0; right: 0; z-index: 49; background: var(--km-superficie); border-bottom: 1px solid var(--km-borda); box-shadow: var(--km-sombra2); padding: 8px 16px 16px; }
+      .painel-menu.aberto { display: block; }
+      .painel-menu a { display: flex; align-items: center; min-height: 48px; padding: 10px 4px; font-size: 16px; font-weight: 600; color: var(--km-titulo); text-decoration: none; border-bottom: 1px solid var(--km-borda); }
+      .painel-menu .btn { margin-top: 12px; width: 100%; border-bottom: 0; }
+      .painel-menu .entrar-m { color: var(--km-texto2); border-bottom: 0; justify-content: center; font-size: 14px; }
+      @media (min-width: 768px) {
+        .topo-nav { display: flex; }
+        .entrar, .zap-topo { display: inline-flex; }
+        #hamb, .zap-topo-ico, .painel-menu { display: none !important; }
       }
-      .topo .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-      .logo { font-weight: 900; font-size: 24px; letter-spacing: -1px; line-height: 1; color: #fff; text-decoration: none; }
-      .logo span { color: var(--ouro); }
-      .topo-nav { display: none; gap: 26px; font-size: 14px; font-weight: 600; }
-      .topo-nav a { color: rgba(255,255,255,.75); text-decoration: none; }
-      .topo-nav a:hover { color: #fff; }
-      @media (min-width: 900px) { .topo-nav { display: flex; } }
+      @media (min-width: 768px) and (max-width: 959px) { .topo-nav { gap: 14px; font-size: 13px; } }
+
+      /* Barra inferior do celular (aparece quando o hero sai da tela) */
+      .barra-zap { position: fixed; left: 0; right: 0; bottom: 0; z-index: 48; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--km-fundo); border-top: 1px solid var(--km-borda); transform: translateY(110%); transition: transform .25s ease; }
+      .barra-zap.on { transform: none; }
+      .barra-zap .btn { width: 100%; }
+      @media (min-width: 768px) { .barra-zap { display: none; } }
 
       /* Hero */
-      .hero { background: var(--navy); color: #fff; padding: 56px 0 64px; }
-      .hero .wrap { display: grid; gap: 44px; align-items: center; }
+      .hero { position: relative; overflow: hidden; padding: 40px 0 48px; }
+      .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+        background-image: repeating-linear-gradient(0deg, var(--malha) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, var(--malha) 0 1px, transparent 1px 32px); }
+      .hero::after { content: ""; position: absolute; top: -200px; right: -160px; width: 720px; height: 620px; pointer-events: none;
+        background: radial-gradient(closest-side, rgba(11,114,133,.38), rgba(11,114,133,0)); }
+      .hero .wrap { position: relative; z-index: 1; display: grid; gap: 40px; align-items: center; }
       .hero .wrap > * { min-width: 0; }
-      .hero h1 { font-size: clamp(34px, 5.2vw, 58px); font-weight: 800; line-height: 1.06; letter-spacing: -.025em; }
-      .hero .sub { margin-top: 20px; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.6; color: rgba(255,255,255,.78); max-width: 560px; }
-      .hero .acoes { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }
-      .hero .selos { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,.65); }
-      .hero .selos span::before {
-        content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-        background: var(--verde); margin-right: 8px; vertical-align: middle;
-      }
+      .rotulo { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--km-contorno); margin-bottom: 12px; }
+      .hero h1 { font-size: clamp(38px, 6vw, 68px); font-weight: 800; line-height: 1.02; letter-spacing: -.02em; }
+      .hero .sub { margin-top: 18px; font-size: clamp(16px, 1.5vw, 19px); line-height: 1.6; color: var(--km-texto2); max-width: 560px; }
+      .acoes { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 12px; }
+      @media (max-width: 479px) { .acoes .btn { width: 100%; } }
+      .selos { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; font-weight: 500; color: var(--km-texto2); list-style: none; padding: 0; }
+      .selos li { display: flex; align-items: center; gap: 8px; }
+      .selos .ico { width: 16px; height: 16px; color: var(--verde); }
+      @media (min-width: 600px) { .selos { display: flex; flex-wrap: wrap; gap: 8px 20px; } }
       @media (min-width: 960px) {
-        .hero { padding: 96px 0 104px; }
-        .hero .wrap { grid-template-columns: 1.1fr .9fr; gap: 56px; }
+        .hero { padding: 80px 0 88px; }
+        .hero .wrap { grid-template-columns: 1.05fr 1fr; gap: 48px; }
       }
 
-      /* Ilustração do hero (só CSS) */
-      .demo { display: grid; gap: 14px; width: 100%; max-width: 460px; margin: 0 auto; }
-      .tela { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 16px 18px; }
-      .tela-cab {
-        display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;
-        font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.55);
-      }
-      .tela-cab b { color: var(--ouro); letter-spacing: 0; text-transform: none; }
-      .lin { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.08); }
-      .tela-cab + .lin { border-top: 0; }
-      .lin small { margin-left: auto; color: rgba(255,255,255,.5); font-size: 12px; white-space: nowrap; }
-      .pt { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-      .pt-verde { background: var(--verde); }
-      .pt-ouro { background: var(--ouro); }
-      .pt-azul { background: var(--azul); }
-      .barra { height: 8px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; margin: 2px 0 6px; }
-      .barra i { display: block; height: 100%; width: 62%; background: var(--verde); border-radius: 99px; }
+      /* Mockups em HTML/CSS (moldura de navegador + celular) */
+      .mk { position: relative; width: 100%; }
+      .mk-nav { width: 100%; max-width: 560px; border: 1px solid var(--km-borda2); border-radius: 12px; background: var(--km-superficie); box-shadow: var(--km-sombra2); overflow: hidden; font-size: 10px; line-height: 1.3; color: var(--km-texto); }
+      .mk-nav-barra { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: var(--km-superficie2); border-bottom: 1px solid var(--km-borda); }
+      .mk-nav-barra i { width: 8px; height: 8px; border-radius: 50%; background: var(--km-borda2); }
+      .mk-nav-barra span { margin-left: 8px; flex: 1; height: 16px; border-radius: 6px; background: var(--km-superficie); border: 1px solid var(--km-borda); font-size: 9px; color: var(--km-texto3); padding: 0 8px; line-height: 15px; }
+      .mk-corpo { display: grid; grid-template-columns: 128px 1fr; min-height: 290px; }
+      .mk-menu { background: var(--km-menu-fundo); border-right: 1px solid var(--km-menu-borda); padding: 10px 0; color: var(--km-menu-texto); }
+      .mk-menu .lockup { padding: 0 12px 10px; }
+      .mk-menu .lockup b { font-size: 14px; color: #fff; }
+      .mk-menu .lockup small { font-size: 5px; letter-spacing: 2px; color: var(--km-menu-texto2); }
+      .mk-grupo { padding: 8px 12px 3px; font-size: 7px; font-weight: 700; letter-spacing: .12em; color: var(--km-menu-texto2); }
+      .mk-item { display: flex; align-items: center; gap: 7px; padding: 5px 12px; font-size: 9px; font-weight: 500; }
+      .mk-item .ico { width: 11px; height: 11px; opacity: .8; }
+      .mk-item.ativo { background: var(--km-menu-ativo); box-shadow: inset 3px 0 0 var(--ouro); color: #fff; font-weight: 600; }
+      .mk-item.ativo .ico { color: var(--ouro); opacity: 1; }
+      .mk-pag { background: var(--km-superficie); display: flex; flex-direction: column; }
+      .mk-pag-barra { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 12px; background: var(--km-barra); color: #fff; font: 700 11px/1 Barlow, sans-serif; }
+      .mk-pag-barra small { font: 500 8px/1 Inter, sans-serif; color: rgba(255,255,255,.7); }
+      .mk-pag-corpo { padding: 12px; display: grid; gap: 10px; }
+      .mk-resumo { border: 1px solid var(--km-sucesso-borda); background: var(--km-sucesso-fundo); border-radius: 10px; padding: 8px 12px; }
+      .mk-resumo small { display: block; font-size: 8px; font-weight: 600; color: var(--km-sucesso-texto); letter-spacing: .04em; text-transform: uppercase; }
+      .mk-resumo b { display: block; margin-top: 2px; font: 800 20px/1.1 Barlow, sans-serif; font-variant-numeric: tabular-nums; color: var(--km-sucesso-texto); }
+      .mk-tab { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+      .mk-tab th { text-align: left; font-size: 8px; font-weight: 600; color: var(--km-texto3); letter-spacing: .04em; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid var(--km-borda2); }
+      .mk-tab td { padding: 6px; border-bottom: 1px solid var(--km-borda); font-size: 10px; }
+      .mk-tab th:not(:first-child), .mk-tab td:not(:first-child) { text-align: right; }
+      .mk-tab td:last-child { font-weight: 700; color: var(--km-titulo); }
+      .mk-btn { justify-self: start; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 8px; background: var(--ouro); color: var(--navy); font-size: 9px; font-weight: 700; }
+      .mk-btn .ico { width: 11px; height: 11px; }
+
+      /* Celular 390×780 escalado (o app de campo é sempre claro) */
+      .mk-cel-caixa { width: 195px; height: 390px; margin: 0 auto; }
+      .mk-cel { width: 390px; height: 780px; transform: scale(.5); transform-origin: 0 0; border-radius: 44px; background: #0b0f12; padding: 12px; box-shadow: var(--km-sombra2), 0 0 0 1px rgba(255,255,255,.12); color: #22343b; font-size: 15px; line-height: 1.35; }
+      .mk-cel-tela { position: relative; height: 100%; border-radius: 34px; overflow: hidden; background: #f7fbfc; display: flex; flex-direction: column; font-family: Inter, sans-serif; }
+      .mk-cel-topo { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 24px 0; font-size: 12px; font-weight: 700; color: #fff; }
+      .mk-cel-topo i { display: block; width: 92px; height: 26px; border-radius: 16px; background: #0b0f12; margin: -10px auto 0; }
+      .mk-cel-cab { padding: 50px 20px 18px; background: linear-gradient(135deg, #052f3d 0%, #0b7285 100%); color: #fff; }
+      .mk-cel-cab .lockup b { color: #fff; font-size: 22px; }
+      .mk-cel-cab .lockup small { color: rgba(255,255,255,.7); font-size: 7px; }
+      .mk-obra { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,.85); }
+      .mk-obra .ico { width: 14px; height: 14px; }
+      .vivo { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+      .vivo::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 0 0 rgba(37,181,121,.6); }
+      .mk-cel-corpo { flex: 1; padding: 14px 16px; display: grid; gap: 10px; align-content: start; }
+      .mk-card { background: #fff; border: 1px solid #e0e9ed; border-radius: 14px; padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+      .mk-card h4 { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #5c6b73; letter-spacing: .02em; }
+      .mk-card h4 .ico { width: 15px; height: 15px; color: #0b7285; }
+      .mk-card h4 b { margin-left: auto; font: 800 20px/1 Barlow, sans-serif; font-variant-numeric: tabular-nums; color: #052f3d; }
+      .mk-chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+      .mk-chips span { font-size: 10px; font-weight: 600; color: #14532d; background: #f0fdf4; border: 1px solid #bbf0d2; border-radius: 99px; padding: 2px 8px; }
+      .mk-chips span.falta { color: #8b6f00; background: #fef9e7; border-color: #f5dfa0; }
+      .mk-fotos { margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .mk-fotos i { position: relative; display: block; height: 58px; border-radius: 8px; overflow: hidden; background: linear-gradient(160deg, #0b7285, #052f3d); }
+      .mk-fotos i:nth-child(2) { background: linear-gradient(160deg, #3fc1d6, #0b7285); }
+      .mk-fotos i:nth-child(3) { background: linear-gradient(200deg, #ffb830 -40%, #0b7285 60%); }
+      .mk-fotos i::after { content: attr(data-h); position: absolute; left: 4px; bottom: 3px; font-size: 7px; font-weight: 700; color: #fff; background: rgba(5,47,61,.75); padding: 1px 4px; border-radius: 3px; }
+      .mk-tag { display: inline-block; margin-top: 8px; font-size: 10px; font-weight: 700; color: #7a4a00; background: rgba(255,159,28,.16); border: 1px solid rgba(255,159,28,.5); border-radius: 99px; padding: 3px 9px; }
+      .mk-pedido { margin-top: 6px; font-size: 13px; font-weight: 600; color: #052f3d; }
+      .mk-cel-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border-radius: 12px; background: var(--ouro); color: #052f3d; font-size: 15px; font-weight: 700; }
+      .mk-abas { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #e0e9ed; background: #fff; padding: 10px 6px 18px; }
+      .mk-abas span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9px; font-weight: 600; color: #6f7d84; }
+      .mk-abas span.ativa { color: #0b7285; }
+      .mk-abas .ico { width: 18px; height: 18px; }
       @media (min-width: 960px) {
-        .demo { margin: 0 0 0 auto; }
-        .tela-cel { margin-right: 36px; }
-        .tela-esc { margin-left: 36px; }
+        .mk { min-height: 470px; }
+        .mk .mk-nav { position: absolute; left: 0; top: 0; right: 120px; max-width: none; }
+        .mk .mk-cel-caixa { position: absolute; right: 0; bottom: -10px; width: 214.5px; height: 429px; margin: 0; transform: perspective(1400px) rotateY(-7deg); }
+        .mk .mk-cel { transform: scale(.55); }
       }
+      @media (max-width: 959px) { .mk .mk-nav { display: none; } }
+
+      /* Faixa de credibilidade */
+      .faixa { background: var(--km-superficie); border-top: 1px solid var(--km-borda); border-bottom: 1px solid var(--km-borda); padding: 14px 0; font-size: 14px; color: var(--km-texto2); }
+      .faixa .wrap { display: flex; align-items: flex-start; gap: 10px; }
+      .faixa .ico { color: var(--verde); margin-top: 2px; }
 
       /* Seções */
-      .secao { padding: 64px 0; }
+      .secao { padding: 56px 0; }
       @media (min-width: 960px) { .secao { padding: 88px 0; } }
-      .secao-clara { background: var(--claro); }
-      .secao-escura { background: var(--navy); color: #fff; }
-      .rotulo { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--navy2); margin-bottom: 12px; }
-      .secao-escura .rotulo { color: var(--ouro); }
-      .secao h2 { font-size: clamp(26px, 3.2vw, 38px); font-weight: 800; line-height: 1.15; letter-spacing: -.02em; max-width: 760px; }
-      .intro { margin-top: 14px; font-size: 17px; line-height: 1.6; color: var(--texto2); max-width: 640px; }
-      .secao-escura .intro { color: rgba(255,255,255,.75); }
-      .cab { margin-bottom: 40px; }
+      .secao-sup { background: var(--km-superficie); border-top: 1px solid var(--km-borda); border-bottom: 1px solid var(--km-borda); }
+      .secao h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; line-height: 1.1; max-width: 800px; }
+      .intro { margin-top: 14px; font-size: 17px; line-height: 1.6; color: var(--km-texto2); max-width: 640px; }
+      .cab { margin-bottom: 32px; }
+      @media (min-width: 960px) { .cab { margin-bottom: 44px; } }
+      .fecho { margin-top: 24px; font-size: 17px; font-weight: 600; color: var(--km-titulo); }
+      .cartao { background: var(--km-superficie); border: 1px solid var(--km-borda); border-radius: 16px; padding: 22px 20px; }
+      .secao-sup .cartao { background: var(--km-fundo); }
 
-      /* Como funciona */
-      .passos { display: grid; gap: 20px; }
-      @media (min-width: 720px) { .passos { grid-template-columns: repeat(3, 1fr); gap: 24px; } }
-      .passo { background: #fff; border: 1px solid var(--borda); border-radius: 16px; padding: 26px 24px; }
-      .passo .num {
-        width: 40px; height: 40px; border-radius: 12px; background: var(--navy); color: var(--ouro);
-        display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; margin-bottom: 18px;
+      /* Você conhece essa rotina */
+      .rotina { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--km-borda); border-radius: 16px; overflow: hidden; background: var(--km-superficie); }
+      .rotina th { text-align: left; padding: 14px 20px; font: 700 12px/1 Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--km-texto2); background: var(--km-superficie2); }
+      .rotina th:last-child { color: var(--km-contorno); }
+      .rotina td { padding: 16px 20px; font-size: 15px; vertical-align: top; border-top: 1px solid var(--km-borda); width: 50%; }
+      .rotina td:first-child { color: var(--km-texto2); }
+      .rotina td:last-child { color: var(--km-titulo); font-weight: 500; }
+      @media (max-width: 719px) {
+        .rotina th { padding: 10px 12px; font-size: 11px; }
+        .rotina td { padding: 10px 12px; font-size: 13px; line-height: 1.45; }
+        .rotina td:first-child { border-right: 1px solid var(--km-borda); }
+        .fecho { font-size: 16px; }
       }
-      .passo h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-      .passo p { font-size: 15px; color: var(--texto2); }
+
+      /* Como funciona (linha do tempo) */
+      .passos { display: grid; gap: 16px; position: relative; }
+      .passo { position: relative; padding-left: 56px; }
+      .passo .num { position: absolute; left: 0; top: 0; width: 40px; height: 40px; border-radius: 12px; background: var(--km-superficie2); border: 1px solid var(--km-borda2); color: var(--ouro); display: flex; align-items: center; justify-content: center; font: 800 17px/1 Barlow, sans-serif; }
+      .passo::before { content: ""; position: absolute; left: 19px; top: 44px; bottom: -16px; border-left: 1px dashed var(--km-borda2); }
+      .passo:last-child::before { display: none; }
+      .passo h3 { font-size: 20px; font-weight: 700; padding-top: 8px; margin-bottom: 6px; }
+      .passo p { font-size: 14px; color: var(--km-texto2); }
+      @media (min-width: 720px) { .passo p { font-size: 15px; } }
+      @media (min-width: 720px) {
+        .passos { grid-template-columns: repeat(3, 1fr); gap: 28px; }
+        .passo { padding-left: 0; padding-top: 58px; }
+        .passo::before { left: 48px; right: -28px; top: 20px; bottom: auto; border-left: 0; border-top: 1px dashed var(--km-borda2); }
+      }
 
       /* O que faz */
-      .cartoes { display: grid; gap: 16px; }
-      @media (min-width: 720px) { .cartoes { grid-template-columns: repeat(2, 1fr); } }
-      @media (min-width: 1024px) { .cartoes { grid-template-columns: repeat(4, 1fr); gap: 20px; } }
-      .cartao { background: #fff; border: 1px solid var(--borda); border-radius: 16px; padding: 22px 20px; transition: border-color .15s, box-shadow .15s; }
-      .cartao:hover { border-color: #b9d3db; box-shadow: 0 6px 24px rgba(5,47,61,.06); }
-      .icone { width: 44px; height: 44px; border-radius: 12px; background: #e6f3f6; color: var(--navy2); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
-      .icone svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-      .cartao h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-      .cartao p { font-size: 14px; color: var(--texto2); }
+      .bloco { margin-top: 28px; }
+      .bloco:first-child { margin-top: 0; }
+      .bloco .rotulo { margin-bottom: 10px; }
+      .cartoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .cartoes .cartao { padding: 12px; }
+      .cartoes .icone { width: 36px; height: 36px; border-radius: 10px; background: var(--km-superficie2); color: var(--km-contorno); display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+      .cartoes h3 { font-size: 15px; font-weight: 700; line-height: 1.25; }
+      .cartoes p { margin-top: 4px; font-size: 13px; color: var(--km-texto2); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+      @media (min-width: 720px) {
+        .cartoes { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .cartoes .cartao { padding: 20px 18px; }
+        .cartoes .icone { width: 44px; height: 44px; margin-bottom: 14px; }
+        .cartoes p { display: block; -webkit-line-clamp: none; }
+        .bloco { margin-top: 36px; }
+      }
+      .tambem { margin-top: 24px; font-size: 14px; color: var(--km-texto2); max-width: 820px; }
 
       /* Celular e computador */
-      .duas { display: grid; gap: 20px; }
+      .duas { display: grid; gap: 16px; }
       @media (min-width: 720px) { .duas { grid-template-columns: 1fr 1fr; gap: 24px; } }
-      .painel { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 28px 26px; }
-      .painel .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ouro); margin-bottom: 12px; }
-      .painel h3 { font-size: 22px; font-weight: 800; line-height: 1.2; margin-bottom: 16px; }
+      .painel { display: flex; flex-direction: column; }
+      .painel .tag { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--km-contorno); margin-bottom: 8px; }
+      .painel h3 { font-size: 22px; font-weight: 700; line-height: 1.2; margin-bottom: 14px; }
       .painel ul { list-style: none; padding: 0; display: grid; gap: 10px; }
-      .painel li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; color: rgba(255,255,255,.85); }
-      .painel li::before { content: "✓"; flex: none; color: var(--verde); font-weight: 800; }
+      .painel li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--km-texto); }
+      @media (min-width: 720px) { .painel li { font-size: 15px; } }
+      .painel li .ico { width: 18px; height: 18px; color: var(--verde); margin-top: 2px; }
+      .painel-mk { margin-top: 20px; display: none; }
+      .painel-mk .mk-nav { max-width: none; box-shadow: none; }
+      .painel-mk .mk-cel-caixa { transform: none; }
+      @media (min-width: 720px) { .painel-mk { display: block; } }
+      @media (max-width: 719px) { .painel-mk-nav { display: block; } }
 
       /* Para quem */
-      .publico { display: grid; gap: 16px; }
-      @media (min-width: 720px) { .publico { grid-template-columns: repeat(3, 1fr); gap: 20px; } }
-      .pub { background: #fff; border: 1px solid var(--borda); border-radius: 16px; padding: 24px 22px; }
-      .pub h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
-      .pub p { font-size: 14px; color: var(--texto2); }
+      .publico { display: grid; gap: 12px; }
+      @media (min-width: 720px) { .publico { grid-template-columns: repeat(2, 1fr); gap: 16px; } }
+      @media (min-width: 1024px) { .publico { grid-template-columns: repeat(4, 1fr); } }
+      .publico h3 { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+      .publico h3 .ico { color: var(--km-contorno); }
+      .publico p { font-size: 14px; color: var(--km-texto2); }
+      @media (max-width: 719px) { .publico .cartao { padding: 16px; } .publico h3 { font-size: 16px; } }
 
-      /* Planos */
-      .plano { max-width: 720px; margin: 0 auto; padding: 40px 28px; text-align: center; background: #fff8e6; border: 1.5px solid var(--ouro); border-radius: 20px; }
-      .plano .rotulo { color: #9a6200; }
-      .plano h2 { margin: 0 auto; }
-      .plano p { margin: 14px auto 0; max-width: 540px; font-size: 17px; color: var(--texto2); }
-      .plano .btn { margin-top: 26px; }
+      /* Quem faz */
+      .quem { display: grid; gap: 24px; align-items: center; }
+      @media (min-width: 720px) { .quem { grid-template-columns: 200px 1fr; gap: 40px; } }
+      .monograma { width: 160px; height: 160px; border-radius: 20px; background: linear-gradient(160deg, #052f3d, #0b7285); border: 1px solid var(--km-borda2); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: Barlow, sans-serif; color: #fff; }
+      .monograma b { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+      .monograma b span { color: var(--ouro); }
+      .monograma small { margin-top: 6px; font: 700 9px/1 Inter, sans-serif; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,.7); }
+      @media (min-width: 720px) { .monograma { width: 200px; height: 200px; } }
+      .quem p { font-size: 15px; color: var(--km-texto); max-width: 640px; }
+      @media (min-width: 720px) { .quem p { font-size: 16px; } }
+      .quem blockquote { margin: 18px 0 0; padding: 14px 18px; border-left: 3px solid var(--ouro); background: var(--km-superficie2); border-radius: 0 12px 12px 0; font-size: 16px; color: var(--km-titulo); }
+      .quem blockquote cite { display: block; margin-top: 6px; font-size: 13px; color: var(--km-texto2); }
+
+      /* Seus dados são seus */
+      .dados { list-style: none; padding: 0; display: grid; gap: 12px; }
+      @media (min-width: 720px) { .dados { grid-template-columns: repeat(2, 1fr); gap: 16px; } }
+      .dados li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: var(--km-texto); }
+      @media (min-width: 720px) { .dados li { font-size: 15px; } }
+      .dados .icone { width: 40px; height: 40px; border-radius: 10px; background: var(--km-superficie2); color: var(--km-contorno); display: flex; align-items: center; justify-content: center; flex: none; }
+      .dados-links { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 15px; font-weight: 600; }
+      .dados-links a { display: inline-block; padding: 10px 0; }
+
+      /* Perguntas */
+      .faq { max-width: 800px; }
+      .faq details { border-top: 1px solid var(--km-borda); }
+      .faq details:last-child { border-bottom: 1px solid var(--km-borda); }
+      .faq summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 12px 0; cursor: pointer; list-style: none; font-size: 16px; font-weight: 600; color: var(--km-titulo); }
+      @media (min-width: 720px) { .faq summary { min-height: 56px; padding: 14px 0; font-size: 17px; } }
+      .faq summary::-webkit-details-marker { display: none; }
+      .faq summary .ico { color: var(--km-contorno); transition: transform .15s; }
+      .faq details[open] summary .ico { transform: rotate(180deg); }
+      .faq p { padding: 0 0 18px; font-size: 14px; color: var(--km-texto2); max-width: 720px; }
+      @media (min-width: 720px) { .faq p { font-size: 15px; } }
+
+      /* Como começar */
+      .comecar { display: grid; gap: 24px; }
+      @media (min-width: 960px) { .comecar { grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: start; } }
+      .oferta { background: var(--km-superficie); border: 1.5px solid var(--ouro); border-radius: 16px; padding: 24px 22px; }
+      .oferta .selo { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); background: var(--ouro); border-radius: 99px; padding: 5px 12px; margin-bottom: 14px; }
+      .oferta ul { list-style: none; padding: 0; display: grid; gap: 10px; margin-bottom: 20px; }
+      .oferta li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; color: var(--km-texto); }
+      .oferta li .ico { width: 18px; height: 18px; color: var(--ouro); margin-top: 2px; }
 
       /* Contato */
-      .contatos { display: grid; gap: 16px; }
-      @media (min-width: 720px) { .contatos { grid-template-columns: repeat(3, 1fr); gap: 20px; } }
-      .contato { display: block; background: #fff; border: 1px solid var(--borda); border-radius: 16px; padding: 22px 20px; text-decoration: none; color: inherit; transition: border-color .15s, box-shadow .15s; }
-      a.contato:hover { border-color: #b9d3db; box-shadow: 0 6px 24px rgba(5,47,61,.06); }
-      .contato .rotulo { margin-bottom: 8px; }
-      .contato strong { display: block; font-size: 17px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-      .contato .linha2 { display: block; margin-top: 6px; font-size: 14px; color: var(--texto2); }
-      a.contato .linha2 { color: var(--navy2); font-weight: 600; }
+      .contatos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      @media (min-width: 720px) { .contatos { grid-template-columns: repeat(4, 1fr); gap: 16px; } }
+      .contato { display: block; text-decoration: none; color: inherit; transition: border-color .15s; padding: 16px 14px; min-width: 0; }
+      a.contato:hover { border-color: var(--km-borda2); }
+      .contato .icone { width: 36px; height: 36px; border-radius: 10px; background: var(--km-superficie2); color: var(--km-contorno); display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+      .contato .rotulo { margin-bottom: 4px; font-size: 11px; }
+      .contato strong { display: block; font-size: 14px; font-weight: 700; line-height: 1.35; color: var(--km-titulo); overflow-wrap: anywhere; }
+      .contato .linha2 { display: block; margin-top: 4px; font-size: 13px; color: var(--km-texto2); }
+      a.contato .linha2 { color: var(--km-contorno); font-weight: 600; }
+      @media (min-width: 720px) { .contato { padding: 22px 20px; } .contato strong { font-size: 16px; } }
 
       /* Rodapé */
-      .rodape { background: var(--navy); color: rgba(255,255,255,.7); padding: 32px 0; font-size: 14px; }
-      .rodape .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
-      .rodape .marca { color: #fff; font-weight: 800; }
-      .rodape .marca span { color: var(--ouro); }
-      .rodape a { color: #fff; font-weight: 600; text-decoration: none; }
+      .rodape { background: var(--km-superficie); border-top: 1px solid var(--km-borda); color: var(--km-texto2); padding: 32px 0 20px; font-size: 14px; }
+      @media (min-width: 720px) { .rodape { padding: 40px 0 24px; } }
+      .rodape-cols { display: grid; gap: 16px; }
+      @media (min-width: 720px) { .rodape-cols { grid-template-columns: 1.2fr 1fr 1fr; gap: 32px; } }
+      .rodape h4 { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--km-texto3); margin-bottom: 8px; }
+      .rodape a { display: inline-flex; align-items: center; gap: 8px; padding: 12px 0; color: var(--km-titulo); font-weight: 600; text-decoration: none; }
       .rodape a:hover { color: var(--ouro); }
+      .rodape .ico { width: 18px; height: 18px; color: var(--km-contorno); }
+      .rodape .tag { margin-top: 8px; max-width: 320px; }
+      .rodape-base { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--km-borda); display: flex; flex-wrap: wrap; gap: 0 16px; align-items: center; font-size: 13px; }
+      .rodape-base a { font-weight: 500; color: var(--km-texto2); }
 
+      /* Movimento: só sem prefers-reduced-motion e só com JS (html.anim) */
+      html.anim .rev { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s ease; }
+      html.anim .rev.on { opacity: 1; transform: none; }
+      html.anim .vivo::before { animation: pulsar 1.6s ease-out infinite; }
+      html.anim .mk-fotos i { animation: chegar .45s ease-out both; }
+      html.anim .mk-fotos i:nth-child(2) { animation-delay: .35s; }
+      html.anim .mk-fotos i:nth-child(3) { animation-delay: .7s; }
+      @keyframes pulsar { 0% { box-shadow: 0 0 0 0 rgba(37,181,121,.6); } 100% { box-shadow: 0 0 0 8px rgba(37,181,121,0); } }
+      @keyframes chegar { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
       @media (prefers-reduced-motion: reduce) {
         html { scroll-behavior: auto; }
-        .btn, .cartao, .contato { transition: none; }
+        .btn, .contato, .barra-zap, .faq summary .ico { transition: none; }
         .btn:hover { transform: none; }
       }
     </style>
   </head>
   <body>
+    <!-- Ícones (traço 1.75, desenhos do Lucide, MIT) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-celular" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></symbol>
+      <symbol id="i-cadeado" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+      <symbol id="i-escudo" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 8.9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-capacete" viewBox="0 0 24 24"><path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1z"/><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><path d="M14 6a6 6 0 0 1 6 6v3"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+      <symbol id="i-pacote" viewBox="0 0 24 24"><path d="m7.5 4.3 9 5.1"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+      <symbol id="i-arquivo" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+      <symbol id="i-painel" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+      <symbol id="i-aprovar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-curva" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
+      <symbol id="i-dinheiro" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></symbol>
+      <symbol id="i-calc" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M8 6h8"/><path d="M16 14v4"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></symbol>
+      <symbol id="i-pino" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+      <symbol id="i-pessoas" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+      <symbol id="i-predio" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-9 5.7a1.9 1.9 0 0 1-2 0L2 7"/></symbol>
+      <symbol id="i-insta" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.4A4 4 0 1 1 12.6 8a4 4 0 0 1 3.4 3.4z"/><path d="M17.5 6.5h.01"/></symbol>
+      <symbol id="i-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/></symbol>
+      <symbol id="i-lua" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/></symbol>
+      <symbol id="i-fechar" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+      <symbol id="i-banco" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+      <symbol id="i-baixar" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+      <symbol id="i-entrar" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></symbol>
+      <symbol id="i-calendario" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></symbol>
+      <symbol id="i-baixo" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-casa" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+      <symbol id="i-combustivel" viewBox="0 0 24 24"><path d="M3 22h12"/><path d="M4 9h10"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9.8a2 2 0 0 0-.6-1.4L18 5"/></symbol>
+    </svg>
+
     <header class="topo">
       <div class="wrap">
-        <a class="logo" href="/" aria-label="KMZERO Obras">KM<span>ZERO</span></a>
+        <a class="lockup" href="/" aria-label="KMZERO Obras, início"><b>KM<span>ZERO</span></b><small>Gestão de obras</small></a>
         <nav class="topo-nav" aria-label="Seções do site">
           <a href="#como-funciona">Como funciona</a>
           <a href="#o-que-faz">O que faz</a>
-          <a href="#planos">Planos</a>
-          <a href="#contato">Contato</a>
+          <a href="#perguntas">Perguntas</a>
+          <a href="#como-comecar">Como começar</a>
         </nav>
-        <a class="btn btn-ouro btn-p" href="/app/">Entrar no sistema</a>
+        <div class="topo-acoes">
+          <a class="entrar" href="/app/">Já sou cliente · Entrar</a>
+          <button class="btn-ico" id="tema" type="button" aria-label="Mudar para tema claro">
+            <svg class="ico sol"><use href="#i-sol"/></svg>
+            <svg class="ico lua"><use href="#i-lua"/></svg>
+          </button>
+          <a class="btn btn-ouro btn-p zap-topo" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener">Falar no WhatsApp</a>
+          <a class="btn-ico zap-topo-ico" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener" aria-label="Falar no WhatsApp"><svg class="ico"><use href="#i-zap"/></svg></a>
+          <button class="btn-ico" id="hamb" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-movel">
+            <svg class="ico abrir"><use href="#i-menu"/></svg>
+          </button>
+        </div>
       </div>
     </header>
+    <nav class="painel-menu" id="menu-movel" aria-label="Menu do site">
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#o-que-faz">O que faz</a>
+      <a href="#perguntas">Perguntas</a>
+      <a href="#como-comecar">Como começar</a>
+      <a class="btn btn-ouro" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener">Falar no WhatsApp</a>
+      <a class="entrar-m" href="/app/">Já sou cliente · Entrar no sistema</a>
+    </nav>
 
     <main>
-      <section class="hero">
+      <section class="hero" id="inicio">
         <div class="wrap">
           <div>
-            <h1>Gestão de obras no celular e no escritório</h1>
-            <p class="sub">A equipe lança presença, fotos, pedidos e RDO no canteiro. Você acompanha tudo na hora, de onde estiver.</p>
+            <span class="rotulo">Para quem hoje controla a obra por WhatsApp e planilha</span>
+            <h1>A obra inteira no seu celular. O escritório vê tudo na hora.</h1>
+            <p class="sub">Presença, fotos carimbadas, pedidos de material, diário de obra e folha de pagamento em um lugar só. A equipe lança no canteiro, mesmo sem sinal. Você acompanha e aprova de onde estiver.</p>
             <div class="acoes">
-              <a class="btn btn-ouro" href="/app/">Entrar no sistema</a>
-              <a class="btn btn-contorno" href="#contato">Falar com a gente</a>
+              <a class="btn btn-ouro" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener">Falar no WhatsApp</a>
+              <!-- Quando a demonstração passar no checklist: 'Ver demonstração' → /app/?demo=1 -->
+              <a class="btn btn-contorno" href="#como-funciona">Ver como funciona</a>
             </div>
-            <div class="selos">
-              <span>Funciona sem sinal</span>
-              <span>Dados separados por empresa</span>
-              <span>Relatórios em PDF</span>
-            </div>
+            <ul class="selos">
+              <li><svg class="ico"><use href="#i-check"/></svg>Sem instalar nada</li>
+              <li><svg class="ico"><use href="#i-check"/></svg>Funciona sem sinal</li>
+              <li><svg class="ico"><use href="#i-check"/></svg>Entra com o Google, sem senha</li>
+              <li><svg class="ico"><use href="#i-check"/></svg>Dados separados por empresa</li>
+              <li><svg class="ico"><use href="#i-check"/></svg>Feito por engenheiro civil, CREA-ES</li>
+            </ul>
           </div>
-          <div class="demo" aria-hidden="true">
-            <div class="tela tela-cel">
-              <div class="tela-cab">Canteiro · celular <b>hoje</b></div>
-              <div class="lin"><i class="pt pt-verde"></i>Presença lançada <small>14 pessoas</small></div>
-              <div class="lin"><i class="pt pt-verde"></i>3 fotos da laje enviadas <small>08:42</small></div>
-              <div class="lin"><i class="pt pt-ouro"></i>Pedido de cimento <small>aguardando</small></div>
+
+          <!-- Mockups em HTML/CSS: renderizam no tema, não vazam nome de cliente e servem de base para o og.png -->
+          <div class="mk" id="mockups" aria-hidden="true">
+            <div class="mk-nav">
+              <div class="mk-nav-barra"><i></i><i></i><i></i><span>kmzero.vercel.app/app/</span></div>
+              <div class="mk-corpo">
+                <div class="mk-menu">
+                  <div class="lockup"><b>KM<span>ZERO</span></b><small>Gestão de obras</small></div>
+                  <div class="mk-grupo">VISÃO GERAL</div>
+                  <div class="mk-item"><svg class="ico"><use href="#i-painel"/></svg>Painel</div>
+                  <div class="mk-item"><svg class="ico"><use href="#i-pino"/></svg>Mapa das obras</div>
+                  <div class="mk-grupo">OBRAS</div>
+                  <div class="mk-item"><svg class="ico"><use href="#i-predio"/></svg>Obras</div>
+                  <div class="mk-item"><svg class="ico"><use href="#i-arquivo"/></svg>RDO e diário</div>
+                  <div class="mk-item"><svg class="ico"><use href="#i-curva"/></svg>Cronograma</div>
+                  <div class="mk-grupo">EQUIPE</div>
+                  <div class="mk-item"><svg class="ico"><use href="#i-pessoas"/></svg>Equipe</div>
+                  <div class="mk-item"><svg class="ico"><use href="#i-calendario"/></svg>Presença</div>
+                  <div class="mk-item ativo"><svg class="ico"><use href="#i-dinheiro"/></svg>Folha de pagamento</div>
+                </div>
+                <div class="mk-pag">
+                  <div class="mk-pag-barra">Folha de pagamento <small>2ª quinzena</small></div>
+                  <div class="mk-pag-corpo">
+                    <div class="mk-resumo"><small>Total da folha</small><b>R$ 4.290,00</b></div>
+                    <table class="mk-tab">
+                      <thead><tr><th>Nome</th><th>Dias</th><th>Líquido</th></tr></thead>
+                      <tbody>
+                        <tr><td>João P.</td><td>13</td><td>R$ 1.560,00</td></tr>
+                        <tr><td>Marcos A.</td><td>12</td><td>R$ 1.440,00</td></tr>
+                        <tr><td>Ana L.</td><td>11</td><td>R$ 1.290,00</td></tr>
+                      </tbody>
+                    </table>
+                    <span class="mk-btn"><svg class="ico"><use href="#i-baixar"/></svg>Exportar folha em PDF</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="tela tela-esc">
-              <div class="tela-cab">Escritório · painel <b>ao vivo</b></div>
-              <div class="lin"><i class="pt pt-azul"></i>Obra Residencial Vista Verde <small>62%</small></div>
-              <div class="barra"><i></i></div>
-              <div class="lin"><i class="pt pt-verde"></i>RDO do dia pronto para PDF <small>17:05</small></div>
+            <div class="mk-cel-caixa">
+              <div class="mk-cel">
+                <div class="mk-cel-tela">
+                  <div class="mk-cel-topo"><span>08:42</span><i></i><span>4G</span></div>
+                  <div class="mk-cel-cab">
+                    <div class="lockup"><b>KM<span>ZERO</span></b><small>Gestão de obras</small></div>
+                    <div class="mk-obra"><svg class="ico"><use href="#i-pino"/></svg>Residencial Vista Verde<span class="vivo">ao vivo</span></div>
+                  </div>
+                  <div class="mk-cel-corpo">
+                    <div class="mk-card">
+                      <h4><svg class="ico"><use href="#i-pessoas"/></svg>Presença de hoje<b><span class="num-pres">14</span>/16</b></h4>
+                      <div class="mk-chips"><span>Carlos</span><span>Edson</span><span>João P.</span><span>Marcos A.</span><span>Ana L.</span><span class="falta">Rai · atestado</span></div>
+                    </div>
+                    <div class="mk-card">
+                      <h4><svg class="ico"><use href="#i-camera"/></svg>Fotos de hoje<b>3</b></h4>
+                      <div class="mk-fotos"><i data-h="07:52"></i><i data-h="08:10"></i><i data-h="08:37"></i></div>
+                    </div>
+                    <div class="mk-card">
+                      <h4><svg class="ico"><use href="#i-pacote"/></svg>Pedido de material</h4>
+                      <div class="mk-pedido">Cimento CP-II · 40 sacos</div>
+                      <span class="mk-tag">aguardando aprovação</span>
+                    </div>
+                    <div class="mk-cel-btn"><svg class="ico"><use href="#i-calendario"/></svg>Lançar presença</div>
+                  </div>
+                  <div class="mk-abas">
+                    <span class="ativa"><svg class="ico"><use href="#i-casa"/></svg>Início</span>
+                    <span><svg class="ico"><use href="#i-camera"/></svg>Fotos</span>
+                    <span><svg class="ico"><use href="#i-pacote"/></svg>Pedidos</span>
+                    <span><svg class="ico"><use href="#i-arquivo"/></svg>RDO</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="secao secao-clara" id="como-funciona">
+      <div class="faixa">
+        <div class="wrap"><svg class="ico" aria-hidden="true"><use href="#i-capacete"/></svg><p>Em uso em obras reais no sul do Espírito Santo. Desenvolvido e acompanhado pelo Eng. Kleber Vieira Martins, CREA-ES, da KM Consultoria, em Alegre/ES.</p></div>
+      </div>
+
+      <section class="secao" id="rotina">
         <div class="wrap">
-          <div class="cab">
+          <div class="cab rev">
+            <span class="rotulo">Você conhece essa rotina</span>
+            <h2>Presença no caderno, foto perdida no WhatsApp, pedido de material por áudio.</h2>
+          </div>
+          <table class="rotina rev">
+            <thead><tr><th scope="col">Hoje</th><th scope="col">Com o KMZERO</th></tr></thead>
+            <tbody>
+              <tr><td data-c="Hoje">A chamada fica no caderno do mestre e chega ao escritório no fim da quinzena</td><td data-c="Com o KMZERO">Presença em dois toques, com hora, obra por obra</td></tr>
+              <tr><td data-c="Hoje">A foto da laje está no grupo, no meio de trezentas mensagens</td><td data-c="Com o KMZERO">Foto carimbada com data, hora e obra, guardada na galeria da obra</td></tr>
+              <tr><td data-c="Hoje">O RDO fica para depois e nunca sai</td><td data-c="Com o KMZERO">RDO do dia em PDF, pronto para enviar</td></tr>
+              <tr><td data-c="Hoje">O pedido veio por áudio e ninguém sabe se foi aprovado</td><td data-c="Com o KMZERO">Pedido registrado, aprovado no escritório com fornecedor e prazo</td></tr>
+              <tr><td data-c="Hoje">A folha é montada na planilha, de memória</td><td data-c="Com o KMZERO">Folha calculada da presença: faltas não pagam, atestados pagam, adiantamentos descontados</td></tr>
+              <tr><td data-c="Hoje">“Como está a obra?” por telefone, todo dia</td><td data-c="Com o KMZERO">Painel com todas as obras: quem está presente, o que foi fotografado, o que aguarda aprovação</td></tr>
+            </tbody>
+          </table>
+          <p class="fecho rev">O KMZERO resolve isso com o celular que a equipe já tem no bolso.</p>
+        </div>
+      </section>
+
+      <!-- Aqui entra a seção 'O sistema por dentro' (id="por-dentro") com as capturas reais do modo demonstração, quando a fase de capturas estiver pronta -->
+
+      <section class="secao secao-sup" id="como-funciona">
+        <div class="wrap">
+          <div class="cab rev">
             <span class="rotulo">Como funciona</span>
             <h2>Três passos, do canteiro ao escritório</h2>
           </div>
           <div class="passos">
-            <div class="passo">
+            <div class="passo rev">
               <div class="num">1</div>
-              <h3>Equipe lança no celular</h3>
-              <p>Presença, fotos, pedidos e diário de obra em poucos toques. Funciona sem sinal.</p>
+              <h3>A equipe lança no celular</h3>
+              <p>Presença, foto carimbada, pedido de material e diário de obra em poucos toques. Sem sinal, fica guardado no aparelho e sobe sozinho quando a internet volta.</p>
             </div>
-            <div class="passo">
+            <div class="passo rev">
               <div class="num">2</div>
-              <h3>A nuvem recebe e guarda por empresa</h3>
-              <p>Cada empresa tem seus dados separados e protegidos. Nada se mistura.</p>
+              <h3>O escritório vê na hora</h3>
+              <p>Painel com todas as obras: quem está presente, o que foi fotografado, o que está aguardando aprovação. Sem ligar para o canteiro.</p>
             </div>
-            <div class="passo">
+            <div class="passo rev">
               <div class="num">3</div>
-              <h3>O escritório acompanha e aprova em tempo real</h3>
-              <p>O gestor vê tudo na hora, aprova pedidos e gera relatórios sem esperar o fim do dia.</p>
+              <h3>Os relatórios saem prontos</h3>
+              <p>RDO do dia e da semana, folha por período e custos por obra em PDF, com o nome da sua empresa.</p>
             </div>
           </div>
         </div>
@@ -279,139 +662,196 @@
 
       <section class="secao" id="o-que-faz">
         <div class="wrap">
-          <div class="cab">
-            <span class="rotulo">O que o KMZERO faz</span>
+          <div class="cab rev">
+            <span class="rotulo">O que faz</span>
             <h2>Tudo o que hoje fica espalhado em conversas e planilhas, em um lugar só</h2>
           </div>
-          <div class="cartoes">
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 5-5"/></svg></div>
-              <h3>Presença em dois toques</h3>
-              <p>Chamada da equipe por obra, com horário, sem papel.</p>
-            </div>
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h5M10 17h5"/></svg></div>
-              <h3>RDO diário e semanal em PDF</h3>
-              <p>Relatório do dia e da semana prontos para enviar ao cliente ou à fiscalização.</p>
-            </div>
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 8 9-4 9 4-9 4z"/><path d="M3 8v8l9 4 9-4V8"/><path d="M12 12v8"/></svg></div>
-              <h3>Pedidos de material com aprovação</h3>
-              <p>O canteiro pede, o escritório aprova e todo mundo vê o andamento.</p>
-            </div>
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div>
-              <h3>Fotos de obra carimbadas</h3>
-              <p>Cada foto guarda data, hora e obra. Prova do que foi feito.</p>
-            </div>
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg></div>
-              <h3>Folha de pagamento (diarista e CLT)</h3>
-              <p>Quinzena e mês calculados a partir da presença lançada.</p>
-            </div>
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7"/><path d="M2 20h20"/></svg></div>
-              <h3>Custos por obra</h3>
-              <p>Material, mão de obra e despesas somados obra por obra.</p>
-            </div>
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 17c3 0 3-4 5-4s2 4 5 4"/></svg></div>
-              <h3>Cronograma e curva S</h3>
-              <p>Previsto contra realizado, para saber se a obra está no ritmo.</p>
-            </div>
-            <div class="cartao">
-              <div class="icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 21h14"/><path d="M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V9l-3-3"/><path d="M7 7h6v5H7z"/></svg></div>
-              <h3>Equipamentos e combustível</h3>
-              <p>Onde está cada máquina e quanto ela consome.</p>
+          <div class="bloco rev">
+            <span class="rotulo">No canteiro, de manhã</span>
+            <div class="cartoes">
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-calendario"/></svg></div><h3>Presença em dois toques</h3><p>Chamada da equipe por obra: dia inteiro, meia diária, falta ou atestado. É ela que alimenta a folha.</p></div>
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-camera"/></svg></div><h3>Fotos de obra carimbadas</h3><p>Cada foto recebe data, hora e obra no próprio arquivo. Prova do que foi feito, organizada por obra.</p></div>
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-pacote"/></svg></div><h3>Pedidos de material</h3><p>O canteiro pede, o escritório aprova com fornecedor e prazo, e o pedido de compra sai em PDF.</p></div>
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-arquivo"/></svg></div><h3>Diário e RDO</h3><p>Relatório Diário de Obra e resumo da semana com presença, serviços, equipamentos e fotos do dia.</p></div>
             </div>
           </div>
+          <div class="bloco rev">
+            <span class="rotulo">No escritório, na hora</span>
+            <div class="cartoes">
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-painel"/></svg></div><h3>Painel de todas as obras</h3><p>Quem está presente, o que foi fotografado e o que aguarda aprovação, obra por obra, numa tela só.</p></div>
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-aprovar"/></svg></div><h3>Aprovações e movimentações</h3><p>Pedidos, adiantamentos e movimentações de equipe e equipamento aprovados na hora, com registro de quem aprovou.</p></div>
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-curva"/></svg></div><h3>Cronograma e curva S</h3><p>Previsto contra realizado, para saber se a obra está no ritmo.</p></div>
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-combustivel"/></svg></div><h3>Equipamentos e combustível</h3><p>Ativos, frota, abastecimentos e manutenções: onde está cada máquina e quanto consome.</p></div>
+            </div>
+          </div>
+          <div class="bloco rev">
+            <span class="rotulo">No fechamento</span>
+            <div class="cartoes">
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-calc"/></svg></div><h3>Folha por diária, semana, quinzena, mês ou ciclo</h3><p>Dias, diária e líquido calculados da presença. Faltas não pagam, atestados pagam, adiantamentos descontados no fechamento.</p></div>
+              <div class="cartao"><div class="icone"><svg class="ico"><use href="#i-dinheiro"/></svg></div><h3>Custos por obra</h3><p>Material, mão de obra e despesas avulsas somados obra por obra, e o consolidado da empresa.</p></div>
+            </div>
+          </div>
+          <p class="tambem rev">E também: mapa das obras, clientes, fornecedores e recebimentos, ferramentas, exames e férias da equipe, mensagens entre escritório e canteiro. Em implantação: avisos no celular. Planejado: obras no Google Earth.</p>
         </div>
       </section>
 
-      <section class="secao secao-escura" id="celular-e-computador">
+      <section class="secao secao-sup" id="celular-pc">
         <div class="wrap">
-          <div class="cab">
-            <span class="rotulo">No celular e no computador</span>
-            <h2>O celular é o apoio do canteiro. O escritório vê tudo em tela cheia.</h2>
+          <div class="cab rev">
+            <span class="rotulo">Celular e computador</span>
+            <h2>O celular é o apoio do canteiro. O computador é o controle do escritório.</h2>
           </div>
           <div class="duas">
-            <div class="painel">
+            <div class="cartao painel rev">
               <span class="tag">Celular da equipe</span>
               <h3>Simples para quem está na obra</h3>
               <ul>
-                <li>App instalável, com ícone na tela inicial</li>
-                <li>Funciona sem sinal e guarda o que foi lançado</li>
-                <li>Envia tudo sozinho quando o sinal volta</li>
-                <li>Presença, fotos, pedidos e RDO em poucos toques</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Vira ícone na tela inicial, sem loja de aplicativos</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Funciona sem sinal e guarda o que foi lançado</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Envia sozinho quando o sinal volta</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Botões grandes: presença, foto, pedido e RDO</li>
               </ul>
+              <div class="painel-mk" id="clone-cel" aria-hidden="true"></div>
             </div>
-            <div class="painel">
+            <div class="cartao painel rev">
               <span class="tag">Escritório</span>
               <h3>Controle completo para quem gerencia</h3>
               <ul>
-                <li>Tela cheia no computador, sem instalar nada</li>
-                <li>Painel de todas as obras em uma tela só</li>
-                <li>Aprovações de pedidos e acompanhamento na hora</li>
-                <li>Relatórios, folha e custos prontos para imprimir</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Abre no navegador, sem instalar nada</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Menu lateral com todas as áreas: obras, equipe, campo, suprimentos, equipamentos, financeiro</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Aprova pedidos e movimentações na hora</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Relatórios, folha e custos prontos para imprimir</li>
               </ul>
+              <div class="painel-mk painel-mk-nav" id="clone-nav" aria-hidden="true"></div>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="secao secao-clara" id="para-quem">
+      <section class="secao" id="para-quem">
         <div class="wrap">
-          <div class="cab">
+          <div class="cab rev">
             <span class="rotulo">Para quem</span>
-            <h2>Feito para quem hoje controla a obra por WhatsApp e planilha</h2>
+            <h2>Feito para quem toca obra de verdade</h2>
           </div>
           <div class="publico">
-            <div class="pub">
-              <h3>Construtoras pequenas e médias</h3>
-              <p>Várias obras ao mesmo tempo e um escritório enxuto que precisa ver tudo sem ligar para o canteiro.</p>
-            </div>
-            <div class="pub">
-              <h3>Engenheiros</h3>
-              <p>Responsáveis técnicos que precisam de diário de obra, fotos e medições organizados e prontos para apresentar.</p>
-            </div>
-            <div class="pub">
-              <h3>Mestres de obra</h3>
-              <p>Quem está no canteiro e precisa lançar presença, pedir material e mandar foto sem perder tempo com papel.</p>
+            <div class="cartao rev"><h3><svg class="ico"><use href="#i-predio"/></svg>Dono de construtora</h3><p>Você tem duas, cinco ou dez obras e um escritório pequeno. Precisa saber quem está em cada obra e quanto cada uma custa sem passar o dia no telefone.</p></div>
+            <div class="cartao rev"><h3><svg class="ico"><use href="#i-capacete"/></svg>Engenheiro responsável</h3><p>Você responde pela obra e precisa de RDO, fotos com data e medições organizados para o cliente, a fiscalização ou uma perícia.</p></div>
+            <div class="cartao rev"><h3><svg class="ico"><use href="#i-celular"/></svg>Mestre de obra e encarregado</h3><p>Você está no canteiro. Quer lançar presença, pedir material e mandar foto em poucos toques, sem planilha e sem papel. Se usa WhatsApp, usa o KMZERO.</p></div>
+            <div class="cartao rev"><h3><svg class="ico"><use href="#i-arquivo"/></svg>Cliente e fiscalização</h3><p>Recebe o RDO e as fotos carimbadas em PDF, com os dados da empresa e da obra.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="secao secao-sup" id="quem-faz">
+        <div class="wrap">
+          <div class="quem">
+            <!-- trocar pela foto real (WebP 480px) -->
+            <div class="monograma rev" role="img" aria-label="Monograma KM, da KM Consultoria"><b>K<span>M</span></b><small>Engenharia</small></div>
+            <div class="rev">
+              <span class="rotulo">Quem faz</span>
+              <h2>Feito por quem toca obra.</h2>
+              <p style="margin-top:14px">O KMZERO Obras é desenvolvido pela KM Consultoria, Assessoria e Serviços de Engenharia, de Alegre/ES, sob responsabilidade do Eng. Kleber Vieira Martins, CREA-ES, com mais de dez anos em obras civis no sul capixaba. Nasceu da rotina de controlar obra no papel, em planilha e por WhatsApp, e hoje está em uso em obras reais na região. Quem entra agora fala direto com o engenheiro que fez o sistema.</p>
+              <blockquote>“Construí o que eu mesmo gostaria de ter em campo, com a linguagem e os processos de quem está no canteiro todo dia.”<cite>Eng. Kleber Vieira Martins, CREA-ES</cite></blockquote>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="secao" id="planos">
+      <section class="secao" id="dados">
         <div class="wrap">
-          <div class="plano">
-            <span class="rotulo">Planos</span>
-            <h2>Em fase de lançamento.</h2>
-            <p>As primeiras empresas entram com acompanhamento direto do engenheiro responsável.</p>
-            <a class="btn btn-navy" href="#contato">Quero testar</a>
+          <div class="cab rev">
+            <span class="rotulo">Segurança e privacidade</span>
+            <h2>Seus dados são seus.</h2>
+          </div>
+          <ul class="dados rev">
+            <li><span class="icone"><svg class="ico"><use href="#i-entrar"/></svg></span><span>Login pela conta Google. O KMZERO não guarda senha de ninguém.</span></li>
+            <li><span class="icone"><svg class="ico"><use href="#i-cadeado"/></svg></span><span>Cada empresa tem seus dados isolados: as regras do banco impedem que uma empresa veja a outra.</span></li>
+            <li><span class="icone"><svg class="ico"><use href="#i-banco"/></svg></span><span>Os dados ficam em servidores do Google Cloud, com cópia automática.</span></li>
+            <li><span class="icone"><svg class="ico"><use href="#i-baixar"/></svg></span><span>Você exporta tudo quando quiser, em Sistema → Exportar dados, e pode pedir a exclusão da conta.</span></li>
+            <li><span class="icone"><svg class="ico"><use href="#i-escudo"/></svg></span><span>Política de privacidade conforme a LGPD, com encarregado de dados nomeado.</span></li>
+          </ul>
+          <div class="dados-links rev">
+            <a href="/privacidade.html">Ler a política de privacidade</a>
+            <a href="/termos.html">Termos de uso</a>
           </div>
         </div>
       </section>
 
-      <section class="secao secao-clara" id="contato">
+      <section class="secao secao-sup" id="perguntas">
         <div class="wrap">
-          <div class="cab">
+          <div class="cab rev">
+            <span class="rotulo">Perguntas</span>
+            <h2>Perguntas que sempre aparecem</h2>
+          </div>
+          <div class="faq rev">
+            <details><summary>Quanto custa?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>O KMZERO está em fase de lançamento e ainda não tem tabela pública. As primeiras empresas entram com condição de lançamento e acompanhamento direto do engenheiro responsável. Chame no WhatsApp e conte quantas obras e quantas pessoas você tem.</p></details>
+            <details><summary>Precisa instalar alguma coisa?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Não. No computador abre no navegador. No celular, você adiciona à tela inicial e ele vira um ícone como qualquer app, sem loja e sem atualização manual. Funciona em Android e iPhone.</p></details>
+            <details><summary>Funciona sem sinal na obra?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Sim. O que a equipe lança fica guardado no aparelho e sobe sozinho quando o sinal volta. Só a primeira entrada precisa de internet.</p></details>
+            <details><summary>Quem vê os meus dados?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Só a sua empresa. Cada empresa tem os dados separados, o acesso é pela conta Google e o encarregado só enxerga a obra em que está cadastrado. Os dados ficam em servidores do Google Cloud e você exporta tudo quando quiser.</p></details>
+            <details><summary>Minha equipe precisa de Gmail?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Precisa de uma conta Google (Gmail ou e-mail da empresa no Google). O gestor cadastra o e-mail de cada pessoa em Sistema → Acessos do app; ela entra com esse e-mail no celular e já cai na sua empresa, na obra certa. Não tem senha para distribuir.</p></details>
+            <details><summary>Meu mestre de obra vai conseguir usar?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>O app de campo foi feito para isso: presença, foto e pedido em poucos toques, botões grandes, sem menus escondidos. Se ele usa WhatsApp, usa o KMZERO.</p></details>
+            <details><summary>Serve para quantas obras?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>O sistema foi feito para várias obras ao mesmo tempo, com painel que mostra todas numa tela. Converse com a gente sobre o tamanho da sua operação.</p></details>
+            <details><summary>Já tenho tudo em planilha. Perco esse histórico?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>O cadastro de obras e equipe é feito dentro do sistema. Nas primeiras empresas, o engenheiro acompanha essa montagem com você.</p></details>
+            <details><summary>E se eu quiser parar?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Os dados são seus. Você exporta tudo em arquivo e pode pedir a exclusão da conta.</p></details>
+            <details><summary>O que está pronto e o que ainda vem?<svg class="ico"><use href="#i-baixo"/></svg></summary><p>Pronto e em uso: presença, fotos carimbadas, pedidos com aprovação, RDO e diário, folha, custos, cronograma e curva S, equipamentos e combustível, mapa das obras. Em implantação: avisos no celular. Planejado: obras no Google Earth.</p></details>
+          </div>
+        </div>
+      </section>
+
+      <section class="secao" id="como-comecar">
+        <div class="wrap">
+          <div class="cab rev">
+            <span class="rotulo">Como começar</span>
+            <h2>Em fase de lançamento. As primeiras empresas entram com o engenheiro do lado.</h2>
+          </div>
+          <div class="comecar">
+            <div class="passos">
+              <div class="passo rev"><div class="num">1</div><h3>Chame no WhatsApp</h3><p>Conte quantas obras e quantas pessoas você tem.</p></div>
+              <div class="passo rev"><div class="num">2</div><h3>Cadastro guiado</h3><p>O engenheiro responsável ajuda a cadastrar empresa, obras e equipe.</p></div>
+              <div class="passo rev"><div class="num">3</div><h3>Equipe no ar</h3><p>Cada pessoa entra com o próprio Gmail no celular. Sem senha, sem instalação.</p></div>
+            </div>
+            <div class="oferta rev">
+              <span class="selo">Primeiras empresas</span>
+              <ul>
+                <li><svg class="ico"><use href="#i-check"/></svg>Implantação feita pelo próprio engenheiro</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Migração do que hoje está em planilha e WhatsApp</li>
+                <li><svg class="ico"><use href="#i-check"/></svg>Condição de lançamento a combinar</li>
+              </ul>
+              <a class="btn btn-ouro" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener">Quero conhecer o KMZERO</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="secao secao-sup" id="contato">
+        <div class="wrap">
+          <div class="cab rev">
             <span class="rotulo">Contato</span>
-            <h2>Fale com a gente</h2>
-            <p class="intro">Respondemos pelo WhatsApp em horário comercial. Se preferir, mande um e-mail.</p>
+            <h2>Fale direto com o engenheiro.</h2>
+            <p class="intro">Respondemos pelo WhatsApp de segunda a sexta, em horário comercial. Se preferir, mande um e-mail ou chame no Instagram.</p>
           </div>
-          <div class="contatos">
-            <a class="contato" href="https://wa.me/5528999258172" target="_blank" rel="noopener">
+          <div class="contatos rev">
+            <a class="cartao contato" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener">
+              <span class="icone"><svg class="ico"><use href="#i-zap"/></svg></span>
               <span class="rotulo">WhatsApp</span>
               <strong>(28) 99925-8172</strong>
               <span class="linha2">Abrir conversa</span>
             </a>
-            <a class="contato" href="mailto:kvmprojetos@gmail.com">
+            <a class="cartao contato" href="mailto:kvmprojetos@gmail.com?subject=Contato%20pelo%20site%20do%20KMZERO">
+              <span class="icone"><svg class="ico"><use href="#i-mail"/></svg></span>
               <span class="rotulo">E-mail</span>
               <strong>kvmprojetos@gmail.com</strong>
               <span class="linha2">Escrever e-mail</span>
             </a>
-            <div class="contato">
+            <a class="cartao contato" href="https://instagram.com/km_engenharias" target="_blank" rel="noopener">
+              <span class="icone"><svg class="ico"><use href="#i-insta"/></svg></span>
+              <span class="rotulo">Instagram</span>
+              <strong>@km_engenharias</strong>
+              <span class="linha2">Ver obras e novidades</span>
+            </a>
+            <div class="cartao contato">
+              <span class="icone"><svg class="ico"><use href="#i-pino"/></svg></span>
               <span class="rotulo">Empresa</span>
               <strong>KM Consultoria, Assessoria e Serviços de Engenharia Ltda</strong>
               <span class="linha2">Alegre/ES</span>
@@ -423,9 +863,113 @@
 
     <footer class="rodape">
       <div class="wrap">
-        <div><span class="marca">KM<span>ZERO</span> Obras</span> · Eng. Kleber Vieira Martins · CREA-ES</div>
-        <div><a href="/app/">Entrar no sistema →</a></div>
+        <div class="rodape-cols">
+          <div>
+            <a class="lockup" href="#inicio" aria-label="KMZERO Obras, voltar ao início"><b>KM<span>ZERO</span></b><small>Gestão de obras</small></a>
+            <p class="tag">A obra inteira no seu celular. O escritório vê tudo na hora.</p>
+            <p style="margin-top:8px">Feito em Alegre/ES</p>
+          </div>
+          <div>
+            <h4>Contato</h4>
+            <div><a href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener"><svg class="ico"><use href="#i-zap"/></svg>(28) 99925-8172</a></div>
+            <div><a href="mailto:kvmprojetos@gmail.com"><svg class="ico"><use href="#i-mail"/></svg>kvmprojetos@gmail.com</a></div>
+            <div><a href="https://instagram.com/km_engenharias" target="_blank" rel="noopener"><svg class="ico"><use href="#i-insta"/></svg>@km_engenharias</a></div>
+          </div>
+          <div>
+            <h4>Responsável técnico</h4>
+            <p>Eng. Kleber Vieira Martins · CREA-ES · KM Consultoria</p>
+            <p style="margin-top:6px">KM Consultoria, Assessoria e Serviços de Engenharia Ltda · CNPJ 60.368.233/0001-73</p>
+          </div>
+        </div>
+        <div class="rodape-base">
+          <span>© 2026 KMZERO Obras</span>
+          <a href="/termos.html">Termos de uso</a>
+          <a href="/privacidade.html">Política de privacidade</a>
+          <a href="/app/">Entrar no sistema</a>
+        </div>
       </div>
     </footer>
+
+    <div class="barra-zap" id="barra-zap">
+      <a class="btn btn-ouro" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener"><svg class="ico"><use href="#i-zap"/></svg>Falar no WhatsApp</a>
+    </div>
+
+    <script>
+      (function () {
+        var d = document, h = d.documentElement;
+
+        // Alternador de tema (sol/lua). Grava só em _kmzero_tema_site: _kmzero_tema é do app.
+        var btnTema = d.getElementById("tema");
+        function aplicarTema(t) {
+          if (t === "claro") h.setAttribute("data-tema", "claro"); else h.removeAttribute("data-tema");
+          var m = d.querySelector('meta[name="theme-color"]'); if (m) m.content = t === "claro" ? "#f7fbfc" : "#081a21";
+          btnTema.setAttribute("aria-label", t === "claro" ? "Mudar para tema escuro" : "Mudar para tema claro");
+        }
+        aplicarTema(h.getAttribute("data-tema") === "claro" ? "claro" : "escuro");
+        btnTema.addEventListener("click", function () {
+          var novo = h.getAttribute("data-tema") === "claro" ? "escuro" : "claro";
+          aplicarTema(novo);
+          try { localStorage.setItem("_kmzero_tema_site", novo); } catch (e) {}
+        });
+
+        // Menu do celular (hambúrguer)
+        var hamb = d.getElementById("hamb"), painel = d.getElementById("menu-movel");
+        function abrirMenu(aberto) {
+          painel.classList.toggle("aberto", aberto);
+          hamb.setAttribute("aria-expanded", aberto ? "true" : "false");
+          hamb.setAttribute("aria-label", aberto ? "Fechar menu" : "Abrir menu");
+          hamb.querySelector("use").setAttribute("href", aberto ? "#i-fechar" : "#i-menu");
+        }
+        hamb.addEventListener("click", function () { abrirMenu(!painel.classList.contains("aberto")); });
+        painel.addEventListener("click", function (e) { if (e.target.closest("a")) abrirMenu(false); });
+        d.addEventListener("keydown", function (e) { if (e.key === "Escape" && painel.classList.contains("aberto")) { abrirMenu(false); hamb.focus(); } });
+
+        // Os mockups do hero aparecem de novo, menores, em 'Celular e computador'
+        var mkNav = d.querySelector(".mk .mk-nav"), mkCel = d.querySelector(".mk .mk-cel-caixa");
+        var cloneNav = d.getElementById("clone-nav"), cloneCel = d.getElementById("clone-cel");
+        if (mkNav && cloneNav) cloneNav.appendChild(mkNav.cloneNode(true));
+        if (mkCel && cloneCel) cloneCel.appendChild(mkCel.cloneNode(true));
+
+        var temIO = "IntersectionObserver" in window;
+        var semMovimento = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        // Barra inferior de WhatsApp no celular: aparece quando o hero sai da tela
+        var hero = d.getElementById("inicio"), barra = d.getElementById("barra-zap");
+        if (temIO && hero && barra) {
+          new IntersectionObserver(function (es) {
+            barra.classList.toggle("on", !es[0].isIntersecting);
+          }, { threshold: 0.05 }).observe(hero);
+        }
+
+        // Animações leves só sem prefers-reduced-motion e só com observer (senão tudo fica visível desde o início)
+        if (temIO && !semMovimento) {
+          h.classList.add("anim");
+          var revs = d.querySelectorAll(".rev");
+          var io = new IntersectionObserver(function (es) {
+            es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("on"); io.unobserve(e.target); } });
+          }, { rootMargin: "0px 0px -8% 0px" });
+          revs.forEach(function (el) {
+            // O que já está na tela ao carregar aparece de imediato; só o que vem abaixo anima ao rolar
+            if (el.getBoundingClientRect().top < window.innerHeight * 0.9) el.classList.add("on"); else io.observe(el);
+          });
+          // Rede de proteção: aba em segundo plano ou prévia sem observer → mostra tudo em 1,5 s
+          setTimeout(function () { revs.forEach(function (el) { el.classList.add("on"); }); }, 1500);
+
+          // Contador de presença do celular do hero (0 → 14)
+          var num = d.querySelector(".mk .num-pres");
+          if (num && window.requestAnimationFrame) {
+            var alvo = 14, t0 = null;
+            var passo = function (t) {
+              if (!t0) t0 = t;
+              var p = Math.min((t - t0) / 1100, 1);
+              num.textContent = Math.round(alvo * (1 - Math.pow(1 - p, 3)));
+              if (p < 1) requestAnimationFrame(passo);
+            };
+            num.textContent = "0";
+            setTimeout(function () { requestAnimationFrame(passo); }, 300);
+          }
+        }
+      })();
+    </script>
   </body>
 </html>

@@ -84,7 +84,8 @@ for (const arq of arquivos) {
     if (Array.isArray(no)) return no.forEach(andar);
     if (no.type === "TemplateLiteral") {
       const texto = codigo.slice(no.start, no.end);
-      const ehHTML = /<\s*(html|div|style|table|body|span|h\d|td|tr|p|section)\b/i.test(texto) || /style="/.test(texto);
+      // Só documentos/tabelas de impressão contam: o HTML do confirmar()/Modal (div/button no DOM do app) pode usar var().
+      const ehHTML = /<\s*(html|head|style|table|thead|tbody|tr|td|th)\b|@page|<!doctype/i.test(texto);
       if (ehHTML && /var\(--km-|\bT\.[a-zA-Z]/.test(texto)) { vazamentos++; console.log("  ! token dentro de HTML de PDF:", rel + ":" + codigo.slice(0, no.start).split("\n").length); }
       if (ehHTML) return;
     }

@@ -10,6 +10,7 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, UsuarioLogado } from "../components/ui.jsx";
 import { useModoEscritorio } from "../lib/useLargura.js";
+import { useTema } from "../lib/useTema.js";
 import { SinoAvisos } from "./avisos.jsx";
 
 export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, avisosNaoLidos = 0, onNav, onLogout }) {
@@ -111,7 +112,8 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
             { icon: "✅", label: "Registrar\nPresença", color: GREEN,  nav: "fluxo" },
             { icon: "📦", label: "Solicitar\nMaterial",  color: ORANGE, nav: "material" },
             { icon: "📷", label: "Enviar\nFotos",        color: BLUE,   nav: "fotos_solo" },
-            { icon: "⚙️", label: "Controle de\nEquip.", color: T.titulo,   nav: "equip_solo" },
+            // Botão colorido com texto branco: precisa do hex fixo (T.titulo fica claro no escuro e quebra o `${b.color}44` da sombra)
+            { icon: "⚙️", label: "Controle de\nEquip.", color: NAVY,   nav: "equip_solo" },
           ].map(b => (
             <button key={b.nav} onClick={() => onNav(b.nav)} style={{ background: b.color, color: "#fff", border: "none", borderRadius: 14, padding: "18px 8px", cursor: "pointer", textAlign: "center", boxShadow: `0 4px 14px ${b.color}44` }}>
               <div style={{ fontSize: 32 }}>{b.icon}</div>
@@ -399,7 +401,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       { v: obrasAtivas.length,    l: "Obras ativas",       nav: "obras",      c: BLUE },
       { v: trabalhadores.length,  l: "Trabalhadores",      nav: "equipe",     c: NAVY },
       { v: presentesHoje,         l: "Presentes hoje",     nav: "calendario", c: GREEN },
-      { v: pendentes,             l: "Pedidos aguardando", nav: "pedidos",    c: pendentes > 0 ? ORANGE : "#9ca3af" },
+      { v: pendentes,             l: "Pedidos aguardando", nav: "pedidos",    c: pendentes > 0 ? ORANGE : T.texto3 },
       { v: totalAvisos,           l: "Avisos",             nav: "alertas",    c: totalAvisos > 0 ? RED : GREEN },
     ];
     const outrasPendencias = [
@@ -427,7 +429,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 {indicadores.map(i => (
-                  <div key={i.l} onClick={() => onNav(i.nav)} style={{ background: T.superficie, border: `1px solid ${T.borda}`, borderRadius: 12, padding: "10px 16px", minWidth: 118, cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                  <div key={i.l} onClick={() => onNav(i.nav)} style={{ background: T.superficie, border: `1px solid ${T.borda}`, borderRadius: 12, padding: "10px 16px", minWidth: 118, cursor: "pointer", boxShadow: T.sombra }}>
                     <div style={{ fontSize: 24, fontWeight: 900, color: i.c, lineHeight: 1.1 }}>{i.v}</div>
                     <div style={{ fontSize: 11, color: T.texto2, fontWeight: 600, marginTop: 2 }}>{i.l}</div>
                   </div>
@@ -490,7 +492,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                     const itens = p.itens || [{ material: p.material, qtd: p.qtd }];
                     const resumo = itens.slice(0, 2).map(it => `${it.material} (${it.qtd})`).join(", ") + (itens.length > 2 ? ` +${itens.length - 2}` : "");
                     return (
-                      <div key={p.id} style={{ borderLeft: `3px solid ${ORANGE}`, background: "#fffaf3", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+                      <div key={p.id} style={{ borderLeft: `3px solid ${ORANGE}`, background: T.avisoFundo, borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
                         <div style={{ fontWeight: 700, color: T.titulo, fontSize: 12 }}>{p.obra}</div>
                         <div style={{ fontSize: 10, color: T.texto2 }}>👷 {p.enc} • {p.data}</div>
                         <div style={{ fontSize: 11, color: T.texto, marginTop: 3 }}>{resumo}</div>
@@ -511,7 +513,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                       <div key={i.nav} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
                         <span style={{ fontSize: 16 }}>{i.icon}</span>
                         <span style={{ flex: 1, fontSize: 12, color: T.texto }}>{i.l}</span>
-                        <span style={{ fontSize: 14, fontWeight: 900, color: i.v > 0 ? RED : "#9ca3af", minWidth: 22, textAlign: "right" }}>{i.v}</span>
+                        <span style={{ fontSize: 14, fontWeight: 900, color: i.v > 0 ? RED : T.texto3, minWidth: 22, textAlign: "right" }}>{i.v}</span>
                         <button onClick={() => onNav(i.nav)} style={btnPeqS(i.v > 0 ? NAVY : "#9ca3af")}>Ver</button>
                       </div>
                     ))}
@@ -546,8 +548,8 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                         return (
                           <div key={f.id} onClick={() => onNav("galeria")} style={{ width: 96, cursor: "pointer" }}>
                             {src
-                              ? <img src={src} alt={f.legenda || ""} style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, background: "#e5e7eb", display: "block" }} />
-                              : <div style={{ width: 96, height: 96, borderRadius: 8, background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📷</div>}
+                              ? <img src={src} alt={f.legenda || ""} style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, background: T.superficie2, display: "block" }} />
+                              : <div style={{ width: 96, height: 96, borderRadius: 8, background: T.superficie2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📷</div>}
                             <div style={{ fontSize: 10, color: T.titulo, fontWeight: 600, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.obraNome || nomeObra(f.obraId)}</div>
                             <div style={{ fontSize: 10, color: T.texto2 }}>{f.data || "—"}</div>
                           </div>
@@ -608,7 +610,8 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
             <button key={b.nav} onClick={() => onNav(b.nav)} style={{ background: b.c, color: "#fff", border: "none", borderRadius: 14, padding: "16px 8px", cursor: "pointer", textAlign: "center", boxShadow: `0 4px 14px ${b.c}55`, position: "relative" }}>
               <div style={{ fontSize: 32 }}>{b.icon}</div>
               <div style={{ fontSize: 13, fontWeight: 800, marginTop: 4 }}>{b.l}</div>
-              {b.badge > 0 && <div style={{ position: "absolute", top: 6, right: 8, background: T.superficie, color: RED, borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{b.badge}</div>}
+              {/* Contador branco fixo: fica sobre o botão colorido (não sobre a superfície), então não segue o tema */}
+              {b.badge > 0 && <div style={{ position: "absolute", top: 6, right: 8, background: "#fff", color: RED, borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{b.badge}</div>}
             </button>
           ))}
         </div>
@@ -635,7 +638,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
           <div style={{
             flex: 1,
             height: 1,
-            background: "linear-gradient(90deg, rgba(15,33,81,0.15) 0%, transparent 100%)",
+            background: `linear-gradient(90deg, ${T.borda2} 0%, transparent 100%)`,
           }} />
           <div style={{ fontSize: 10, color: T.texto2, fontWeight: 600 }}>
             {categorias.length} categorias
@@ -718,7 +721,7 @@ export function CategoriaCard({ categoria, onNav }) {
       borderRadius: 14,
       marginBottom: 10,
       overflow: "hidden",
-      boxShadow: aberto ? `0 4px 20px ${corRGBA(categoria.cor, 0.18)}` : "0 2px 8px rgba(0,0,0,0.06)",
+      boxShadow: aberto ? `0 4px 20px ${corRGBA(categoria.cor, 0.18)}` : T.sombra,
       transition: "all 0.25s ease",
       border: aberto ? `1.5px solid ${corRGBA(categoria.cor, 0.3)}` : "1.5px solid transparent",
     }}>
@@ -728,7 +731,7 @@ export function CategoriaCard({ categoria, onNav }) {
         border: "none",
         background: aberto
           ? `linear-gradient(90deg, ${corRGBA(categoria.cor, 0.08)} 0%, transparent 100%)`
-          : "#fff",
+          : T.superficie,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -819,7 +822,7 @@ export function CategoriaCard({ categoria, onNav }) {
                   position: "absolute",
                   top: 6,
                   right: 8,
-                  background: T.superficie,
+                  background: "#fff", // contador branco fixo: fica sobre o botão colorido, não sobre a superfície
                   color: RED,
                   borderRadius: 10,
                   padding: "2px 7px",
@@ -867,7 +870,7 @@ export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, on
             <div style={{ flex: 1, textAlign: "center", background: T.avisoFundo, borderRadius: 10, padding: "8px 4px" }}><div style={{ fontSize: 18, fontWeight: 900, color: ORANGE }}>{trab.length - presentes - faltas}</div><div style={{ fontSize: 10, color: T.texto2 }}>Atestados</div></div>
           </div>
           {trab.map((t, i, arr) => (
-            <div key={t.id} style={{ display: "flex", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: i < arr.length - 1 ? "1px solid #f0f0f0" : "none" }}>
+            <div key={t.id} style={{ display: "flex", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: i < arr.length - 1 ? `1px solid ${T.borda}` : "none" }}>
               <span style={{ fontSize: 14, marginRight: 8 }}>{presencasHoje[t.id] === "Presente" ? "✅" : presencasHoje[t.id] === "Falta" ? "❌" : "📋"}</span>
               <span style={{ flex: 1, fontSize: 13, color: T.titulo }}>{t.nome} — {t.cargo}</span>
               <Badge label={presencasHoje[t.id] || "—"} color={STATUS_COLOR[presencasHoje[t.id]] || "#888"} small />
@@ -954,6 +957,7 @@ export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, on
 ════════════════════════════════════ */
 
 export function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack }) {
+  const { paleta } = useTema(); // hex do tema atual para o Recharts (var() não funciona em atributo SVG)
   const [obraId, setObraId] = useState("todas");
   const dias = ultimosDias(7);
   const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
@@ -994,10 +998,10 @@ export function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📊 Presenças (últimos 7 dias)</div>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={dadosPresenca}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis dataKey="dia" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke={paleta.grade} />
+              <XAxis dataKey="dia" tick={{ fontSize: 10, fill: paleta.texto2 }} stroke={paleta.texto2} />
+              <YAxis tick={{ fontSize: 10, fill: paleta.texto2 }} stroke={paleta.texto2} />
+              <Tooltip contentStyle={{ background: paleta.superficie, border: `1px solid ${paleta.borda}`, color: paleta.texto }} />
               <Bar dataKey="Presentes" fill={GREEN} />
               <Bar dataKey="Faltas" fill={RED} />
               <Bar dataKey="Atestados" fill={ORANGE} />
@@ -1023,10 +1027,10 @@ export function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack
             <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>👥 Distribuição por Cargo</div>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={dadosCargos} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                <XAxis type="number" tick={{ fontSize: 10 }} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={90} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke={paleta.grade} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: paleta.texto2 }} stroke={paleta.texto2} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: paleta.texto2 }} stroke={paleta.texto2} width={90} />
+                <Tooltip contentStyle={{ background: paleta.superficie, border: `1px solid ${paleta.borda}`, color: paleta.texto }} />
                 <Bar dataKey="qtd" fill={BLUE} />
               </BarChart>
             </ResponsiveContainer>
@@ -1227,15 +1231,15 @@ export function TelaAlertas({ obras, trabalhadores, equips, pedidos, historico, 
           <>
             {/* KPIs CLICÁVEIS — funcionam como filtro */}
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <div onClick={() => setFiltro(filtro === "alta" ? "todas" : "alta")} style={{ flex: 1, background: filtro === "alta" ? RED : "#fff", color: filtro === "alta" ? "#fff" : RED, border: `2px solid ${RED}`, borderRadius: 10, padding: "10px 6px", textAlign: "center", cursor: "pointer", transition: "all 0.2s" }}>
+              <div onClick={() => setFiltro(filtro === "alta" ? "todas" : "alta")} style={{ flex: 1, background: filtro === "alta" ? RED : T.superficie, color: filtro === "alta" ? "#fff" : RED, border: `2px solid ${RED}`, borderRadius: 10, padding: "10px 6px", textAlign: "center", cursor: "pointer", transition: "all 0.2s" }}>
                 <div style={{ fontSize: 22, fontWeight: 900 }}>{altas}</div>
                 <div style={{ fontSize: 10, fontWeight: 700 }}>🔴 ALTA</div>
               </div>
-              <div onClick={() => setFiltro(filtro === "media" ? "todas" : "media")} style={{ flex: 1, background: filtro === "media" ? ORANGE : "#fff", color: filtro === "media" ? "#fff" : ORANGE, border: `2px solid ${ORANGE}`, borderRadius: 10, padding: "10px 6px", textAlign: "center", cursor: "pointer", transition: "all 0.2s" }}>
+              <div onClick={() => setFiltro(filtro === "media" ? "todas" : "media")} style={{ flex: 1, background: filtro === "media" ? ORANGE : T.superficie, color: filtro === "media" ? "#fff" : ORANGE, border: `2px solid ${ORANGE}`, borderRadius: 10, padding: "10px 6px", textAlign: "center", cursor: "pointer", transition: "all 0.2s" }}>
                 <div style={{ fontSize: 22, fontWeight: 900 }}>{medias}</div>
                 <div style={{ fontSize: 10, fontWeight: 700 }}>🟠 MÉDIA</div>
               </div>
-              <div onClick={() => setFiltro(filtro === "baixa" ? "todas" : "baixa")} style={{ flex: 1, background: filtro === "baixa" ? BLUE : "#fff", color: filtro === "baixa" ? "#fff" : BLUE, border: `2px solid ${BLUE}`, borderRadius: 10, padding: "10px 6px", textAlign: "center", cursor: "pointer", transition: "all 0.2s" }}>
+              <div onClick={() => setFiltro(filtro === "baixa" ? "todas" : "baixa")} style={{ flex: 1, background: filtro === "baixa" ? BLUE : T.superficie, color: filtro === "baixa" ? "#fff" : BLUE, border: `2px solid ${BLUE}`, borderRadius: 10, padding: "10px 6px", textAlign: "center", cursor: "pointer", transition: "all 0.2s" }}>
                 <div style={{ fontSize: 22, fontWeight: 900 }}>{baixas}</div>
                 <div style={{ fontSize: 10, fontWeight: 700 }}>🔵 BAIXA</div>
               </div>
@@ -1377,8 +1381,8 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>🏆 Ranking de Frequência</div>
           {ranking.length === 0 && <div style={{ color: T.texto3, fontSize: 13 }}>Sem dados.</div>}
           {ranking.map((t, i) => (
-            <div key={t.id} style={{ display: "flex", alignItems: "center", padding: "8px 0", borderBottom: i < ranking.length - 1 ? "1px solid #f0f0f0" : "none" }}>
-              <div style={{ width: 28, height: 28, borderRadius: 14, background: i === 0 ? GOLD : i === 1 ? "#cbd5e1" : i === 2 ? "#e29361" : "#eee", color: i < 3 ? "#fff" : "#888", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, marginRight: 10 }}>{i + 1}</div>
+            <div key={t.id} style={{ display: "flex", alignItems: "center", padding: "8px 0", borderBottom: i < ranking.length - 1 ? `1px solid ${T.borda}` : "none" }}>
+              <div style={{ width: 28, height: 28, borderRadius: 14, background: i === 0 ? GOLD : i === 1 ? "#cbd5e1" : i === 2 ? "#e29361" : T.superficie2, color: i < 3 ? "#fff" : T.texto2, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, marginRight: 10 }}>{i + 1}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, color: T.titulo, fontWeight: 600 }}>{t.nome}</div>
                 <div style={{ fontSize: 10, color: T.texto2 }}>{t.cargo}</div>
