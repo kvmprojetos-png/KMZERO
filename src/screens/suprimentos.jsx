@@ -1,7 +1,7 @@
 import { CATEGORIAS_FORNECEDOR } from "./midia.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -146,15 +146,15 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
       <KMHeader title="Solicitar Material" sub={obra.nome} onBack={onBack} right={
         totalItens > 0 ? <div style={{ background: GOLD, color: "#fff", borderRadius: 14, padding: "4px 10px", fontWeight: 800, fontSize: 12 }}>🛒 {totalItens}</div> : null
       } />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {ok ? (
           <div style={{ textAlign: "center", padding: 32 }}>
             <div style={{ fontSize: 64 }}>✅</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: GREEN, marginTop: 12 }}>Pedido Enviado!</div>
-            <div style={{ color: "#666", marginTop: 6, fontSize: 13 }}><b>{itens.length} item(ns)</b> aguardando aprovação do gestor.</div>
-            <div style={{ background: "#f0fdf4", borderRadius: 10, padding: 12, marginTop: 16, textAlign: "left" }}>
+            <div style={{ color: T.texto2, marginTop: 6, fontSize: 13 }}><b>{itens.length} item(ns)</b> aguardando aprovação do gestor.</div>
+            <div style={{ background: T.sucessoFundo, borderRadius: 10, padding: 12, marginTop: 16, textAlign: "left" }}>
               {itens.map((i, idx) => (
-                <div key={i.idLocal} style={{ fontSize: 11, color: "#444", paddingBottom: 4 }}>
+                <div key={i.idLocal} style={{ fontSize: 11, color: T.texto, paddingBottom: 4 }}>
                   {idx + 1}) <b>{i.material}</b> — {i.qtd}
                 </div>
               ))}
@@ -166,27 +166,27 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
           <>
             {/* CESTA — itens já adicionados */}
             {itens.length > 0 && (
-              <div style={{ background: "#fff", borderRadius: 14, padding: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12, borderLeft: `4px solid ${GREEN}` }}>
+              <div style={{ background: T.superficie, borderRadius: 14, padding: 12, boxShadow: T.sombra, marginBottom: 12, borderLeft: `4px solid ${GREEN}` }}>
                 <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ flex: 1, fontWeight: 800, color: NAVY, fontSize: 13 }}>🛒 Cesta de pedido ({totalItens})</div>
+                  <div style={{ flex: 1, fontWeight: 800, color: T.titulo, fontSize: 13 }}>🛒 Cesta de pedido ({totalItens})</div>
                   <button onClick={() => { confirmar("Limpar todos os itens?", () => { setItens([]); }); }} style={{ background: "none", border: "none", color: RED, fontSize: 11, cursor: "pointer", fontWeight: 700 }}>Limpar</button>
                 </div>
                 {itens.map((i, idx) => (
                   <div key={i.idLocal} style={{ display: "flex", alignItems: "flex-start", padding: "8px 0", borderBottom: idx < itens.length - 1 ? "1px solid #f0f0f0" : "none" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: NAVY, fontWeight: 700 }}>{idx + 1}) {i.material}</div>
+                      <div style={{ fontSize: 12, color: T.titulo, fontWeight: 700 }}>{idx + 1}) {i.material}</div>
                       <div style={{ fontSize: 11, color: GREEN, fontWeight: 700, marginTop: 2 }}>📏 {i.qtd}</div>
-                      {i.obs && <div style={{ fontSize: 10, color: "#888", marginTop: 2, fontStyle: "italic" }}>obs: {i.obs}</div>}
+                      {i.obs && <div style={{ fontSize: 10, color: T.texto2, marginTop: 2, fontStyle: "italic" }}>obs: {i.obs}</div>}
                     </div>
-                    <button onClick={() => removerItem(i.idLocal)} style={{ background: "none", border: "none", color: "#bbb", fontSize: 16, cursor: "pointer", padding: 4 }}>🗑️</button>
+                    <button onClick={() => removerItem(i.idLocal)} style={{ background: "none", border: "none", color: T.desabilitado, fontSize: 16, cursor: "pointer", padding: 4 }}>🗑️</button>
                   </div>
                 ))}
               </div>
             )}
 
             {/* FORM ADICIONAR ITEM */}
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: NAVY, fontWeight: 800, marginBottom: 8 }}>➕ Adicionar item</div>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: T.titulo, fontWeight: 800, marginBottom: 8 }}>➕ Adicionar item</div>
               <label style={labelS}>🔍 Buscar material</label>
               <input
                 value={mat || busca}
@@ -196,30 +196,30 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
                 autoFocus={!mat && itens.length === 0}
               />
               {mat && (
-                <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", marginBottom: 8, display: "flex", alignItems: "center" }}>
+                <div style={{ background: T.sucessoFundo, borderRadius: 8, padding: "8px 12px", marginBottom: 8, display: "flex", alignItems: "center" }}>
                   <span style={{ flex: 1 }}>
                     <span style={{ fontSize: 14, color: GREEN, fontWeight: 700 }}>✓ {mat}</span>
-                    {infoMaterial?.cat && <span style={{ fontSize: 9, color: "#888", marginLeft: 6, background: "#fff", padding: "2px 6px", borderRadius: 6 }}>{infoMaterial.cat}</span>}
+                    {infoMaterial?.cat && <span style={{ fontSize: 9, color: T.texto2, marginLeft: 6, background: T.superficie, padding: "2px 6px", borderRadius: 6 }}>{infoMaterial.cat}</span>}
                   </span>
                   <button onClick={() => { setMat(""); setBusca(""); setMarca(""); }} style={{ background: "none", border: "none", color: RED, fontSize: 13, cursor: "pointer", fontWeight: 700 }}>Trocar</button>
                 </div>
               )}
               {!mat && busca.length > 0 && (
-                <div style={{ background: "#f9fafb", borderRadius: 8, marginTop: 4, maxHeight: 280, overflowY: "auto" }}>
+                <div style={{ background: T.superficie2, borderRadius: 8, marginTop: 4, maxHeight: 280, overflowY: "auto" }}>
                   {sugestoes.length === 0 ? (
-                    <div style={{ padding: 12, color: "#888", fontSize: 12, fontStyle: "italic" }}>
+                    <div style={{ padding: 12, color: T.texto2, fontSize: 12, fontStyle: "italic" }}>
                       Nada encontrado. Toque em "Pedir mesmo assim" abaixo:
                     </div>
                   ) : (
                     sugestoes.map(s => (
-                      <div key={(s.idCatalogo || "") + s.nome} onClick={() => selecionarMaterial(s.nome)} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #eee", background: s.doCatalogo ? "#fefce8" : "transparent" }}>
+                      <div key={(s.idCatalogo || "") + s.nome} onClick={() => selecionarMaterial(s.nome)} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${T.borda}`, background: s.doCatalogo ? "#fefce8" : "transparent" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
                           {s.doCatalogo && <span style={{ fontSize: 9, background: "#854d0e", color: "#fff", padding: "1px 5px", borderRadius: 3, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>PRO</span>}
-                          <div style={{ flex: 1, fontSize: 13, color: NAVY, fontWeight: 600, lineHeight: 1.3 }}>{s.nome}</div>
+                          <div style={{ flex: 1, fontSize: 13, color: T.titulo, fontWeight: 600, lineHeight: 1.3 }}>{s.nome}</div>
                         </div>
-                        <div style={{ fontSize: 10, color: "#888", marginTop: 3, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {s.idCatalogo && <span style={{ fontFamily: "monospace", background: "#fef3c7", padding: "1px 5px", borderRadius: 3, color: "#854d0e", fontWeight: 700 }}>{s.idCatalogo}</span>}
-                          <span style={{ background: "#eff6ff", padding: "1px 6px", borderRadius: 4, color: BLUE }}>{s.cat}</span>
+                        <div style={{ fontSize: 10, color: T.texto2, marginTop: 3, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {s.idCatalogo && <span style={{ fontFamily: "monospace", background: T.avisoFundo, padding: "1px 5px", borderRadius: 3, color: T.avisoTexto, fontWeight: 700 }}>{s.idCatalogo}</span>}
+                          <span style={{ background: T.infoFundo, padding: "1px 6px", borderRadius: 4, color: BLUE }}>{s.cat}</span>
                           <span style={{ color: ORANGE, fontWeight: 600 }}>📏 {s.un}</span>
                           {s.marcas && s.marcas.length > 0 && <span>🏷️ {s.marcas.length} marca(s)</span>}
                         </div>
@@ -272,26 +272,26 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
             {/* OBSERVAÇÃO GERAL DO PEDIDO + ENVIAR */}
             {itens.length > 0 && (
               <>
-                <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
+                <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 }}>
                   <label style={labelS}>📝 Observação geral do pedido (opcional)</label>
                   <textarea value={obsGeral} onChange={e => setObsGeral(e.target.value)} rows={2} placeholder="Ex: entregar até sexta, urgente, etc." style={{ ...inputS, resize: "none", fontFamily: "inherit", marginBottom: 0 }} />
                 </div>
 
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={onBack} style={{ flex: 1, padding: "14px", borderRadius: 10, border: "none", background: "#eee", color: NAVY, fontWeight: 800, cursor: "pointer", fontSize: 14 }}>Cancelar</button>
+                  <button onClick={onBack} style={{ flex: 1, padding: "14px", borderRadius: 10, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 800, cursor: "pointer", fontSize: 14 }}>Cancelar</button>
                   <button onClick={enviarPedido} style={{ flex: 2, padding: "14px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14, boxShadow: "0 4px 14px rgba(42,168,79,0.3)" }}>
                     📤 Enviar Pedido ({totalItens} {totalItens === 1 ? "item" : "itens"})
                   </button>
                 </div>
 
-                <div style={{ background: "#f0f7ff", borderRadius: 8, padding: 10, marginTop: 10, fontSize: 11, color: "#0c4a6e", textAlign: "center" }}>
+                <div style={{ background: T.infoFundo, borderRadius: 8, padding: 10, marginTop: 10, fontSize: 11, color: T.infoTexto, textAlign: "center" }}>
                   💡 Continue adicionando quantos itens precisar antes de enviar
                 </div>
               </>
             )}
 
             {itens.length === 0 && (
-              <div style={{ textAlign: "center", padding: 16, color: "#888", fontSize: 11, fontStyle: "italic" }}>
+              <div style={{ textAlign: "center", padding: 16, color: T.texto2, fontSize: 11, fontStyle: "italic" }}>
                 Nenhum item na cesta ainda. Adicione o primeiro item acima.
               </div>
             )}
@@ -461,10 +461,10 @@ export function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, o
       <KMHeader title="Fornecedores" sub={`${fornecedores.length} cadastrado(s)`} onBack={onBack} right={
         <button onClick={abrirNovo} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>+ Novo</button>
       } />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* Busca + filtro */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.sombra }}>
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome, CNPJ, contato..." style={inputS} />
           <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} style={{ ...selS, marginBottom: 0 }}>
             <option value="todas">Todas as categorias</option>
@@ -484,16 +484,16 @@ export function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, o
         ) : (
           <Grade min={300} gap={8} style={{ marginBottom: 8 }}>
           {filtrados.map(f => (
-            <div key={f.id} onClick={() => abrirEdit(f)} style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}`, cursor: "pointer" }}>
+            <div key={f.id} onClick={() => abrirEdit(f)} style={{ background: T.superficie, borderRadius: 12, padding: 12, boxShadow: T.sombra, borderLeft: `4px solid ${BLUE}`, cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>🏪 {f.nome}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: T.titulo }}>🏪 {f.nome}</div>
                   </div>
-                  {f.razaoSocial && <div style={{ fontSize: 11, color: "#666" }}>{f.razaoSocial}</div>}
-                  {f.cnpj && <div style={{ fontSize: 10, color: "#888" }}>CNPJ: {f.cnpj}</div>}
+                  {f.razaoSocial && <div style={{ fontSize: 11, color: T.texto2 }}>{f.razaoSocial}</div>}
+                  {f.cnpj && <div style={{ fontSize: 10, color: T.texto2 }}>CNPJ: {f.cnpj}</div>}
                   {f.categoria && <div style={{ fontSize: 9, color: "#fff", background: BLUE, padding: "2px 6px", borderRadius: 4, fontWeight: 700, display: "inline-block", marginTop: 4 }}>{f.categoria}</div>}
-                  {f.contato && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>👤 {f.contato}</div>}
+                  {f.contato && <div style={{ fontSize: 11, color: T.texto, marginTop: 4 }}>👤 {f.contato}</div>}
                   {(f.telefone || f.whatsapp) && (
                     <div style={{ display: "flex", gap: 8, marginTop: 4 }} onClick={e => e.stopPropagation()}>
                       {f.telefone && <a href={`tel:${f.telefone.replace(/\D/g, "")}`} style={{ fontSize: 10, color: BLUE, textDecoration: "none", fontWeight: 600 }}>📞 {f.telefone}</a>}
@@ -502,7 +502,7 @@ export function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, o
                     </div>
                   )}
                 </div>
-                <span style={{ color: "#bbb", fontSize: 16 }}>›</span>
+                <span style={{ color: T.desabilitado, fontSize: 16 }}>›</span>
               </div>
             </div>
           ))}
@@ -547,7 +547,7 @@ export function TelaFornecedores({ fornecedores = [], onBack, onAdd, onEditar, o
         <textarea value={form.obs} onChange={e => set("obs", e.target.value)} rows={2} placeholder="Forma de pagamento usual, prazo médio, etc" style={{ ...inputS, fontFamily: "inherit", resize: "none" }} />
 
         {editandoId && (
-          <button onClick={() => { confirmar(`Excluir "${form.nome}"?`, () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: "#fef2f2", color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir Fornecedor</button>
+          <button onClick={() => { confirmar(`Excluir "${form.nome}"?`, () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir Fornecedor</button>
         )}
         <Btn label="💾 SALVAR" color={GREEN} onClick={salvar} />
       </Modal>
@@ -632,7 +632,7 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title={`Pedido Nº ${numeroPedido}`} sub={pedido.status} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* CABEÇALHO */}
         <div style={{ background: `linear-gradient(135deg,${cor},${cor}cc)`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12 }}>
@@ -649,36 +649,36 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
         </div>
 
         {/* INFO DA OBRA / ENTREGA */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>📍 Entregar em</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{obra?.nome || "—"}</div>
-          {obra?.endereco && <div style={{ fontSize: 12, color: "#444", marginTop: 4 }}>📌 {obra.endereco}</div>}
-          {obra?.refLocal && <div style={{ fontSize: 11, color: "#666", marginTop: 2, fontStyle: "italic" }}>Ref: {obra.refLocal}</div>}
-          {obra?.local && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>📍 {obra.local}</div>}
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>📍 Entregar em</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.titulo }}>{obra?.nome || "—"}</div>
+          {obra?.endereco && <div style={{ fontSize: 12, color: T.texto, marginTop: 4 }}>📌 {obra.endereco}</div>}
+          {obra?.refLocal && <div style={{ fontSize: 11, color: T.texto2, marginTop: 2, fontStyle: "italic" }}>Ref: {obra.refLocal}</div>}
+          {obra?.local && <div style={{ fontSize: 11, color: T.texto2, marginTop: 2 }}>📍 {obra.local}</div>}
           {(obra?.lat && obra?.lng) && (
             <a href={`https://maps.google.com/?q=${obra.lat},${obra.lng}`} target="_blank" rel="noopener" style={{ display: "inline-block", marginTop: 6, padding: "4px 10px", background: BLUE, color: "#fff", borderRadius: 6, fontSize: 11, fontWeight: 700, textDecoration: "none" }}>📡 Ver no Mapa</a>
           )}
           {!obra?.endereco && (
-            <div style={{ background: "#fef2f2", borderRadius: 6, padding: "6px 8px", marginTop: 8, fontSize: 10, color: RED }}>
+            <div style={{ background: T.erroFundo, borderRadius: 6, padding: "6px 8px", marginTop: 8, fontSize: 10, color: RED }}>
               ⚠️ Obra sem endereço cadastrado. Recomendado completar antes de aprovar.
             </div>
           )}
         </div>
 
         {/* ITENS DO PEDIDO */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>📦 Itens solicitados ({itens.length})</div>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>📦 Itens solicitados ({itens.length})</div>
           {itens.map((it, i) => (
             <div key={i} style={{ padding: "10px 0", borderBottom: i < itens.length - 1 ? "1px solid #f0f0f0" : "none" }}>
               <div style={{ display: "flex", alignItems: "flex-start" }}>
                 <div style={{ background: NAVY, color: "#fff", width: 22, height: 22, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, marginRight: 8, flexShrink: 0, marginTop: 2 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{it.materialBase || it.material}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.titulo }}>{it.materialBase || it.material}</div>
                   {it.marca && <div style={{ fontSize: 11, color: BLUE, fontWeight: 600, marginTop: 2 }}>🏷️ Marca: {it.marca}</div>}
-                  {it.categoria && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{it.categoria}</div>}
-                  {it.obs && <div style={{ fontSize: 11, color: "#666", marginTop: 4, fontStyle: "italic" }}>📝 {it.obs}</div>}
+                  {it.categoria && <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>{it.categoria}</div>}
+                  {it.obs && <div style={{ fontSize: 11, color: T.texto2, marginTop: 4, fontStyle: "italic" }}>📝 {it.obs}</div>}
                 </div>
-                <div style={{ background: "#f0fdf4", padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 800, color: GREEN, whiteSpace: "nowrap" }}>{it.qtd}</div>
+                <div style={{ background: T.sucessoFundo, padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 800, color: GREEN, whiteSpace: "nowrap" }}>{it.qtd}</div>
               </div>
             </div>
           ))}
@@ -686,17 +686,17 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
 
         {/* OBSERVAÇÃO GERAL */}
         {pedido.obsGeral && (
-          <div style={{ background: "#fef9e7", borderRadius: 12, padding: 14, marginBottom: 10, borderLeft: `4px solid ${ORANGE}` }}>
-            <div style={{ fontSize: 11, color: "#8b6f00", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 4 }}>📝 Observação Geral</div>
-            <div style={{ fontSize: 13, color: "#444" }}>{pedido.obsGeral}</div>
+          <div style={{ background: T.avisoFundo, borderRadius: 12, padding: 14, marginBottom: 10, borderLeft: `4px solid ${ORANGE}` }}>
+            <div style={{ fontSize: 11, color: T.avisoTexto, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 4 }}>📝 Observação Geral</div>
+            <div style={{ fontSize: 13, color: T.texto }}>{pedido.obsGeral}</div>
           </div>
         )}
 
         {/* DADOS DE PAGAMENTO (se aprovado) */}
         {pedido.status === "Aprovado" && (pedido.formaPagamento || pedido.prazoEntrega) && (
-          <div style={{ background: "#f0fdf4", borderRadius: 12, padding: 14, marginBottom: 10, borderLeft: `4px solid ${GREEN}` }}>
-            <div style={{ fontSize: 11, color: "#14532d", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>💰 Pagamento e prazo</div>
-            <div style={{ fontSize: 12, color: "#14532d" }}>
+          <div style={{ background: T.sucessoFundo, borderRadius: 12, padding: 14, marginBottom: 10, borderLeft: `4px solid ${GREEN}` }}>
+            <div style={{ fontSize: 11, color: T.sucessoTexto, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>💰 Pagamento e prazo</div>
+            <div style={{ fontSize: 12, color: T.sucessoTexto }}>
               <div><b>Forma:</b> {pedido.formaPagamento || "—"}</div>
               <div><b>Prazo:</b> {pedido.prazoEntrega || "—"}</div>
             </div>
@@ -707,13 +707,13 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
         <div style={{ marginTop: 12 }}>
           {pedido.status === "Aguardando" ? (
             <>
-              <button onClick={abrirEdicao} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${BLUE}`, background: "#eff6ff", color: BLUE, fontWeight: 800, cursor: "pointer", fontSize: 13, marginBottom: 8 }}>
+              <button onClick={abrirEdicao} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${BLUE}`, background: T.infoFundo, color: BLUE, fontWeight: 800, cursor: "pointer", fontSize: 13, marginBottom: 8 }}>
                 ✏️ Editar Itens do Pedido
               </button>
               <button onClick={() => setModal(true)} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14, marginBottom: 8, boxShadow: "0 4px 12px rgba(42,168,79,0.3)" }}>
                 ✓ APROVAR E GERAR PDF DO PEDIDO
               </button>
-              <button onClick={negarPedido} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${RED}`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+              <button onClick={negarPedido} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${RED}`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
                 ✕ Negar Pedido
               </button>
             </>
@@ -722,12 +722,12 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
               <button onClick={baixarPDF} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: NAVY, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14, marginBottom: 8, boxShadow: "0 4px 12px rgba(15,33,81,0.3)" }}>
                 📥 Baixar / Enviar Pedido (PDF A6)
               </button>
-              <button onClick={removerPedido} style={{ width: "100%", padding: 10, borderRadius: 12, border: `1px solid ${RED}33`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>
+              <button onClick={removerPedido} style={{ width: "100%", padding: 10, borderRadius: 12, border: `1px solid ${RED}33`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>
                 🗑️ Excluir Pedido
               </button>
             </>
           ) : (
-            <button onClick={removerPedido} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1px solid ${RED}33`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+            <button onClick={removerPedido} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1px solid ${RED}33`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
               🗑️ Excluir Pedido
             </button>
           )}
@@ -737,7 +737,7 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
 
       {/* MODAL APROVAÇÃO */}
       <Modal show={modal} title="✓ Aprovar Pedido" onClose={() => setModal(false)}>
-        <div style={{ background: "#fef9e7", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: "#8b6f00" }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: T.avisoTexto }}>
           💡 Preencha forma de pagamento e prazo para gerar a Solicitação de Pedido (PDF A6) que vai pro fornecedor.
         </div>
 
@@ -759,23 +759,23 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
         <input value={prazo} onChange={e => setPrazo(e.target.value)} placeholder="Ex: até 05/05/2026" style={inputS} />
 
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => setModal(false)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: "#eee", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
+          <button onClick={() => setModal(false)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
           <button onClick={aprovar} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>✓ Aprovar e Gerar PDF</button>
         </div>
       </Modal>
 
       {/* MODAL EDIÇÃO */}
       <Modal show={modalEdicao} title="✏️ Editar Pedido" onClose={() => setModalEdicao(false)}>
-        <div style={{ background: "#eff6ff", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: "#1e40af", lineHeight: 1.5 }}>
+        <div style={{ background: T.infoFundo, borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: T.infoTexto, lineHeight: 1.5 }}>
           💡 Pode ajustar materiais, quantidades e observações antes de aprovar ou negar.
         </div>
 
         {itensEdit.map((it, i) => (
-          <div key={i} style={{ background: "#f9fafb", borderRadius: 10, padding: 10, marginBottom: 8, border: "1px solid #e5e7eb" }}>
+          <div key={i} style={{ background: T.superficie2, borderRadius: 10, padding: 10, marginBottom: 8, border: `1px solid ${T.borda}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ fontSize: 11, color: "#666", fontWeight: 700 }}>ITEM {i + 1}</div>
+              <div style={{ fontSize: 11, color: T.texto2, fontWeight: 700 }}>ITEM {i + 1}</div>
               {itensEdit.length > 1 && (
-                <button onClick={() => removerItem(i)} style={{ background: "#fee2e2", color: RED, border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>
+                <button onClick={() => removerItem(i)} style={{ background: T.erroFundo, color: RED, border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>
               )}
             </div>
 
@@ -790,7 +790,7 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
           </div>
         ))}
 
-        <button onClick={adicionarItem} style={{ width: "100%", padding: 10, background: "#f3f4f6", color: NAVY, border: `1px dashed ${NAVY}66`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 12 }}>
+        <button onClick={adicionarItem} style={{ width: "100%", padding: 10, background: T.superficie2, color: T.titulo, border: `1px dashed ${NAVY}66`, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 12 }}>
           ➕ Adicionar Item
         </button>
 
@@ -798,7 +798,7 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
         <textarea value={obsGeralEdit} onChange={e => setObsGeralEdit(e.target.value)} placeholder="Observações pro fornecedor" rows="2" style={{ ...inputS, resize: "vertical", minHeight: 50 }} />
 
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-          <button onClick={() => setModalEdicao(false)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: "#eee", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
+          <button onClick={() => setModalEdicao(false)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
           <button onClick={salvarEdicao} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>💾 Salvar Alterações</button>
         </div>
       </Modal>
@@ -895,7 +895,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Pedidos de Material" sub={`${total} total`} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
@@ -945,32 +945,32 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
           const cor = p.status === "Aprovado" ? GREEN : p.status === "Negado" ? RED : ORANGE;
           const numeroPedido = String(p.id).slice(-6);
           return (
-            <div key={p.id} onClick={() => onVerDetalhe && onVerDetalhe(p)} style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
+            <div key={p.id} onClick={() => onVerDetalhe && onVerDetalhe(p)} style={{ background: T.superficie, borderRadius: 12, padding: 12, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 9, color: "#888", fontWeight: 600 }}>Nº {numeroPedido} • {p.data}</div>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 13, marginTop: 2 }}>{p.obra}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>👷 {p.enc} • <b style={{ color: NAVY }}>{itens.length} {itens.length === 1 ? "item" : "itens"}</b></div>
+                  <div style={{ fontSize: 9, color: T.texto2, fontWeight: 600 }}>Nº {numeroPedido} • {p.data}</div>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13, marginTop: 2 }}>{p.obra}</div>
+                  <div style={{ fontSize: 10, color: T.texto2 }}>👷 {p.enc} • <b style={{ color: T.titulo }}>{itens.length} {itens.length === 1 ? "item" : "itens"}</b></div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ background: cor, color: "#fff", padding: "2px 8px", borderRadius: 10, fontSize: 9, fontWeight: 800 }}>{p.status}</div>
-                  <span style={{ color: "#bbb", fontSize: 16 }}>›</span>
+                  <span style={{ color: T.desabilitado, fontSize: 16 }}>›</span>
                 </div>
               </div>
 
-              <div style={{ background: "#f9fafb", borderRadius: 6, padding: "6px 8px", marginBottom: 6 }}>
+              <div style={{ background: T.superficie2, borderRadius: 6, padding: "6px 8px", marginBottom: 6 }}>
                 {itens.slice(0, 3).map((it, i) => (
-                  <div key={i} style={{ fontSize: 11, color: "#444", paddingBottom: 2 }}>
+                  <div key={i} style={{ fontSize: 11, color: T.texto, paddingBottom: 2 }}>
                     {i + 1}) <b>{it.material}</b> — <span style={{ color: GREEN, fontWeight: 700 }}>{it.qtd}</span>
                   </div>
                 ))}
                 {itens.length > 3 && <div style={{ fontSize: 10, color: BLUE, fontWeight: 600 }}>+ {itens.length - 3} item(ns) — toque pra ver todos</div>}
               </div>
 
-              {p.obsGeral && <div style={{ fontSize: 10, color: "#888", fontStyle: "italic", marginBottom: 6 }}>📝 {p.obsGeral}</div>}
+              {p.obsGeral && <div style={{ fontSize: 10, color: T.texto2, fontStyle: "italic", marginBottom: 6 }}>📝 {p.obsGeral}</div>}
 
               {p.status === "Aprovado" && (p.formaPagamento || p.prazoEntrega) && (
-                <div style={{ background: "#f0fdf4", borderRadius: 6, padding: "4px 8px", marginBottom: 6, fontSize: 10, color: "#14532d" }}>
+                <div style={{ background: T.sucessoFundo, borderRadius: 6, padding: "4px 8px", marginBottom: 6, fontSize: 10, color: T.sucessoTexto }}>
                   💰 {p.formaPagamento || "—"} • 📅 {p.prazoEntrega || "—"}
                 </div>
               )}
@@ -984,10 +984,10 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
                 ) : p.status === "Aprovado" ? (
                   <>
                     <button onClick={() => baixar(p)} style={{ flex: 2, padding: 7, borderRadius: 8, border: "none", background: NAVY, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 11 }}>📥 Baixar Pedido (A6)</button>
-                    <button onClick={() => { confirmar(`Excluir pedido Nº ${numeroPedido}?`, () => { onRemover(p.id); }); }} style={{ padding: 7, borderRadius: 8, border: `1px solid ${RED}33`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 11 }}>🗑️</button>
+                    <button onClick={() => { confirmar(`Excluir pedido Nº ${numeroPedido}?`, () => { onRemover(p.id); }); }} style={{ padding: 7, borderRadius: 8, border: `1px solid ${RED}33`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 11 }}>🗑️</button>
                   </>
                 ) : (
-                  <button onClick={() => { confirmar(`Excluir pedido Nº ${numeroPedido}?`, () => { onRemover(p.id); }); }} style={{ flex: 1, padding: 7, borderRadius: 8, border: `1px solid ${RED}33`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 11 }}>🗑️ Excluir</button>
+                  <button onClick={() => { confirmar(`Excluir pedido Nº ${numeroPedido}?`, () => { onRemover(p.id); }); }} style={{ flex: 1, padding: 7, borderRadius: 8, border: `1px solid ${RED}33`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 11 }}>🗑️ Excluir</button>
                 )}
               </div>
             </div>
@@ -1005,15 +1005,15 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
           const obraDoPedido = obras.find(o => o.id === pedidoEdit.obraId);
           return (
             <>
-              <div style={{ background: "#f0fdf4", borderRadius: 10, padding: 10, marginBottom: 10, borderLeft: `3px solid ${GREEN}` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{pedidoEdit.obra}</div>
-                <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{itens.length} {itens.length === 1 ? "item" : "itens"} • 👷 {pedidoEdit.enc}</div>
+              <div style={{ background: T.sucessoFundo, borderRadius: 10, padding: 10, marginBottom: 10, borderLeft: `3px solid ${GREEN}` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.titulo }}>{pedidoEdit.obra}</div>
+                <div style={{ fontSize: 10, color: T.texto2, marginBottom: 4 }}>{itens.length} {itens.length === 1 ? "item" : "itens"} • 👷 {pedidoEdit.enc}</div>
                 {itens.map((it, i) => (
-                  <div key={i} style={{ fontSize: 10, color: "#444" }}>{i + 1}) <b>{it.material}</b> — <span style={{ color: GREEN, fontWeight: 700 }}>{it.qtd}</span></div>
+                  <div key={i} style={{ fontSize: 10, color: T.texto }}>{i + 1}) <b>{it.material}</b> — <span style={{ color: GREEN, fontWeight: 700 }}>{it.qtd}</span></div>
                 ))}
               </div>
 
-              <div style={{ background: "#fef9e7", borderRadius: 6, padding: 8, marginBottom: 10, fontSize: 10, color: "#8b6f00" }}>
+              <div style={{ background: T.avisoFundo, borderRadius: 6, padding: 8, marginBottom: 10, fontSize: 10, color: T.avisoTexto }}>
                 💡 Após aprovar, o PDF do pedido (A6) é gerado automaticamente.
               </div>
 
@@ -1035,13 +1035,13 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
               <input value={prazo} onChange={e => setPrazo(e.target.value)} placeholder="Ex: até 05/05/2026" style={inputS} />
 
               {!obraDoPedido?.endereco && (
-                <div style={{ background: "#fef2f2", borderRadius: 6, padding: 8, marginBottom: 10, fontSize: 10, color: RED }}>
+                <div style={{ background: T.erroFundo, borderRadius: 6, padding: 8, marginBottom: 10, fontSize: 10, color: RED }}>
                   ⚠️ A obra não tem endereço cadastrado. O PDF não terá detalhes de entrega completos.
                 </div>
               )}
 
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => setPedidoEdit(null)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: "#eee", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
+                <button onClick={() => setPedidoEdit(null)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
                 <button onClick={aprovar} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>✓ Aprovar e Gerar PDF</button>
               </div>
             </>
@@ -1051,7 +1051,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
 
       {/* MODAL: NOVO PEDIDO PELO GESTOR */}
       <Modal show={modalNovo} title="➕ Novo Pedido de Compra" onClose={() => setModalNovo(false)}>
-        <div style={{ background: "#fff7e6", borderRadius: 8, padding: "8px 10px", marginBottom: 12, fontSize: 11, color: "#8a6d1a", lineHeight: 1.4 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 8, padding: "8px 10px", marginBottom: 12, fontSize: 11, color: T.avisoTexto, lineHeight: 1.4 }}>
           💡 Pedido criado pelo gestor já entra como <b>Aguardando aprovação</b>. Você pode aprovar em seguida na lista.
         </div>
 
@@ -1081,9 +1081,9 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
 
         <label style={labelS}>📦 Itens do Pedido</label>
         {novoItens.map((item, i) => (
-          <div key={i} style={{ background: "#f9fafb", borderRadius: 8, padding: 8, marginBottom: 6, border: "1px solid #e5e7eb" }}>
+          <div key={i} style={{ background: T.superficie2, borderRadius: 8, padding: 8, marginBottom: 6, border: `1px solid ${T.borda}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>Item {i + 1}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.titulo }}>Item {i + 1}</span>
               {novoItens.length > 1 && (
                 <button onClick={() => removerItemNovo(i)} style={{ background: "none", border: "none", color: RED, cursor: "pointer", fontSize: 14 }}>🗑️</button>
               )}
@@ -1119,7 +1119,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
             </div>
           </div>
         ))}
-        <button onClick={addItemNovo} style={{ width: "100%", padding: 8, marginBottom: 10, background: "#f0f7ff", color: BLUE, border: `1px dashed ${BLUE}`, borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
+        <button onClick={addItemNovo} style={{ width: "100%", padding: 8, marginBottom: 10, background: T.infoFundo, color: BLUE, border: `1px dashed ${BLUE}`, borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
           ➕ Adicionar mais um item
         </button>
 
@@ -1133,7 +1133,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
         />
 
         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-          <button onClick={() => setModalNovo(false)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: "#eee", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
+          <button onClick={() => setModalNovo(false)} style={{ flex: 1, padding: 11, borderRadius: 8, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Cancelar</button>
           <button onClick={salvarNovoPedido} style={{ flex: 2, padding: 11, borderRadius: 8, border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>📦 Criar Pedido</button>
         </div>
       </Modal>
@@ -1383,13 +1383,13 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
   if (step === "novo") return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Selecionar Pedido" onBack={() => setStep("lista")} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10 }}>Selecione o pedido aprovado que está sendo recebido:</div>
-        {aprovados.length === 0 && <div style={{ background: "#fff", borderRadius: 12, padding: 20, textAlign: "center", color: "#aaa" }}>Nenhum pedido aprovado para receber.</div>}
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10 }}>Selecione o pedido aprovado que está sendo recebido:</div>
+        {aprovados.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhum pedido aprovado para receber.</div>}
         {aprovados.map(p => (
-          <div key={p.id} onClick={() => { setPedidoSel(p); setStep("foto"); }} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${GREEN}` }}>
-            <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>{p.material} — {fmtQtd(p.qtd)}</div>
-            <div style={{ fontSize: 11, color: "#888" }}>{p.obra} • {p.data} • {p.enc}</div>
+          <div key={p.id} onClick={() => { setPedidoSel(p); setStep("foto"); }} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${GREEN}` }}>
+            <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{p.material} — {fmtQtd(p.qtd)}</div>
+            <div style={{ fontSize: 11, color: T.texto2 }}>{p.obra} • {p.data} • {p.enc}</div>
           </div>
         ))}
       </div>
@@ -1400,13 +1400,13 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
   if (step === "foto") return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Foto da Entrega" sub={pedidoSel?.material} onBack={() => setStep("novo")} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, textAlign: "center" }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 16, marginBottom: 12, textAlign: "center" }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>📦</div>
-          <div style={{ fontWeight: 700, color: NAVY }}>{pedidoSel?.material}</div>
-          <div style={{ fontSize: 13, color: "#666" }}>{pedidoSel?.qtd}</div>
+          <div style={{ fontWeight: 700, color: T.titulo }}>{pedidoSel?.material}</div>
+          <div style={{ fontSize: 13, color: T.texto2 }}>{pedidoSel?.qtd}</div>
         </div>
-        <div style={{ background: "#fff8e1", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#7b5800", marginBottom: 12 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 10, padding: "10px 14px", fontSize: 12, color: T.avisoTexto, marginBottom: 12 }}>
           ⚠️ <b>Validação Visual Obrigatória</b><br/>Tire foto do material recebido como comprovação.
         </div>
         <label style={{ ...bigBtn(BLUE), display: "block", textAlign: "center" }}>
@@ -1421,11 +1421,11 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
   if (step === "confirmar") return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Validar Recebimento" sub={pedidoSel?.material} onBack={() => setStep("foto")} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {foto && <img src={foto} alt="" style={{ width: "100%", borderRadius: 12, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }} />}
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>✓ Conformidade da Entrega</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>✓ Conformidade da Entrega</div>
           {[
             { v: "Conforme",        l: "✅ Conforme — tudo correto", c: GREEN },
             { v: "Divergência",     l: "⚠️ Divergência — quantidade ou qualidade",   c: ORANGE },
@@ -1437,7 +1437,7 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
           ))}
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
           <label style={labelS}>Observações</label>
           <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder={conformidade === "Conforme" ? "Ex: material em ordem" : "Descreva a divergência ou problema..."} style={{ ...inputS, resize: "none", marginBottom: 0 }} />
         </div>
@@ -1452,23 +1452,23 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Recebimento" sub="Validação de entregas" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <Btn label="➕ Novo Recebimento" color={GREEN} onClick={() => setStep("novo")} style={{ marginBottom: 14 }} />
 
-        <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13 }}>📜 Recebimentos recentes</div>
-        {meusReceb.length === 0 && <div style={{ background: "#fff", borderRadius: 12, padding: 20, textAlign: "center", color: "#aaa" }}>Nenhum recebimento ainda.</div>}
+        <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 Recebimentos recentes</div>
+        {meusReceb.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhum recebimento ainda.</div>}
         {meusReceb.map(r => {
           const cor = r.conformidade === "Conforme" ? GREEN : r.conformidade === "Divergência" ? ORANGE : RED;
           const obra = obras.find(o => o.id === r.obraId);
           return (
-            <div key={r.id} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}` }}>
+            <div key={r.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}` }}>
               <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 {r.foto && <img src={r.foto} alt="" style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />}
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{r.material} — {r.qtd}</div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{obra?.nome} • {r.data}</div>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{r.material} — {r.qtd}</div>
+                  <div style={{ fontSize: 11, color: T.texto2 }}>{obra?.nome} • {r.data}</div>
                   <Badge label={r.conformidade} color={cor} small />
-                  {r.obs && <div style={{ fontSize: 11, color: "#666", marginTop: 4, fontStyle: "italic" }}>{r.obs}</div>}
+                  {r.obs && <div style={{ fontSize: 11, color: T.texto2, marginTop: 4, fontStyle: "italic" }}>{r.obs}</div>}
                 </div>
               </div>
             </div>

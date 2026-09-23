@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { logoutFirebase, resultadoRedirecionamento, aguardarSessao } from "./firebase.js";
 
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "./theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
 import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
@@ -832,8 +832,8 @@ export default function App() {
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
           <div>
             <div style={{ fontSize: 64, marginBottom: 16 }}>🔒</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Acesso Restrito</div>
-            <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, marginBottom: 20 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>Acesso Restrito</div>
+            <div style={{ fontSize: 13, color: T.texto2, lineHeight: 1.5, marginBottom: 20 }}>
               Esta área é apenas para o gestor.<br/>
               Se precisar, fale com o gestor da empresa.
             </div>
@@ -857,12 +857,12 @@ export default function App() {
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
             <div>
               <div style={{ fontSize: 64, marginBottom: 16 }}>🏗️</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Sem obra vinculada</div>
-              <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, marginBottom: 20 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>Sem obra vinculada</div>
+              <div style={{ fontSize: 13, color: T.texto2, lineHeight: 1.5, marginBottom: 20 }}>
                 Peça ao gestor para vincular você a uma obra em Sistema → Acessos do App.
               </div>
               <button onClick={() => window.location.reload()} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13, marginRight: 8 }}>🔄 Atualizar</button>
-              <button onClick={() => setTela("home")} style={{ background: "#eee", color: NAVY, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
+              <button onClick={() => setTela("home")} style={{ background: T.superficie2, color: T.titulo, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
             </div>
           </div>
           <KMFooter />
@@ -1016,7 +1016,7 @@ export default function App() {
 
   return (
     <UsuarioContext.Provider value={usuarioCtx}>
-    <div style={{ fontFamily: "'Segoe UI',sans-serif", backgroundColor: "#0a1535", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
+    <div style={{ fontFamily: "'Segoe UI',sans-serif", backgroundColor: T.fundoExterno, minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
       {/* SPLASH SCREEN */}
       {splashAtivo && (
         <div style={{
@@ -1094,10 +1094,10 @@ export default function App() {
             </div>
             <div style={{ animation: "kmSplashPulse 2.5s ease-in-out infinite" }}>
               <span style={{ fontWeight: 900, fontSize: 64, color: "#fff", letterSpacing: -2 }}>KM</span>
-              <span style={{ fontWeight: 900, fontSize: 64, color: "#F5A623", letterSpacing: -2 }}>ZERO</span>
+              <span style={{ fontWeight: 900, fontSize: 64, color: GOLD, letterSpacing: -2 }}>ZERO</span>
             </div>
             <div style={{
-              height: 3, background: "#F5A623", margin: "14px auto", borderRadius: 2,
+              height: 3, background: GOLD, margin: "14px auto", borderRadius: 2,
               animation: "kmSplashLine 1s ease-out forwards",
               boxShadow: "0 0 12px rgba(245,166,35,0.6)",
             }} />
@@ -1196,10 +1196,10 @@ export default function App() {
         </button>
       )}
       {escritorio ? (
-        <div className="km-app-wrapper km-escritorio" style={{ width: "100%", maxWidth: "none", minHeight: "100vh", display: "flex", flexDirection: "row", alignItems: "stretch", backgroundColor: LIGHT, position: "relative", boxShadow: "none" }}>
+        <div className="km-app-wrapper km-escritorio" style={{ width: "100%", maxWidth: "none", minHeight: "100vh", display: "flex", flexDirection: "row", alignItems: "stretch", backgroundColor: T.fundo, position: "relative", boxShadow: "none" }}>
           <MenuLateral tela={tela} onNav={setTela} usuario={usuario} empresa={empresa} badges={badgesMenu} onLogout={logout} />
           <div style={{ flex: 1, minWidth: 0, padding: "0 24px 24px", display: "flex", flexDirection: "column" }}>
-            <div style={{ maxWidth: 1280, margin: "0 auto", width: "100%", flex: 1, display: "flex", flexDirection: "column", backgroundColor: "#fff" }}>
+            <div style={{ maxWidth: 1280, margin: "0 auto", width: "100%", flex: 1, display: "flex", flexDirection: "column", backgroundColor: T.superficie }}>
               <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
                 {render()}
               </div>
@@ -1207,7 +1207,7 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#fff", position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
+        <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: T.superficie, position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
           <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             {render()}
           </div>

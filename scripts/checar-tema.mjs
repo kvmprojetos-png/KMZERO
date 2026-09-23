@@ -69,3 +69,26 @@ for (const [chave, c] of lista.slice(0, porArquivo ? lista.length : 60)) {
   if (porArquivo) for (const [a, n] of [...c.arquivos.entries()].sort((x, y) => y[1] - x[1])) console.log("         ", String(n).padStart(4), a);
 }
 if (!porArquivo && lista.length > 60) console.log(`… e mais ${lista.length - 60} combinações (use --por-arquivo para ver tudo)`);
+
+/* ── Prova: nenhum token dentro do HTML de PDF/impressão (template literals com tags) ── */
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { parse } = require("@babel/parser");
+let vazamentos = 0;
+for (const arq of arquivos) {
+  const codigo = fs.readFileSync(arq, "utf8");
+  let ast; try { ast = parse(codigo, { sourceType: "module", plugins: ["jsx"], errorRecovery: true }); } catch { continue; }
+  const rel = path.relative(path.join(RAIZ, ".."), arq).replace(/\\/g, "/");
+  (function andar(no) {
+    if (!no || typeof no !== "object") return;
+    if (Array.isArray(no)) return no.forEach(andar);
+    if (no.type === "TemplateLiteral") {
+      const texto = codigo.slice(no.start, no.end);
+      const ehHTML = /<\s*(html|div|style|table|body|span|h\d|td|tr|p|section)\b/i.test(texto) || /style="/.test(texto);
+      if (ehHTML && /var\(--km-|\bT\.[a-zA-Z]/.test(texto)) { vazamentos++; console.log("  ! token dentro de HTML de PDF:", rel + ":" + codigo.slice(0, no.start).split("\n").length); }
+      if (ehHTML) return;
+    }
+    for (const k of Object.keys(no)) { if (k !== "loc") { const v = no[k]; if (v && typeof v === "object") andar(v); } }
+  })(ast.program);
+}
+console.log(vazamentos ? "\n❌ " + vazamentos + " vazamento(s) de token em HTML de PDF" : "\n✅ Nenhum token dentro do HTML de PDF/impressão");

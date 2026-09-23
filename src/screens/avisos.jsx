@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NAVY, GOLD, GREEN, RED, ORANGE, LIGHT, labelS, inputS, selS } from "../theme.js";
+import { NAVY, GOLD, GREEN, RED, ORANGE, LIGHT, labelS, inputS, selS, T } from "../theme.js";
 import { KMHeader, KMFooter, EmptyState } from "../components/ui.jsx";
 import { TIPOS_AVISO, descreverPara, uidDe } from "../lib/avisosRegras.js";
 import { situacaoNotificacoes, ativarNotificacoes, desligarNotificacoes } from "../lib/avisos.js";
@@ -75,24 +75,24 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
     } else setResultado("⚠️ Aviso publicado no app. " + r.erro);
   };
 
-  const card = { background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 };
+  const card = { background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 };
   const btn = (bg, cor = "#fff") => ({ background: bg, color: cor, border: "none", borderRadius: 10, padding: "10px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" });
   const sit = TEXTO_SITUACAO[situacao];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Avisos" sub="Notificações da equipe" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ maxWidth: 720 }}>
           {/* Este aparelho */}
           <div style={{ ...card, borderLeft: `4px solid ${sit.cor}` }}>
-            <div style={{ fontSize: 13, color: NAVY, lineHeight: 1.45 }}>{sit.txt}</div>
+            <div style={{ fontSize: 13, color: T.titulo, lineHeight: 1.45 }}>{sit.txt}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
               {situacao === "desligada" && <button onClick={ligar} disabled={ligando} style={btn(NAVY)}>{ligando ? "Ligando…" : "🔔 Ativar notificações"}</button>}
               {situacao === "ligada" && <button onClick={testar} style={btn(NAVY)}>Testar</button>}
               {situacao === "ligada" && <button onClick={desligar} style={btn("#eee", NAVY)}>Desligar neste aparelho</button>}
             </div>
-            {msgAparelho && <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>{msgAparelho}</div>}
+            {msgAparelho && <div style={{ fontSize: 12, color: T.texto2, marginTop: 8 }}>{msgAparelho}</div>}
           </div>
 
           {/* Escrever */}
@@ -124,7 +124,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
                     </select>
                   )}
                 </>
-              ) : <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>Vai para os gestores e diretores.</div>}
+              ) : <div style={{ fontSize: 12, color: T.texto2, marginBottom: 8 }}>Vai para os gestores e diretores.</div>}
               <label style={labelS}>Título</label>
               <input value={titulo} onChange={e => setTitulo(e.target.value.slice(0, 80))} placeholder="Ex.: Reunião amanhã às 7h no canteiro" style={inputS} />
               <label style={labelS}>Mensagem (opcional)</label>
@@ -135,7 +135,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
               </div>
             </div>
           )}
-          {resultado && <div style={{ fontSize: 12, color: NAVY, margin: "-4px 0 12px" }}>{resultado}</div>}
+          {resultado && <div style={{ fontSize: 12, color: T.titulo, margin: "-4px 0 12px" }}>{resultado}</div>}
 
           {/* Lista */}
           {avisos.length === 0 && <EmptyState icon="🔔" titulo="Nenhum aviso ainda" subtitulo="Os avisos da equipe e os alertas automáticos aparecem aqui." />}
@@ -148,8 +148,8 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
                   <div style={{ fontSize: 20, lineHeight: 1 }}>{tipo.icone}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 800, color: NAVY, fontSize: 14 }}>{a.titulo}{novo && <span style={{ marginLeft: 6, fontSize: 10, background: GOLD, color: NAVY, borderRadius: 6, padding: "1px 6px" }}>NOVO</span>}</div>
-                    {a.texto && <div style={{ fontSize: 13, color: "#444", whiteSpace: "pre-wrap", marginTop: 4, lineHeight: 1.45 }}>{a.texto}</div>}
-                    <div style={{ fontSize: 11, color: "#888", marginTop: 6 }}>
+                    {a.texto && <div style={{ fontSize: 13, color: T.texto, whiteSpace: "pre-wrap", marginTop: 4, lineHeight: 1.45 }}>{a.texto}</div>}
+                    <div style={{ fontSize: 11, color: T.texto2, marginTop: 6 }}>
                       {a.de === eu ? "Você" : a.deNome || "KMZERO"} → {descreverPara(a.para, { obras, usuarios })} · {quandoFoi(a.criadoEm)}
                       {a.de === eu && a.push?.aparelhos !== undefined && ` · tocou em ${a.push.aparelhos} aparelho(s)`}
                     </div>

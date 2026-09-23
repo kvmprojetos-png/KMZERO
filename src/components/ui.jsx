@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { useModoEscritorio } from "../lib/useLargura.js";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 
 export const Badge = ({ label, color, small }) => (
   <span style={{ background: color, color: "#fff", borderRadius: 20, padding: small ? "3px 9px" : "5px 13px", fontSize: small ? 11 : 13, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>
@@ -35,12 +35,12 @@ export const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, sty
 export function EmptyState({ icon = "📦", titulo, subtitulo, botaoLabel, onBotao, cor = NAVY }) {
   return (
     <div className="km-card-anim" style={{
-      background: "#fff",
+      background: T.superficie,
       borderRadius: 16,
       padding: "28px 20px",
       textAlign: "center",
-      boxShadow: "0 2px 10px rgba(15,33,81,0.06)",
-      border: "1px dashed #e5e7eb",
+      boxShadow: T.sombra,
+      border: `1px dashed ${T.borda}`,
       margin: "8px 0",
     }}>
       <div style={{
@@ -57,7 +57,7 @@ export function EmptyState({ icon = "📦", titulo, subtitulo, botaoLabel, onBot
       {subtitulo && (
         <div style={{
           fontSize: 12,
-          color: "#94a3b8",
+          color: T.texto3,
           marginBottom: botaoLabel ? 14 : 0,
           lineHeight: 1.5,
           maxWidth: 280,
@@ -98,7 +98,7 @@ export function AvatarUsuario({ usuario, tamanho = 34, anel = GOLD }) {
   const base = { width: tamanho, height: tamanho, minWidth: tamanho, borderRadius: "50%", boxShadow: `0 0 0 2px ${anel}`, flexShrink: 0 };
   if (usuario?.foto && !semFoto) {
     // no-referrer: as fotos do Google (lh3.googleusercontent.com) às vezes recusam com referrer de outro site
-    return <img src={usuario.foto} alt="" referrerPolicy="no-referrer" onError={() => setSemFoto(true)} style={{ ...base, objectFit: "cover", background: "#fff" }} />;
+    return <img src={usuario.foto} alt="" referrerPolicy="no-referrer" onError={() => setSemFoto(true)} style={{ ...base, objectFit: "cover", background: T.superficie }} />;
   }
   return <div aria-hidden="true" style={{ ...base, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: Math.round(tamanho * 0.4) }}>{iniciais || "?"}</div>;
 }
@@ -126,6 +126,25 @@ export function UsuarioLogado({ compacto }) {
   return ctx.onAbrirConta
     ? <button type="button" onClick={ctx.onAbrirConta} title={titulo + " — Minha conta"} aria-label={`Conectado como ${u.nome}. Abrir Minha conta`} style={{ ...estilo, cursor: "pointer" }}>{conteudo}</button>
     : <div title={titulo} aria-label={`Conectado como ${u.nome}`} style={estilo}>{conteudo}</div>;
+}
+
+/* ── LogoKM — lockup único da marca (vitrine, splash, login, menu, rodapé) ──
+   KM na cor passada + ZERO em ouro, Barlow 800 (cai em Inter 900 se a fonte não
+   estiver em cache), sem emoji e sem itálico. `tamanho` é o corpo do lockup em px;
+   a tagline "GESTÃO DE OBRAS" escala junto. Os usos antigos (KMHeader/KMFooter)
+   migram para cá nas fases seguintes. */
+export function LogoKM({ tamanho = 24, tagline = true, cor = "#fff", style: sx }) {
+  const tamTag = Math.max(7, Math.round(tamanho * 0.36));
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1, ...(sx || {}) }}>
+      <span aria-label="KMZERO" style={{ fontFamily: "Barlow, Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial", fontSize: tamanho, fontWeight: 800, letterSpacing: "-0.03em", whiteSpace: "nowrap" }}>
+        <span style={{ color: cor }}>KM</span><span style={{ color: GOLD }}>ZERO</span>
+      </span>
+      {tagline && (
+        <span style={{ fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial", fontSize: tamTag, fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, color: "rgba(255,255,255,0.55)", marginTop: Math.round(tamanho * 0.18), whiteSpace: "nowrap" }}>GESTÃO DE OBRAS</span>
+      )}
+    </span>
+  );
 }
 
 export function KMHeader({ title, sub, onBack, right }) {
@@ -276,10 +295,10 @@ export function Modal({ show, title, children, onClose }) {
   if (!show) return null;
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16, overscrollBehavior: "contain" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, padding: 20, width: "100%", maxWidth: 400, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", WebkitOverflowScrolling: "touch" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, position: "sticky", top: -20, background: "#fff", padding: "16px 0 12px 0", marginTop: -20, borderBottom: "1px solid #eee", zIndex: 1 }}>
-          <div style={{ fontWeight: 800, color: NAVY, fontSize: 16 }}>{title}</div>
-          <button type="button" onClick={onClose} style={{ background: "#f3f4f6", border: "none", fontSize: 18, cursor: "pointer", color: "#666", width: 32, height: 32, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>✕</button>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.superficie, borderRadius: 20, padding: 20, width: "100%", maxWidth: 400, maxHeight: "85vh", overflowY: "auto", boxShadow: T.sombra2, WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, position: "sticky", top: -20, background: T.superficie, padding: "16px 0 12px 0", marginTop: -20, borderBottom: `1px solid ${T.borda}`, zIndex: 1 }}>
+          <div style={{ fontWeight: 800, color: T.titulo, fontSize: 16 }}>{title}</div>
+          <button type="button" onClick={onClose} style={{ background: T.superficie2, border: "none", fontSize: 18, cursor: "pointer", color: T.texto2, width: 32, height: 32, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>✕</button>
         </div>
         <div style={{ paddingTop: 4 }}>
           {children}
@@ -391,14 +410,14 @@ export function Assinatura({ valor, onChange, label = "Assine abaixo" }) {
   return (
     <div>
       <label style={labelS}>{label}</label>
-      <div style={{ background: "#f9fafb", border: "1.5px dashed #c5d0e5", borderRadius: 10, position: "relative" }}>
+      <div style={{ background: T.superficie2, border: `1.5px dashed ${T.borda2}`, borderRadius: 10, position: "relative" }}>
         <canvas
           ref={setupCanvas}
           onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
           onTouchStart={start} onTouchMove={move} onTouchEnd={end}
           style={{ width: "100%", height: 140, display: "block", cursor: "crosshair", touchAction: "none" }}
         />
-        {!valor && !desenhando && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#bbb", fontSize: 13, pointerEvents: "none" }}>✍️ Assine aqui com o dedo ou mouse</div>}
+        {!valor && !desenhando && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: T.desabilitado, fontSize: 13, pointerEvents: "none" }}>✍️ Assine aqui com o dedo ou mouse</div>}
       </div>
       <button onClick={limpar} style={{ background: "none", border: "none", color: BLUE, fontSize: 12, cursor: "pointer", marginTop: 4, fontWeight: 600 }}>🗑️ Limpar</button>
     </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, precoAlim } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -39,7 +39,7 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
   const totalGeral = dados.reduce((s, d) => s + d._calc.total, 0);
 
   return (
-    <div style={{ background: "#fff", borderRadius: 14, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+    <div style={{ background: T.superficie, borderRadius: 14, marginBottom: 14, boxShadow: T.sombra, overflow: "hidden" }}>
       <div onClick={() => setColapsada(c => !c)} style={{ background: `linear-gradient(135deg,${NAVY},${NAVY2 || "#243b7a"})`, color: "#fff", padding: "10px 14px", display: "flex", alignItems: "center", cursor: "pointer" }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 800 }}>📊 Resumo da Equipe — {meses[mes]}/{ano}</div>
@@ -50,7 +50,7 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
 
       {!colapsada && (
         <>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: "1px solid #eee", fontSize: 12, fontWeight: 600, color: NAVY, background: "#fafbfc" }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: `1px solid ${T.borda}`, fontSize: 12, fontWeight: 600, color: T.titulo, background: "#fafbfc" }}>
             <option value="todas">🏗️ Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -58,24 +58,24 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
-                <tr style={{ background: "#f3f4f6" }}>
-                  <th style={{ padding: "8px 10px", textAlign: "left", color: NAVY, fontWeight: 700, fontSize: 10, borderBottom: "2px solid #e5e7eb" }}>Trabalhador</th>
-                  <th style={{ padding: "8px 6px", textAlign: "center", color: GREEN, fontWeight: 700, fontSize: 10, borderBottom: "2px solid #e5e7eb" }}>P</th>
-                  <th style={{ padding: "8px 6px", textAlign: "center", color: RED, fontWeight: 700, fontSize: 10, borderBottom: "2px solid #e5e7eb" }}>F</th>
-                  <th style={{ padding: "8px 6px", textAlign: "center", color: ORANGE, fontWeight: 700, fontSize: 10, borderBottom: "2px solid #e5e7eb" }}>A</th>
-                  <th style={{ padding: "8px 8px", textAlign: "right", color: NAVY, fontWeight: 700, fontSize: 10, borderBottom: "2px solid #e5e7eb" }}>Diária</th>
-                  <th style={{ padding: "8px 8px", textAlign: "right", color: NAVY, fontWeight: 700, fontSize: 10, borderBottom: "2px solid #e5e7eb" }}>Total</th>
+                <tr style={{ background: T.superficie2 }}>
+                  <th style={{ padding: "8px 10px", textAlign: "left", color: T.titulo, fontWeight: 700, fontSize: 10, borderBottom: `2px solid ${T.borda}` }}>Trabalhador</th>
+                  <th style={{ padding: "8px 6px", textAlign: "center", color: GREEN, fontWeight: 700, fontSize: 10, borderBottom: `2px solid ${T.borda}` }}>P</th>
+                  <th style={{ padding: "8px 6px", textAlign: "center", color: RED, fontWeight: 700, fontSize: 10, borderBottom: `2px solid ${T.borda}` }}>F</th>
+                  <th style={{ padding: "8px 6px", textAlign: "center", color: ORANGE, fontWeight: 700, fontSize: 10, borderBottom: `2px solid ${T.borda}` }}>A</th>
+                  <th style={{ padding: "8px 8px", textAlign: "right", color: T.titulo, fontWeight: 700, fontSize: 10, borderBottom: `2px solid ${T.borda}` }}>Diária</th>
+                  <th style={{ padding: "8px 8px", textAlign: "right", color: T.titulo, fontWeight: 700, fontSize: 10, borderBottom: `2px solid ${T.borda}` }}>Total</th>
                 </tr>
               </thead>
               <tbody>
                 {dados.length === 0 && (
-                  <tr><td colSpan={6} style={{ padding: 20, textAlign: "center", color: "#aaa", fontSize: 12 }}>Nenhum trabalhador.</td></tr>
+                  <tr><td colSpan={6} style={{ padding: 20, textAlign: "center", color: T.texto3, fontSize: 12 }}>Nenhum trabalhador.</td></tr>
                 )}
                 {dados.map(d => (
-                  <tr key={d.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                  <tr key={d.id} style={{ borderBottom: `1px solid ${T.borda}` }}>
                     <td style={{ padding: "8px 10px" }}>
-                      <div style={{ fontWeight: 700, color: NAVY, fontSize: 11 }}>{d.nome}</div>
-                      <div style={{ fontSize: 9, color: "#888" }}>{d.cargo} • {d._obra?.nome?.substring(0, 22) || "—"}</div>
+                      <div style={{ fontWeight: 700, color: T.titulo, fontSize: 11 }}>{d.nome}</div>
+                      <div style={{ fontSize: 9, color: T.texto2 }}>{d.cargo} • {d._obra?.nome?.substring(0, 22) || "—"}</div>
                     </td>
                     <td style={{ padding: "8px 6px", textAlign: "center", color: GREEN, fontWeight: 700, fontSize: 11 }}>{d._calc.pres}</td>
                     <td style={{ padding: "8px 6px", textAlign: "center", color: d._calc.falt > 0 ? RED : "#ccc", fontWeight: 700, fontSize: 11 }}>{d._calc.falt}</td>
@@ -86,15 +86,15 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr style={{ background: "#f3f4f6" }}>
-                  <td colSpan={5} style={{ padding: "10px", textAlign: "right", color: NAVY, fontWeight: 800, fontSize: 11 }}>TOTAL DO MÊS</td>
+                <tr style={{ background: T.superficie2 }}>
+                  <td colSpan={5} style={{ padding: "10px", textAlign: "right", color: T.titulo, fontWeight: 800, fontSize: 11 }}>TOTAL DO MÊS</td>
                   <td style={{ padding: "10px", textAlign: "right", color: GREEN, fontWeight: 900, fontSize: 13 }}>R$ {totalGeral.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
 
-          <div style={{ padding: "8px 12px", background: "#f9fafb", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #eee", fontSize: 10, color: "#888" }}>
+          <div style={{ padding: "8px 12px", background: T.superficie2, display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${T.borda}`, fontSize: 10, color: T.texto2 }}>
             <span>P=Presença • F=Falta • A=Atestado</span>
             <button onClick={() => onNav("folha_quinzenal")} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Ver Folha →</button>
           </div>
@@ -171,25 +171,25 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Equipe" sub={`${trabalhadores.length} trabalhador(es)`} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
 
         {/* Indicadores rápidos clicáveis (filtros) */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           <button onClick={() => setFiltroStatus("todos")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "todos" ? `2px solid ${NAVY}` : "1px solid #dde2ef", background: filtroStatus === "todos" ? "#dde6f5" : "#fff", cursor: "pointer" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>{trabalhadores.length}</div>
-            <div style={{ fontSize: 9, color: "#666" }}>Todos</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.titulo }}>{trabalhadores.length}</div>
+            <div style={{ fontSize: 9, color: T.texto2 }}>Todos</div>
           </button>
           <button onClick={() => setFiltroStatus(filtroStatus === "aso_vencido" ? "todos" : "aso_vencido")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "aso_vencido" ? `2px solid ${RED}` : "1px solid #dde2ef", background: filtroStatus === "aso_vencido" ? "#fef2f2" : "#fff", cursor: "pointer" }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: totalAsoVencido > 0 ? RED : "#888" }}>{totalAsoVencido}</div>
-            <div style={{ fontSize: 9, color: "#666" }}>ASO 30d</div>
+            <div style={{ fontSize: 9, color: T.texto2 }}>ASO 30d</div>
           </button>
           <button onClick={() => setFiltroStatus(filtroStatus === "sem_epi" ? "todos" : "sem_epi")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "sem_epi" ? `2px solid ${ORANGE}` : "1px solid #dde2ef", background: filtroStatus === "sem_epi" ? "#fff8f0" : "#fff", cursor: "pointer" }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: totalSemEPI > 0 ? ORANGE : "#888" }}>{totalSemEPI}</div>
-            <div style={{ fontSize: 9, color: "#666" }}>S/ EPI</div>
+            <div style={{ fontSize: 9, color: T.texto2 }}>S/ EPI</div>
           </button>
           <button onClick={() => setFiltroStatus(filtroStatus === "inapto" ? "todos" : "inapto")} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: filtroStatus === "inapto" ? `2px solid ${RED}` : "1px solid #dde2ef", background: filtroStatus === "inapto" ? "#fef2f2" : "#fff", cursor: "pointer" }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: totalInapto > 0 ? RED : "#888" }}>{totalInapto}</div>
-            <div style={{ fontSize: 9, color: "#666" }}>Inapto</div>
+            <div style={{ fontSize: 9, color: T.texto2 }}>Inapto</div>
           </button>
         </div>
 
@@ -218,15 +218,15 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           else if (t.asoStatus === "Apto com restrições") indicadores.push({ icon: "⚠️", label: "Restrições", cor: ORANGE });
 
           return (
-            <div key={t.id} onClick={() => onVerDetalhe && onVerDetalhe(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
+            <div key={t.id} onClick={() => onVerDetalhe && onVerDetalhe(t)} style={{ background: T.superficie, borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer" }}>
               {t.foto ? (
                 <img src={t.foto} alt="" style={{ width: 44, height: 44, borderRadius: 22, objectFit: "cover", border: `2px solid ${NAVY}`, marginRight: 10, flexShrink: 0 }} />
               ) : (
                 <div style={{ width: 44, height: 44, borderRadius: 22, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, marginRight: 10, flexShrink: 0, color: "#fff" }}>👷</div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nome}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>{t.cargo} • {obra ? obra.nome : "-"}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: T.titulo, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nome}</div>
+                <div style={{ fontSize: 11, color: T.texto2 }}>{t.cargo} • {obra ? obra.nome : "-"}</div>
                 {indicadores.length > 0 && (
                   <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
                     {indicadores.map((i, idx) => (
@@ -247,7 +247,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
                   });
                 }}
                 style={{
-                  background: "#fee2e2",
+                  background: T.erroFundo,
                   border: `2px solid ${RED}`,
                   color: RED,
                   fontSize: 18,
@@ -265,13 +265,13 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
                   flexShrink: 0,
                 }}
               >🗑️</button>
-              <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+              <span style={{ color: T.desabilitado, fontSize: 18 }}>›</span>
             </div>
           );
         })}
         </Grade>
         )}
-        {lista.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 20 }}>Nenhum resultado.</div>}
+        {lista.length === 0 && <div style={{ textAlign: "center", color: T.texto3, padding: 20 }}>Nenhum resultado.</div>}
         <Btn label="➕ Adicionar Trabalhador" color={NAVY} onClick={() => setModal(true)} style={{ marginTop: 8 }} />
       </div>
       <KMFooter />
@@ -290,7 +290,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
-        <div style={{ background: "#fffaeb", borderRadius: 8, padding: "10px 12px", fontSize: 11, color: "#8b6f00", marginBottom: 10, lineHeight: 1.5 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: T.avisoTexto, marginBottom: 10, lineHeight: 1.5 }}>
           💡 Esta tela cadastra <b>trabalhador</b> (folha, presença, frequência).<br/>
           Pra dar <b>acesso ao app</b> (login do encarregado), vá em <b>⚙️ Sistema → 🔑 Acessos do App</b>.
         </div>
@@ -351,12 +351,12 @@ export function TelaFicha({ obras, onBack, onAdd }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ficha Cadastral" sub="Novo Colaborador" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {salvo ? (
           <div style={{ textAlign: "center", padding: 32 }}>
             <div style={{ fontSize: 64 }}>✅</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: GREEN, marginTop: 12 }}>Ficha Salva!</div>
-            <div style={{ color: "#666", marginTop: 6, fontSize: 13 }}>{form.nome} cadastrado com sucesso.</div>
+            <div style={{ color: T.texto2, marginTop: 6, fontSize: 13 }}>{form.nome} cadastrado com sucesso.</div>
             <Btn label="Nova Ficha" color={NAVY} onClick={() => { setSalvo(false); setForm({ nome: "", cpf: "", rg: "", nasc: "", tel: "", cargo: "", obraId: "", inicio: "", diaria: "", tamCamisa: "", tamCalca: "", tamBota: "", tamLuva: "", tamCapacete: "", epiEntregue: false, epiData: "", foto: null, asoData: "", asoValidade: "", asoStatus: "Apto", docCtps: null, docCpf: null, docComprov: null }); }} style={{ marginTop: 24 }} />
             <Btn label="Voltar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 10 }} />
           </div>
@@ -370,10 +370,10 @@ export function TelaFicha({ obras, onBack, onAdd }) {
                   <button onClick={() => set("foto", null)} style={{ position: "absolute", top: 0, right: 0, background: RED, color: "#fff", border: "none", borderRadius: 14, width: 28, height: 28, fontSize: 14, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>✕</button>
                 </div>
               ) : (
-                <div style={{ width: 96, height: 96, borderRadius: 48, background: "#dde6f5", border: `3px solid ${NAVY}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 42 }}>👤</div>
+                <div style={{ width: 96, height: 96, borderRadius: 48, background: T.infoFundo, border: `3px solid ${NAVY}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 42 }}>👤</div>
               )}
               <div style={{ marginTop: 8 }}>
-                <label style={{ background: "#eef2ff", border: "none", borderRadius: 20, padding: "6px 16px", fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", display: "inline-block" }}>
+                <label style={{ background: T.infoFundo, border: "none", borderRadius: 20, padding: "6px 16px", fontSize: 12, fontWeight: 700, color: T.titulo, cursor: "pointer", display: "inline-block" }}>
                   📷 {form.foto ? "Trocar Foto" : "Tirar Foto"}
                   <input type="file" accept="image/*" capture="user" onChange={(e) => handleFoto(e, "foto")} style={{ display: "none" }} />
                 </label>
@@ -381,16 +381,16 @@ export function TelaFicha({ obras, onBack, onAdd }) {
             </div>
 
             {/* DADOS PESSOAIS */}
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-              <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>👤 Dados Pessoais</div>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>👤 Dados Pessoais</div>
               {[{ l: "Nome Completo", k: "nome", p: "Nome completo" }, { l: "CPF", k: "cpf", p: "000.000.000-00" }, { l: "RG", k: "rg", p: "00.000.000-0" }, { l: "Data de Nascimento", k: "nasc", p: "DD/MM/AAAA" }, { l: "Telefone / WhatsApp", k: "tel", p: "(27) 9 0000-0000" }].map(f => (
                 <div key={f.k}><label style={labelS}>{f.l}</label><input value={form[f.k]} onChange={e => set(f.k, e.target.value)} placeholder={f.p} style={inputS} /></div>
               ))}
             </div>
 
             {/* CONTRATUAIS */}
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-              <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>💼 Informações Contratuais</div>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>💼 Informações Contratuais</div>
               <label style={labelS}>Cargo / Função</label>
               <select value={form.cargo} onChange={e => { set("cargo", e.target.value); setTimeout(aplicarSugestao, 0); }} style={selS}>
                 <option value="">Selecione</option>
@@ -406,20 +406,20 @@ export function TelaFicha({ obras, onBack, onAdd }) {
               <label style={labelS}>💰 Valor da Diária (R$/dia)</label>
               <input value={form.diaria} onChange={e => set("diaria", e.target.value)} type="number" placeholder="Ex: 100" style={inputS} />
               {form.cargo && SUGESTAO_DIARIA[form.cargo] && !form.diaria && (
-                <button onClick={() => set("diaria", SUGESTAO_DIARIA[form.cargo])} style={{ background: "#dde6f5", color: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
+                <button onClick={() => set("diaria", SUGESTAO_DIARIA[form.cargo])} style={{ background: T.infoFundo, color: T.titulo, border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>
                   💡 Usar sugestão para {form.cargo}: R$ {SUGESTAO_DIARIA[form.cargo]}
                 </button>
               )}
               {form.diaria && (
-                <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: GREEN, fontWeight: 600 }}>
+                <div style={{ background: T.sucessoFundo, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: GREEN, fontWeight: 600 }}>
                   💰 Diária: R$ {parseFloat(form.diaria).toFixed(2)} • Quinzena cheia (10 dias úteis): R$ {(parseFloat(form.diaria) * 10).toFixed(2)}
                 </div>
               )}
             </div>
 
             {/* EXAME MÉDICO ASO */}
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-              <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>🏥 Exame Médico (ASO)</div>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>🏥 Exame Médico (ASO)</div>
               <label style={labelS}>Data do exame</label>
               <input value={form.asoData} onChange={e => set("asoData", e.target.value)} type="date" style={dateS} />
               <label style={labelS}>Validade</label>
@@ -440,8 +440,8 @@ export function TelaFicha({ obras, onBack, onAdd }) {
             </div>
 
             {/* EPI / UNIFORME */}
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-              <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>👕 EPI / Uniforme</div>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>👕 EPI / Uniforme</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
                   <label style={labelS}>Camisa</label>
@@ -482,8 +482,8 @@ export function TelaFicha({ obras, onBack, onAdd }) {
                   </select>
                 </div>
               </div>
-              <div style={{ background: "#f0f7ff", borderRadius: 10, padding: "10px 12px", marginTop: 6 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: NAVY, fontWeight: 600 }}>
+              <div style={{ background: T.infoFundo, borderRadius: 10, padding: "10px 12px", marginTop: 6 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: T.titulo, fontWeight: 600 }}>
                   <input type="checkbox" checked={form.epiEntregue} onChange={e => set("epiEntregue", e.target.checked)} style={{ width: 18, height: 18 }} />
                   EPI/Uniforme já entregue
                 </label>
@@ -497,8 +497,8 @@ export function TelaFicha({ obras, onBack, onAdd }) {
             </div>
 
             {/* DOCUMENTOS DIGITAIS */}
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-              <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📋 Documentos (foto)</div>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra, marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📋 Documentos (foto)</div>
               {[
                 { k: "docCtps", l: "CTPS / Carteira de Trabalho", icon: "📘" },
                 { k: "docCpf", l: "CPF / RG", icon: "🆔" },
@@ -507,15 +507,15 @@ export function TelaFicha({ obras, onBack, onAdd }) {
                 <div key={d.k} style={{ marginBottom: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <span style={{ fontSize: 16 }}>{d.icon}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>{d.l}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.titulo }}>{d.l}</span>
                   </div>
                   {form[d.k] ? (
                     <div style={{ position: "relative" }}>
-                      <img src={form[d.k]} alt="" style={{ width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 8, border: "1px solid #dde2ef" }} />
+                      <img src={form[d.k]} alt="" style={{ width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.borda}` }} />
                       <button onClick={() => set(d.k, null)} style={{ position: "absolute", top: 4, right: 4, background: RED, color: "#fff", border: "none", borderRadius: 14, width: 26, height: 26, fontSize: 13, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>✕</button>
                     </div>
                   ) : (
-                    <label style={{ display: "block", padding: 10, borderRadius: 8, border: "1.5px dashed #c5d0e5", background: "#f9fafb", textAlign: "center", cursor: "pointer", fontSize: 11, color: "#666" }}>
+                    <label style={{ display: "block", padding: 10, borderRadius: 8, border: `1.5px dashed ${T.borda2}`, background: T.superficie2, textAlign: "center", cursor: "pointer", fontSize: 11, color: T.texto2 }}>
                       📷 Tirar foto / escolher
                       <input type="file" accept="image/*" onChange={(e) => handleFoto(e, d.k)} style={{ display: "none" }} />
                     </label>
@@ -1132,18 +1132,18 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
   const ehMesAtual = mesOffset === 0;
 
   return (
-    <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+    <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <button
           onClick={() => setMesOffset(mesOffset - 1)}
           aria-label="Mês anterior"
-          style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer", color: NAVY, fontWeight: 700 }}
+          style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 16, cursor: "pointer", color: T.titulo, fontWeight: 700 }}
         >
           ‹
         </button>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 800, color: NAVY, fontSize: 14 }}>📅 {nomesMes[mes]} {ano}</div>
-          <div style={{ fontSize: 10, color: "#888" }}>Calendário de presença</div>
+          <div style={{ fontWeight: 800, color: T.titulo, fontSize: 14 }}>📅 {nomesMes[mes]} {ano}</div>
+          <div style={{ fontSize: 10, color: T.texto2 }}>Calendário de presença</div>
         </div>
         <button
           onClick={() => setMesOffset(Math.min(0, mesOffset + 1))}
@@ -1157,7 +1157,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
         {diasSemana.map((ds, i) => (
-          <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: "#94a3b8", padding: "2px 0" }}>{ds}</div>
+          <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: T.texto3, padding: "2px 0" }}>{ds}</div>
         ))}
       </div>
 
@@ -1194,28 +1194,28 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
         })}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-around", marginTop: 12, paddingTop: 12, borderTop: "1px solid #f1f5f9" }}>
+      <div style={{ display: "flex", justifyContent: "space-around", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borda}` }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#15803d" }}>{contPresente}</div>
-          <div style={{ fontSize: 9, color: "#888" }}>Presenças</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.sucessoTexto }}>{contPresente}</div>
+          <div style={{ fontSize: 9, color: T.texto2 }}>Presenças</div>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#b91c1c" }}>{contFalta}</div>
-          <div style={{ fontSize: 9, color: "#888" }}>Faltas</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.erroTexto }}>{contFalta}</div>
+          <div style={{ fontSize: 9, color: T.texto2 }}>Faltas</div>
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: "#a16207" }}>{contAtestado}</div>
-          <div style={{ fontSize: 9, color: "#888" }}>Atestados</div>
+          <div style={{ fontSize: 9, color: T.texto2 }}>Atestados</div>
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 10, fontSize: 9, color: "#94a3b8" }}>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#dcfce7", borderRadius: 2, marginRight: 3 }}></span>Presente</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fee2e2", borderRadius: 2, marginRight: 3 }}></span>Falta</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#fef3c7", borderRadius: 2, marginRight: 3 }}></span>Atestado</span>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 10, fontSize: 9, color: T.texto3 }}>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: T.sucessoFundo, borderRadius: 2, marginRight: 3 }}></span>Presente</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: T.erroFundo, borderRadius: 2, marginRight: 3 }}></span>Falta</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: T.avisoFundo, borderRadius: 2, marginRight: 3 }}></span>Atestado</span>
       </div>
       {podeEditar && (
-        <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: NAVY, fontWeight: 600, background: "#f0f6ff", borderRadius: 8, padding: "6px 8px" }}>
+        <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: T.titulo, fontWeight: 600, background: "#f0f6ff", borderRadius: 8, padding: "6px 8px" }}>
           ✏️ Modo gestor: toque no dia para corrigir (Presente → Falta → Atestado → limpar)
         </div>
       )}
@@ -1275,15 +1275,15 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           <button onClick={() => setEditando(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✏️ Editar</button>
         </div>
       } />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 14, padding: 18, textAlign: "center", marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 18, textAlign: "center", marginBottom: 12, boxShadow: T.sombra }}>
           {trabalhador.foto ? (
             <img src={trabalhador.foto} alt="" style={{ width: 90, height: 90, borderRadius: 45, objectFit: "cover", border: `3px solid ${NAVY}`, marginBottom: 8 }} />
           ) : (
             <div style={{ width: 80, height: 80, borderRadius: 40, background: NAVY, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 40, marginBottom: 8 }}>👷</div>
           )}
-          <div style={{ fontWeight: 800, color: NAVY, fontSize: 20 }}>{trabalhador.nome}</div>
-          <div style={{ fontSize: 13, color: "#666" }}>{trabalhador.cargo}</div>
+          <div style={{ fontWeight: 800, color: T.titulo, fontSize: 20 }}>{trabalhador.nome}</div>
+          <div style={{ fontSize: 13, color: T.texto2 }}>{trabalhador.cargo}</div>
           <div style={{ fontSize: 12, color: BLUE, marginTop: 4 }}>📍 {obra?.nome || "—"}</div>
 
           {/* Status ASO */}
@@ -1301,14 +1301,14 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           )}
 
           {aniversarioProximo !== null && (
-            <div style={{ marginTop: 8, background: "#fef3c7", color: "#92400e", borderRadius: 20, padding: "4px 12px", display: "inline-block", fontSize: 11, fontWeight: 700 }}>
+            <div style={{ marginTop: 8, background: T.avisoFundo, color: T.avisoTexto, borderRadius: 20, padding: "4px 12px", display: "inline-block", fontSize: 11, fontWeight: 700 }}>
               🎂 {aniversarioProximo === 0 ? "Aniversário hoje!" : aniversarioProximo === 1 ? "Aniversário amanhã!" : `Aniversário em ${aniversarioProximo} dias`}
             </div>
           )}
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📋 Dados Pessoais</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📋 Dados Pessoais</div>
           {[
             { l: "CPF", v: trabalhador.cpf || "—" },
             { l: "RG", v: trabalhador.rg || "—" },
@@ -1318,15 +1318,15 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
             { l: "💰 Diária", v: trabalhador.diaria ? `R$ ${parseFloat(trabalhador.diaria).toFixed(2)}/dia` : "—" },
             { l: "Quinzena cheia (10 dias)", v: trabalhador.diaria ? `R$ ${(parseFloat(trabalhador.diaria) * 10).toFixed(2)}` : "—" },
           ].map(d => (
-            <div key={d.l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
-              <span style={{ fontSize: 13, color: "#666" }}>{d.l}</span>
-              <span style={{ fontSize: 13, color: NAVY, fontWeight: 600 }}>{d.v}</span>
+            <div key={d.l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.borda}` }}>
+              <span style={{ fontSize: 13, color: T.texto2 }}>{d.l}</span>
+              <span style={{ fontSize: 13, color: T.titulo, fontWeight: 600 }}>{d.v}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>👕 EPI / Uniforme</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>👕 EPI / Uniforme</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[
               { l: "👕 Camisa", v: trabalhador.tamCamisa },
@@ -1335,9 +1335,9 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
               { l: "🧤 Luva", v: trabalhador.tamLuva },
               { l: "⛑️ Capacete", v: trabalhador.tamCapacete },
             ].map(d => (
-              <div key={d.l} style={{ background: LIGHT, borderRadius: 8, padding: "8px 10px" }}>
-                <div style={{ fontSize: 10, color: "#888" }}>{d.l}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{d.v || "—"}</div>
+              <div key={d.l} style={{ background: T.superficie2, borderRadius: 8, padding: "8px 10px" }}>
+                <div style={{ fontSize: 10, color: T.texto2 }}>{d.l}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.titulo }}>{d.v || "—"}</div>
               </div>
             ))}
           </div>
@@ -1348,22 +1348,22 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
                 {trabalhador.epiEntregue ? "EPI Entregue" : "EPI Pendente"}
               </div>
               {trabalhador.epiEntregue && trabalhador.epiData && (
-                <div style={{ fontSize: 10, color: "#666" }}>Entregue em {new Date(trabalhador.epiData).toLocaleDateString("pt-BR")}</div>
+                <div style={{ fontSize: 10, color: T.texto2 }}>Entregue em {new Date(trabalhador.epiData).toLocaleDateString("pt-BR")}</div>
               )}
             </div>
           </div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📊 Frequência (30 dias)</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📊 Frequência (30 dias)</div>
           <div style={{ textAlign: "center", marginBottom: 12 }}>
             <div style={{ fontSize: 36, fontWeight: 900, color: presPct >= 80 ? GREEN : presPct >= 50 ? ORANGE : RED }}>{presPct}%</div>
-            <div style={{ fontSize: 11, color: "#888" }}>Taxa de presença</div>
+            <div style={{ fontSize: 11, color: T.texto2 }}>Taxa de presença</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            <div style={{ flex: 1, background: "#f0fdf4", borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: GREEN }}>{stats.Presente}</div><div style={{ fontSize: 9, color: "#666" }}>Presente</div></div>
-            <div style={{ flex: 1, background: "#fef2f2", borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: RED }}>{stats.Falta}</div><div style={{ fontSize: 9, color: "#666" }}>Falta</div></div>
-            <div style={{ flex: 1, background: "#fff8f0", borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: ORANGE }}>{stats.Atestado}</div><div style={{ fontSize: 9, color: "#666" }}>Atestado</div></div>
+            <div style={{ flex: 1, background: T.sucessoFundo, borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: GREEN }}>{stats.Presente}</div><div style={{ fontSize: 9, color: T.texto2 }}>Presente</div></div>
+            <div style={{ flex: 1, background: T.erroFundo, borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: RED }}>{stats.Falta}</div><div style={{ fontSize: 9, color: T.texto2 }}>Falta</div></div>
+            <div style={{ flex: 1, background: T.avisoFundo, borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: ORANGE }}>{stats.Atestado}</div><div style={{ fontSize: 9, color: T.texto2 }}>Atestado</div></div>
           </div>
         </div>
 
@@ -1396,47 +1396,47 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           });
           if (rdosMes.length === 0) return null;
           return (
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontWeight: 800, color: NAVY, fontSize: 14, flex: 1 }}>☕ Alimentação no mês</div>
+                <div style={{ fontWeight: 800, color: T.titulo, fontSize: 14, flex: 1 }}>☕ Alimentação no mês</div>
                 <div style={{ background: "#dc7e00", color: "#fff", padding: "4px 10px", borderRadius: 6, fontWeight: 800, fontSize: 13 }}>R$ {totalAli.toFixed(2)}</div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
-                <div style={{ background: "#fef9e7", padding: 8, borderRadius: 8, textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#92400e" }}>{qtdManha}</div>
-                  <div style={{ fontSize: 9, color: "#666" }}>☕ Manhã</div>
+                <div style={{ background: T.avisoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: T.avisoTexto }}>{qtdManha}</div>
+                  <div style={{ fontSize: 9, color: T.texto2 }}>☕ Manhã</div>
                 </div>
-                <div style={{ background: "#fef9e7", padding: 8, borderRadius: 8, textAlign: "center" }}>
+                <div style={{ background: T.avisoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#b45309" }}>{qtdTarde}</div>
-                  <div style={{ fontSize: 9, color: "#666" }}>☕ Tarde</div>
+                  <div style={{ fontSize: 9, color: T.texto2 }}>☕ Tarde</div>
                 </div>
-                <div style={{ background: "#fef2f2", padding: 8, borderRadius: 8, textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#dc2626" }}>{qtdMarmita}</div>
-                  <div style={{ fontSize: 9, color: "#666" }}>🍱 Marmita</div>
+                <div style={{ background: T.erroFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: RED }}>{qtdMarmita}</div>
+                  <div style={{ fontSize: 9, color: T.texto2 }}>🍱 Marmita</div>
                 </div>
-                <div style={{ background: "#f0f7ff", padding: 8, borderRadius: 8, textAlign: "center" }}>
+                <div style={{ background: T.infoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#0891b2" }}>{qtdLanche}</div>
-                  <div style={{ fontSize: 9, color: "#666" }}>🥪 Lanche</div>
+                  <div style={{ fontSize: 9, color: T.texto2 }}>🥪 Lanche</div>
                 </div>
               </div>
-              <div style={{ fontSize: 10, color: "#888", marginTop: 8, textAlign: "center", fontStyle: "italic" }}>Baseado em {rdosMes.length} RDO(s) no mês</div>
+              <div style={{ fontSize: 10, color: T.texto2, marginTop: 8, textAlign: "center", fontStyle: "italic" }}>Baseado em {rdosMes.length} RDO(s) no mês</div>
             </div>
           );
         })()}
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>🏥 Exame Médico (ASO)</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>🏥 Exame Médico (ASO)</div>
           {!trabalhador.asoData && !trabalhador.asoValidade ? (
-            <div style={{ color: "#aaa", fontSize: 12, fontStyle: "italic", textAlign: "center", padding: 8 }}>Nenhum exame cadastrado.</div>
+            <div style={{ color: T.texto3, fontSize: 12, fontStyle: "italic", textAlign: "center", padding: 8 }}>Nenhum exame cadastrado.</div>
           ) : (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontSize: 13, color: "#666" }}>Data do exame</span>
-                <span style={{ fontSize: 13, color: NAVY, fontWeight: 600 }}>{trabalhador.asoData ? new Date(trabalhador.asoData).toLocaleDateString("pt-BR") : "—"}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.borda}` }}>
+                <span style={{ fontSize: 13, color: T.texto2 }}>Data do exame</span>
+                <span style={{ fontSize: 13, color: T.titulo, fontWeight: 600 }}>{trabalhador.asoData ? new Date(trabalhador.asoData).toLocaleDateString("pt-BR") : "—"}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontSize: 13, color: "#666" }}>Validade</span>
-                <span style={{ fontSize: 13, color: NAVY, fontWeight: 600 }}>{trabalhador.asoValidade ? new Date(trabalhador.asoValidade).toLocaleDateString("pt-BR") : "—"}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.borda}` }}>
+                <span style={{ fontSize: 13, color: T.texto2 }}>Validade</span>
+                <span style={{ fontSize: 13, color: T.titulo, fontWeight: 600 }}>{trabalhador.asoValidade ? new Date(trabalhador.asoValidade).toLocaleDateString("pt-BR") : "—"}</span>
               </div>
               {asoStatusInfo && (
                 <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: asoStatusInfo.cor === RED ? "#fef2f2" : asoStatusInfo.cor === ORANGE ? "#fff8f0" : "#f0fdf4", color: asoStatusInfo.cor, fontWeight: 700, fontSize: 13, textAlign: "center" }}>
@@ -1448,8 +1448,8 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         </div>
 
         {(trabalhador.docCtps || trabalhador.docCpf || trabalhador.docComprov) && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📋 Documentos Anexados</div>
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+            <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📋 Documentos Anexados</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               {[
                 { k: "docCtps", l: "CTPS", icon: "📘" },
@@ -1459,12 +1459,12 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
                 <div key={d.k} style={{ textAlign: "center" }}>
                   {trabalhador[d.k] ? (
                     <a href={trabalhador[d.k]} target="_blank" rel="noreferrer">
-                      <img src={trabalhador[d.k]} alt={d.l} style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid #dde2ef", cursor: "pointer" }} />
+                      <img src={trabalhador[d.k]} alt={d.l} style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.borda}`, cursor: "pointer" }} />
                     </a>
                   ) : (
-                    <div style={{ height: 80, background: LIGHT, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "#ccc" }}>—</div>
+                    <div style={{ height: 80, background: T.superficie2, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: T.desabilitado }}>—</div>
                   )}
-                  <div style={{ fontSize: 10, color: "#666", marginTop: 4 }}>{d.icon} {d.l}</div>
+                  <div style={{ fontSize: 10, color: T.texto2, marginTop: 4 }}>{d.icon} {d.l}</div>
                 </div>
               ))}
             </div>
@@ -1483,7 +1483,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         <button onClick={() => gerarFichaCadastralPDF(trabalhador, obra, empresa)} style={{ width: "100%", background: NAVY, color: "#fff", border: "none", borderRadius: 12, padding: "14px", marginTop: 10, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(15,33,81,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           🖨️ IMPRIMIR FICHA CADASTRAL (A4)
         </button>
-        <div style={{ fontSize: 10, color: "#888", textAlign: "center", marginTop: 4, fontStyle: "italic" }}>Documento oficial pra arquivo físico (gaveteiro)</div>
+        <div style={{ fontSize: 10, color: T.texto2, textAlign: "center", marginTop: 4, fontStyle: "italic" }}>Documento oficial pra arquivo físico (gaveteiro)</div>
       </div>
       <KMFooter />
 
@@ -1496,17 +1496,17 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
               <button onClick={() => set("foto", null)} style={{ position: "absolute", top: -4, right: -4, background: RED, color: "#fff", border: "none", borderRadius: 12, width: 24, height: 24, fontSize: 12, cursor: "pointer" }}>✕</button>
             </div>
           ) : (
-            <div style={{ width: 80, height: 80, borderRadius: 40, background: "#dde6f5", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>👤</div>
+            <div style={{ width: 80, height: 80, borderRadius: 40, background: T.infoFundo, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>👤</div>
           )}
           <div style={{ marginTop: 6 }}>
-            <label style={{ background: "#eef2ff", border: "none", borderRadius: 16, padding: "5px 12px", fontSize: 11, fontWeight: 700, color: NAVY, cursor: "pointer", display: "inline-block" }}>
+            <label style={{ background: T.infoFundo, border: "none", borderRadius: 16, padding: "5px 12px", fontSize: 11, fontWeight: 700, color: T.titulo, cursor: "pointer", display: "inline-block" }}>
               📷 {form.foto ? "Trocar" : "Adicionar foto"}
               <input type="file" accept="image/*" capture="user" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; reduzirImagem(f, { ladoMax: 800 }).then(dataUrl => set("foto", dataUrl)).catch(() => alert("Não foi possível ler a foto. Tente outra.")); }} style={{ display: "none" }} />
             </label>
           </div>
         </div>
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700 }}>👤 Dados Pessoais</div>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700 }}>👤 Dados Pessoais</div>
         <label style={labelS}>Nome Completo</label>
         <input value={form.nome || ""} onChange={e => set("nome", e.target.value)} style={inputS} />
         <label style={labelS}>CPF</label>
@@ -1526,7 +1526,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         <label style={labelS}>Nome da Mãe</label>
         <input value={form.nomeMae || ""} onChange={e => set("nomeMae", e.target.value)} style={inputS} />
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>📞 Contato</div>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700, marginTop: 10 }}>📞 Contato</div>
         <label style={labelS}>Telefone / WhatsApp</label>
         <input value={form.tel || ""} onChange={e => set("tel", e.target.value)} placeholder="(27) 9 0000-0000" style={inputS} />
         <label style={labelS}>Telefone para recado</label>
@@ -1548,7 +1548,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         <label style={labelS}>CEP</label>
         <input value={form.cep || ""} onChange={e => set("cep", e.target.value)} placeholder="29500-000" style={inputS} />
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>💼 Contratuais</div>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700, marginTop: 10 }}>💼 Contratuais</div>
         <label style={labelS}>Cargo</label>
         <select value={form.cargo || ""} onChange={e => set("cargo", e.target.value)} style={selS}>
           <option value="">Selecione</option>
@@ -1579,8 +1579,8 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         <label style={labelS}>CTPS / PIS</label>
         <input value={form.ctps || ""} onChange={e => set("ctps", e.target.value)} placeholder="Carteira de Trabalho ou PIS" style={inputS} />
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>💼 Folha de Pagamento</div>
-        <div style={{ background: "#fff7e6", border: `1px solid ${GOLD}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#7c6f3a", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700, marginTop: 10 }}>💼 Folha de Pagamento</div>
+        <div style={{ background: T.avisoFundo, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: T.avisoTexto, lineHeight: 1.5 }}>
           💡 Defina como esse trabalhador será pago. Cada um pode ter seu próprio regime (semanal, quinzenal ou mensal).
         </div>
         <label style={labelS}>Tipo de folha</label>
@@ -1597,7 +1597,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           <option value="2">Equipe 2</option>
           <option value="3">Equipe 3</option>
         </select>
-        <div style={{ fontSize: 10, color: "#888", marginTop: -4, marginBottom: 10, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 10, color: T.texto2, marginTop: -4, marginBottom: 10, lineHeight: 1.4 }}>
           Quem é da mesma equipe recebe no mesmo dia. Na Folha "Por Ciclo" dá para filtrar e fechar a equipe inteira de uma vez.
         </div>
         {form.tipoFolha === "semanal" && (
@@ -1638,13 +1638,13 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           </>
         )}
         {form.tipoFolha === "personalizado" && (
-          <div style={{ background: "#eff6ff", border: `1px solid ${BLUE}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#1e3a8a", lineHeight: 1.5 }}>
+          <div style={{ background: T.infoFundo, border: `1px solid ${BLUE}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: T.infoTexto, lineHeight: 1.5 }}>
             ℹ️ O período da folha será definido manualmente cada vez que você gerar a folha desse trabalhador.
           </div>
         )}
         <label style={labelS}>📌 Último pagamento (âncora do ciclo)</label>
         <input value={form.ultimoPagamento || ""} onChange={e => set("ultimoPagamento", e.target.value)} type="date" style={{ ...dateS }} />
-        <div style={{ fontSize: 10, color: "#888", marginTop: -4, marginBottom: 10, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 10, color: T.texto2, marginTop: -4, marginBottom: 10, lineHeight: 1.4 }}>
           Data da última sexta em que recebeu. A folha "Por Ciclo" usa isso para abrir o próximo período automaticamente (seg–sex).
         </div>
         <label style={labelS}>Forma de cálculo do dia</label>
@@ -1677,11 +1677,11 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
             );
           })}
         </div>
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: T.texto2, marginBottom: 12 }}>
           💡 Padrão: CLT paga, diarista não paga. Ajuste por trabalhador.
         </div>
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🏥 Saúde / ASO</div>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🏥 Saúde / ASO</div>
         <label style={labelS}>Data do exame</label>
         <input value={(() => {
           const v = form.asoData || ""; if (!v) return "";
@@ -1709,7 +1709,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         <label style={labelS}>Convênio / Plano de Saúde</label>
         <input value={form.convenio || ""} onChange={e => set("convenio", e.target.value)} style={inputS} />
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🚨 Contato de Emergência</div>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🚨 Contato de Emergência</div>
         <label style={labelS}>Nome</label>
         <input value={form.emergenciaNome || ""} onChange={e => set("emergenciaNome", e.target.value)} style={inputS} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1723,7 +1723,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           </div>
         </div>
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🏦 Dados Bancários</div>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700, marginTop: 10 }}>🏦 Dados Bancários</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <label style={labelS}>Banco</label>
@@ -1747,7 +1747,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         <label style={labelS}>Chave PIX</label>
         <input value={form.pix || ""} onChange={e => set("pix", e.target.value)} placeholder="CPF, telefone, email ou chave aleatória" style={inputS} />
 
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 10, fontWeight: 700, marginTop: 10 }}>👕 EPI / Uniforme</div>
+        <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10, fontWeight: 700, marginTop: 10 }}>👕 EPI / Uniforme</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <label style={labelS}>Camisa</label>
@@ -1780,8 +1780,8 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           <option>Único (ajustável)</option><option>Pequeno</option><option>Médio</option><option>Grande</option>
         </select>
 
-        <div style={{ background: "#f0f7ff", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: NAVY, fontWeight: 600 }}>
+        <div style={{ background: T.infoFundo, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: T.titulo, fontWeight: 600 }}>
             <input type="checkbox" checked={!!form.epiEntregue} onChange={e => set("epiEntregue", e.target.checked)} style={{ width: 18, height: 18 }} />
             EPI/Uniforme entregue
           </label>
@@ -1827,15 +1827,15 @@ export function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemo
     const t = trabalhadores.find(x => x.id === f.trabId);
     const obra = obras.find(o => o.id === t?.obraId);
     return (
-      <div key={f.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${color}` }}>
+      <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, borderLeft: `4px solid ${color}` }}>
         <div style={{ width: 30, height: 30, borderRadius: 15, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, marginRight: 10 }}>🌴</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{t?.nome || "—"}</div>
-          <div style={{ fontSize: 11, color: "#888" }}>{t?.cargo} • {obra?.nome}</div>
+          <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{t?.nome || "—"}</div>
+          <div style={{ fontSize: 11, color: T.texto2 }}>{t?.cargo} • {obra?.nome}</div>
           <div style={{ fontSize: 11, color, fontWeight: 700, marginTop: 2 }}>{new Date(f.inicio).toLocaleDateString("pt-BR")} → {new Date(f.fim).toLocaleDateString("pt-BR")}</div>
-          {f.obs && <div style={{ fontSize: 10, color: "#999", fontStyle: "italic" }}>{f.obs}</div>}
+          {f.obs && <div style={{ fontSize: 10, color: T.texto3, fontStyle: "italic" }}>{f.obs}</div>}
         </div>
-        <button onClick={() => onRemove(f.id)} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+        <button onClick={() => onRemove(f.id)} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
       </div>
     );
   };
@@ -1843,7 +1843,7 @@ export function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemo
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Férias" sub="Escala de descanso" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           <div style={{ flex: 1, background: GREEN, borderRadius: 10, padding: "10px 6px", textAlign: "center", color: "#fff" }}>
             <div style={{ fontSize: 22, fontWeight: 900 }}>{emFerias.length}</div>
@@ -1853,22 +1853,22 @@ export function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemo
             <div style={{ fontSize: 22, fontWeight: 900 }}>{futuras.length}</div>
             <div style={{ fontSize: 10 }}>Programadas</div>
           </div>
-          <div style={{ flex: 1, background: "#888", borderRadius: 10, padding: "10px 6px", textAlign: "center", color: "#fff" }}>
+          <div style={{ flex: 1, background: T.texto3, borderRadius: 10, padding: "10px 6px", textAlign: "center", color: "#fff" }}>
             <div style={{ fontSize: 22, fontWeight: 900 }}>{passadas.length}</div>
             <div style={{ fontSize: 10 }}>Concluídas</div>
           </div>
         </div>
 
         {emFerias.length > 0 && <>
-          <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13 }}>🌴 Em férias agora</div>
+          <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>🌴 Em férias agora</div>
           {emFerias.map(f => renderItem(f, GREEN))}
         </>}
         {futuras.length > 0 && <>
-          <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13, marginTop: 12 }}>📅 Programadas</div>
+          <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13, marginTop: 12 }}>📅 Programadas</div>
           {futuras.map(f => renderItem(f, BLUE))}
         </>}
         {passadas.length > 0 && <>
-          <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13, marginTop: 12 }}>✓ Concluídas</div>
+          <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13, marginTop: 12 }}>✓ Concluídas</div>
           {passadas.slice(0, 5).map(f => renderItem(f, "#888"))}
         </>}
 
@@ -1926,7 +1926,7 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="RH" sub="Aniversários e EPI" onBack={onBack} />
-      <div style={{ display: "flex", gap: 0, background: "#fff", borderBottom: "1px solid #e5e7eb" }}>
+      <div style={{ display: "flex", gap: 0, background: T.superficie, borderBottom: `1px solid ${T.borda}` }}>
         {[
           { v: "aniversarios", l: "🎂 Aniversários", n: aniversariantes.length },
           { v: "epi", l: "👕 EPI", n: epiPendente.length },
@@ -1940,7 +1940,7 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
           </button>
         ))}
       </div>
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {aba === "aniversarios" && (
           <>
             <div style={{ background: `linear-gradient(135deg,#fbbf24,#f59e0b)`, borderRadius: 14, padding: 14, marginBottom: 12, color: "#fff", boxShadow: "0 4px 14px #f59e0b44" }}>
@@ -1950,28 +1950,28 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
             </div>
 
             {aniversariantes.length === 0 ? (
-              <div style={{ background: "#fff", borderRadius: 12, padding: 24, textAlign: "center", color: "#aaa" }}>
+              <div style={{ background: T.superficie, borderRadius: 12, padding: 24, textAlign: "center", color: T.texto3 }}>
                 Nenhum aniversariante em {meses[mesAtual]}.
               </div>
             ) : aniversariantes.map(t => {
               const obra = obras.find(o => o.id === t.obraId);
               const eHoje = t.dia === hoje.getDate();
               return (
-                <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: eHoje ? "#fef3c7" : "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${eHoje ? "#f59e0b" : "#fbbf24"}` }}>
+                <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: eHoje ? "#fef3c7" : "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${eHoje ? "#f59e0b" : "#fbbf24"}` }}>
                   <div style={{ width: 50, textAlign: "center" }}>
                     <div style={{ fontSize: 22, fontWeight: 900, color: eHoje ? "#92400e" : NAVY }}>{String(t.dia).padStart(2, "0")}</div>
-                    <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase" }}>{meses[mesAtual].slice(0, 3)}</div>
+                    <div style={{ fontSize: 9, color: T.texto2, textTransform: "uppercase" }}>{meses[mesAtual].slice(0, 3)}</div>
                   </div>
                   <div style={{ flex: 1, marginLeft: 10 }}>
-                    <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>
+                    <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>
                       {eHoje && "🎉 "}{t.nome}
                     </div>
-                    <div style={{ fontSize: 11, color: "#888" }}>{t.cargo} • {obra?.nome}</div>
+                    <div style={{ fontSize: 11, color: T.texto2 }}>{t.cargo} • {obra?.nome}</div>
                     {t.tel && (
                       <a href={`https://wa.me/55${t.tel.replace(/\D/g, "")}?text=Parab%C3%A9ns%20pelo%20seu%20anivers%C3%A1rio!`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: "#25D366", fontWeight: 700, textDecoration: "none" }}>💬 Mandar parabéns no WhatsApp</a>
                     )}
                   </div>
-                  <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+                  <span style={{ color: T.desabilitado, fontSize: 18 }}>›</span>
                 </div>
               );
             })}
@@ -1997,16 +1997,16 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
                 const obra = obras.find(o => o.id === t.obraId);
                 const tamanhos = [t.tamCamisa && `Camisa ${t.tamCamisa}`, t.tamCalca && `Calça ${t.tamCalca}`, t.tamBota && `Bota ${t.tamBota}`].filter(Boolean).join(" • ");
                 return (
-                  <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${RED}` }}>
+                  <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${RED}` }}>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <div style={{ width: 34, height: 34, borderRadius: 17, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginRight: 10 }}>👷</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{t.nome}</div>
-                        <div style={{ fontSize: 11, color: "#888" }}>{t.cargo} • {obra?.nome}</div>
+                        <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{t.nome}</div>
+                        <div style={{ fontSize: 11, color: T.texto2 }}>{t.cargo} • {obra?.nome}</div>
                         {tamanhos && <div style={{ fontSize: 10, color: BLUE, marginTop: 2 }}>{tamanhos}</div>}
                         {!tamanhos && <div style={{ fontSize: 10, color: ORANGE, marginTop: 2 }}>⚠️ Tamanhos não cadastrados</div>}
                       </div>
-                      <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+                      <span style={{ color: T.desabilitado, fontSize: 18 }}>›</span>
                     </div>
                   </div>
                 );
@@ -2018,15 +2018,15 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
               {epiEntregue.map(t => {
                 const obra = obras.find(o => o.id === t.obraId);
                 return (
-                  <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${GREEN}` }}>
+                  <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${GREEN}` }}>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <div style={{ width: 34, height: 34, borderRadius: 17, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginRight: 10 }}>👷</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{t.nome}</div>
-                        <div style={{ fontSize: 11, color: "#888" }}>{t.cargo} • {obra?.nome}</div>
+                        <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{t.nome}</div>
+                        <div style={{ fontSize: 11, color: T.texto2 }}>{t.cargo} • {obra?.nome}</div>
                         {t.epiData && <div style={{ fontSize: 10, color: GREEN, marginTop: 2 }}>📅 Entregue em {new Date(t.epiData).toLocaleDateString("pt-BR")}</div>}
                       </div>
-                      <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+                      <span style={{ color: T.desabilitado, fontSize: 18 }}>›</span>
                     </div>
                   </div>
                 );
@@ -2083,7 +2083,7 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Contatos" sub="Lista telefônica" onBack={onBack} />
-      <div style={{ display: "flex", gap: 0, background: "#fff", borderBottom: "1px solid #e5e7eb" }}>
+      <div style={{ display: "flex", gap: 0, background: T.superficie, borderBottom: `1px solid ${T.borda}` }}>
         {[
           { v: "trabalhadores", l: "👷 Trabalhadores", n: trabalhadores.filter(t => t.tel).length },
           { v: "encarregados", l: "🏢 Encarregados", n: usuarios.filter(u => u.perfil === "encarregado" && u.tel).length },
@@ -2098,7 +2098,7 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou cargo..." style={inputS} />
 
         {aba === "trabalhadores" && (
@@ -2109,24 +2109,24 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
         )}
 
         {filtrados.length === 0 && (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 30, textAlign: "center", color: "#aaa" }}>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 30, textAlign: "center", color: T.texto3 }}>
             📞 {lista.length === 0 ? "Nenhum contato com telefone cadastrado." : "Nenhum resultado para a busca."}
           </div>
         )}
 
         {Object.entries(grupos).map(([nomeObra, pessoas]) => (
           <div key={nomeObra} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>📍 {nomeObra}</div>
+            <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>📍 {nomeObra}</div>
             {pessoas.map(p => {
               const tel = limparTel(p.tel);
               return (
-                <div key={p.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+                <div key={p.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
                   <div onClick={() => onVerTrabalhador && aba === "trabalhadores" && onVerTrabalhador(p)} style={{ width: 38, height: 38, borderRadius: 19, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginRight: 10, cursor: aba === "trabalhadores" ? "pointer" : "default" }}>
                     {aba === "trabalhadores" ? "👷" : "🏢"}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }} onClick={() => onVerTrabalhador && aba === "trabalhadores" && onVerTrabalhador(p)}>
-                    <div style={{ fontWeight: 700, color: NAVY, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
-                    <div style={{ fontSize: 11, color: "#888" }}>{p.cargo || "Encarregado"} • {p.tel}</div>
+                    <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
+                    <div style={{ fontSize: 11, color: T.texto2 }}>{p.cargo || "Encarregado"} • {p.tel}</div>
                   </div>
                   <a href={`tel:+55${tel}`} style={{ background: BLUE, color: "#fff", borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", marginRight: 6, fontSize: 16 }}>📞</a>
                   <a href={`https://wa.me/55${tel}`} target="_blank" rel="noreferrer" style={{ background: "#25D366", color: "#fff", borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 16 }}>💬</a>
@@ -2172,37 +2172,37 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Adiantamentos" sub="Vales e antecipações" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ background: `linear-gradient(135deg,${ORANGE},#c2410c)`, borderRadius: 14, padding: 16, marginBottom: 12, color: "#fff", boxShadow: "0 4px 14px #ea580c44" }}>
           <div style={{ fontSize: 11, opacity: 0.9 }}>Total adiantado este mês</div>
           <div style={{ fontSize: 30, fontWeight: 900 }}>R$ {totalMes.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
           <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{adiantMes.length} adiantamento(s) registrado(s)</div>
         </div>
 
-        <div style={{ background: "#fffaeb", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#8b6f00", marginBottom: 12 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 10, padding: "10px 14px", fontSize: 11, color: T.avisoTexto, marginBottom: 12 }}>
           💡 Cada vale é descontado uma vez só, na folha cujo período inclui a data dele (qualquer regime). Ao arquivar a folha, o vale fica marcado como descontado.
         </div>
 
         <Btn label="➕ Registrar Adiantamento" color={ORANGE} onClick={() => setModal(true)} style={{ marginBottom: 14 }} />
 
-        <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13 }}>📜 Histórico</div>
-        {adiantamentos.length === 0 && <div style={{ background: "#fff", borderRadius: 12, padding: 20, textAlign: "center", color: "#aaa" }}>Nenhum adiantamento registrado.</div>}
+        <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 Histórico</div>
+        {adiantamentos.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhum adiantamento registrado.</div>}
         {[...adiantamentos].sort((a, b) => b.ts - a.ts).map(a => {
           const t = trabalhadores.find(x => x.id === a.trabId);
           const obra = obras.find(o => o.id === t?.obraId);
           return (
-            <div key={a.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${ORANGE}` }}>
+            <div key={a.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${ORANGE}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{t?.nome || "—"}</div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{t?.cargo} • {obra?.nome}</div>
-                  <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>📅 {a.data}</div>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{t?.nome || "—"}</div>
+                  <div style={{ fontSize: 11, color: T.texto2 }}>{t?.cargo} • {obra?.nome}</div>
+                  <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>📅 {a.data}</div>
                   {a.descontadoEm && <div style={{ fontSize: 10, color: GREEN, fontWeight: 700, marginTop: 2 }}>✅ Descontado em {a.descontadoEm}</div>}
-                  {a.motivo && <div style={{ fontSize: 11, color: "#777", fontStyle: "italic", marginTop: 2 }}>"{a.motivo}"</div>}
+                  {a.motivo && <div style={{ fontSize: 11, color: T.texto2, fontStyle: "italic", marginTop: 2 }}>"{a.motivo}"</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: ORANGE }}>R$ {a.valor.toFixed(2)}</div>
-                  <button onClick={() => { confirmar("Remover este adiantamento?", () => { onRemove(a.id); }); }} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", cursor: "pointer", fontSize: 16, marginTop: 2, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+                  <button onClick={() => { confirmar("Remover este adiantamento?", () => { onRemove(a.id); }); }} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, cursor: "pointer", fontSize: 16, marginTop: 2, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
                 </div>
               </div>
             </div>
@@ -2313,7 +2313,7 @@ export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Exames Médicos" sub="Controle de ASO" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* Resumo */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
@@ -2329,13 +2329,13 @@ export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
           })}
         </div>
 
-        <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span>{cores[filtro].icon} {cores[filtro].titulo} • {lista.length}</span>
           {lista.length > 0 && <button onClick={exportar} style={{ background: "none", border: `1px solid ${BLUE}`, color: BLUE, borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>}
         </div>
 
         {lista.length === 0 ? (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 24, textAlign: "center", color: "#aaa" }}>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 24, textAlign: "center", color: T.texto3 }}>
             {filtro === "vencido" && "🎉 Nenhum exame vencido!"}
             {filtro === "vence_30" && "✅ Nenhum exame vencendo nos próximos 30 dias."}
             {filtro === "apto" && "Nenhum trabalhador apto cadastrado."}
@@ -2345,15 +2345,15 @@ export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
         ) : lista.map(t => {
           const obra = obras.find(o => o.id === t.obraId);
           return (
-            <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${cores[filtro].bg}` }}>
+            <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: T.superficie, borderRadius: 12, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${cores[filtro].bg}` }}>
               {t.foto ? (
                 <img src={t.foto} alt="" style={{ width: 40, height: 40, borderRadius: 20, objectFit: "cover", marginRight: 10, flexShrink: 0 }} />
               ) : (
                 <div style={{ width: 40, height: 40, borderRadius: 20, background: NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginRight: 10, flexShrink: 0 }}>👷</div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{t.nome}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>{t.cargo} • {obra?.nome || "—"}</div>
+                <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{t.nome}</div>
+                <div style={{ fontSize: 11, color: T.texto2 }}>{t.cargo} • {obra?.nome || "—"}</div>
                 {t.asoValidade && (
                   <div style={{ fontSize: 11, color: cores[filtro].bg, fontWeight: 700, marginTop: 2 }}>
                     {filtro === "vencido" && `❌ Vencido há ${Math.abs(t._aso.dias)} dia(s)`}
@@ -2362,17 +2362,17 @@ export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
                     {filtro === "inapto" && `🚫 ${t.asoStatus}`}
                   </div>
                 )}
-                {filtro === "sem_aso" && <div style={{ fontSize: 11, color: "#888", fontStyle: "italic", marginTop: 2 }}>Sem cadastro de exame</div>}
+                {filtro === "sem_aso" && <div style={{ fontSize: 11, color: T.texto2, fontStyle: "italic", marginTop: 2 }}>Sem cadastro de exame</div>}
               </div>
               {t.tel && (
                 <a href={`https://wa.me/55${t.tel.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ background: "#25D366", color: "#fff", borderRadius: 7, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14, marginRight: 4 }}>💬</a>
               )}
-              <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+              <span style={{ color: T.desabilitado, fontSize: 18 }}>›</span>
             </div>
           );
         })}
 
-        <div style={{ background: "#fffaeb", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#8b6f00", marginTop: 14 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 10, padding: "10px 14px", fontSize: 11, color: T.avisoTexto, marginTop: 14 }}>
           💡 <b>Dica:</b> Toque em um trabalhador para editar a data do próximo exame.
         </div>
       </div>

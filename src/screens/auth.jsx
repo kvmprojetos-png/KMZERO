@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { entrarComGoogle } from "../firebase.js";
-import { NAVY, GOLD, GREEN, RED, BLUE, LIGHT, labelS, inputS, selS } from "../theme.js";
+import { NAVY, GOLD, GREEN, RED, BLUE, LIGHT, labelS, inputS, selS, T } from "../theme.js";
 import { criarConvite, removerConvite, atualizarPerfilNuvem, definirAcessoAtivo } from "../lib/store.js";
 import { Btn, KMHeader, KMFooter, Modal } from "../components/ui.jsx";
 
@@ -83,7 +83,7 @@ export function TelaEntrar({ onGoogle, erroInicial = "" }) {
 
           <button onClick={entrar} disabled={carregando} style={{
             width: "100%", padding: "14px 16px", borderRadius: 12, border: "none",
-            background: "#fff", color: "#1f1f1f", fontWeight: 800, fontSize: 15,
+            background: T.superficie, color: "#1f1f1f", fontWeight: 800, fontSize: 15,
             cursor: carregando ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
             boxShadow: "0 4px 20px rgba(0,0,0,0.25)", opacity: carregando ? 0.75 : 1,
           }}>
@@ -248,15 +248,15 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, on
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Acessos do App" sub="Quem entra na sua empresa" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <div style={{ background: "#f0f9ff", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid #bae6fd", fontSize: 11, color: "#0c4a6e", lineHeight: 1.6 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        <div style={{ background: "#f0f9ff", borderRadius: 12, padding: 12, marginBottom: 12, border: `1px solid ${T.infoBorda}`, fontSize: 11, color: T.infoTexto, lineHeight: 1.6 }}>
           Cadastre o <b>Gmail</b> de cada pessoa. Ela entra no app com "Entrar com Google" usando esse Gmail e já cai na sua empresa, na obra escolhida. Sem senha para passar.
         </div>
 
         <Btn label="➕ ADICIONAR ACESSO" color={GREEN} onClick={abrirNovo} />
 
         {lista.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 30, color: "#888", fontSize: 13 }}>Nenhum acesso cadastrado ainda.</div>
+          <div style={{ textAlign: "center", padding: 30, color: T.texto2, fontSize: 13 }}>Nenhum acesso cadastrado ainda.</div>
         ) : (
           lista.map(u => {
             const obra = obras.find(o => String(o.id) === String(u.obraId));
@@ -264,31 +264,31 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, on
             const inativo = u.ativo === false;
             const cor = u.convite ? "#b45309" : inativo ? "#9ca3af" : u.perfil === "gestor" ? GOLD : BLUE;
             return (
-              <div key={u.id} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}`, opacity: inativo ? 0.75 : 1 }}>
+              <div key={u.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, opacity: inativo ? 0.75 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                   {u.foto
                     ? <img src={u.foto} alt="" referrerPolicy="no-referrer" style={{ width: 42, height: 42, borderRadius: 21, objectFit: "cover", flexShrink: 0 }} />
                     : <div style={{ width: 42, height: 42, borderRadius: 21, background: cor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{iniciais}</div>}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.nome}</div>
-                    <div style={{ fontSize: 10, color: "#666", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.nome}</div>
+                    <div style={{ fontSize: 10, color: T.texto2, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {u.perfil === "gestor" ? "👔 Gestor" : `👷 ${u.cargo || "Encarregado"}`}{obra ? ` · ${obra.nome}` : u.perfil === "gestor" ? "" : " · sem obra"}
                     </div>
                   </div>
                 </div>
-                <div style={{ background: "#f9fafb", borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 10, color: "#666" }}>
+                <div style={{ background: T.superficie2, borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 10, color: T.texto2 }}>
                   📧 {u.email}<br />
                   {u.convite
                     ? <span style={{ color: "#b45309" }}>⏳ Convite pendente — ainda não entrou com este Gmail</span>
                     : inativo
-                      ? <span style={{ color: "#6b7280" }}>⛔ Acesso desativado</span>
-                      : <span style={{ color: "#15803d" }}>☁️ Ativo — entra em qualquer celular com o Google</span>}
+                      ? <span style={{ color: T.texto2 }}>⛔ Acesso desativado</span>
+                      : <span style={{ color: T.sucessoTexto }}>☁️ Ativo — entra em qualquer celular com o Google</span>}
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {inativo
                     ? <button onClick={() => reativar(u)} style={{ flex: 1, background: GREEN, color: "#fff", border: "none", borderRadius: 8, padding: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✅ Reativar</button>
                     : <button onClick={() => abrirEdicao(u)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 8, padding: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✏️ Editar</button>}
-                  {!inativo && <button onClick={() => remover(u)} style={{ background: "#fee2e2", color: RED, border: `2px solid ${RED}`, borderRadius: 8, padding: "8px 14px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{u.convite ? "✖ Cancelar" : "⛔ Desativar"}</button>}
+                  {!inativo && <button onClick={() => remover(u)} style={{ background: T.erroFundo, color: RED, border: `2px solid ${RED}`, borderRadius: 8, padding: "8px 14px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{u.convite ? "✖ Cancelar" : "⛔ Desativar"}</button>}
                 </div>
               </div>
             );
@@ -343,7 +343,7 @@ export function TelaMinhaConta({ usuario, empresa, onBack, onLogout }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Minha Conta" sub="Conta Google e empresa" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         <div style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a8a 100%)`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 4px 16px rgba(15,33,81,0.25)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -363,9 +363,9 @@ export function TelaMinhaConta({ usuario, empresa, onBack, onLogout }) {
           </div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 8 }}>🏢 Empresa vinculada</div>
-          <div style={{ fontSize: 12, color: "#444", lineHeight: 1.6 }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>🏢 Empresa vinculada</div>
+          <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.6 }}>
             <div><b>Razão social:</b> {empresa?.razaoSocial || "—"}</div>
             {empresa?.nomeFantasia && <div><b>Nome fantasia:</b> {empresa.nomeFantasia}</div>}
             <div><b>CNPJ:</b> {empresa?.cnpj || "—"}</div>
@@ -373,28 +373,28 @@ export function TelaMinhaConta({ usuario, empresa, onBack, onLogout }) {
           </div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 4 }}>🚪 Sair desta conta</div>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 10, lineHeight: 1.5 }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.titulo, marginBottom: 4 }}>🚪 Sair desta conta</div>
+          <div style={{ fontSize: 11, color: T.texto2, marginBottom: 10, lineHeight: 1.5 }}>
             Para entrar de novo neste aparelho você vai precisar de internet e da mesma conta Google.
           </div>
-          <button onClick={() => setModalSair(true)} className="km-btn-danger" style={{ width: "100%", padding: 12, background: "#fff", color: RED, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+          <button onClick={() => setModalSair(true)} className="km-btn-danger" style={{ width: "100%", padding: 12, background: T.superficie, color: RED, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
             🚪 Sair da conta
           </button>
         </div>
 
-        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: 12, fontSize: 11, color: "#075985", lineHeight: 1.5 }}>
+        <div style={{ background: "#f0f9ff", border: `1px solid ${T.infoBorda}`, borderRadius: 10, padding: 12, fontSize: 11, color: "#075985", lineHeight: 1.5 }}>
           💡 A senha é a da sua conta Google e fica só no Google. Para trocar, use as configurações da sua conta Google (myaccount.google.com).
         </div>
       </div>
       <KMFooter />
 
       <Modal show={modalSair} title="🚪 Sair da conta?" onClose={() => setModalSair(false)}>
-        <div style={{ fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 14 }}>
+        <div style={{ fontSize: 13, color: T.texto, lineHeight: 1.6, marginBottom: 14 }}>
           Você vai precisar de internet para entrar de novo com o Google. Confirma?
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setModalSair(false)} style={{ flex: 1, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={() => setModalSair(false)} style={{ flex: 1, padding: 12, background: T.superficie2, color: T.titulo, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancelar</button>
           <button onClick={() => { setModalSair(false); onLogout && onLogout(true); }} className="km-btn-danger" style={{ flex: 1, padding: 12, background: RED, color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>🚪 Sair</button>
         </div>
       </Modal>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -18,18 +18,18 @@ export function TelaEquip({ obra, equips, onBack, onSaveEquips }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Controle de Equipamentos" sub={obra.nome} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
         {local.map(eq => (
-          <div key={eq.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+          <div key={eq.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
             <div style={{ fontSize: 30, marginRight: 12 }}>{eq.icon}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>{eq.nome}</div>
-              <div style={{ fontSize: 11, color: "#999" }}>Cód: {eq.codigo}</div>
+              <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{eq.nome}</div>
+              <div style={{ fontSize: 11, color: T.texto3 }}>Cód: {eq.codigo}</div>
             </div>
             <button onClick={() => toggle(eq.id)} style={{ background: EQUIP_COLOR[eq.status], color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{eq.status}</button>
           </div>
         ))}
-        {local.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 30 }}>Nenhum equipamento nesta obra.</div>}
+        {local.length === 0 && <div style={{ textAlign: "center", color: T.texto3, padding: 30 }}>Nenhum equipamento nesta obra.</div>}
         <Btn label="💾 Salvar Alterações" color={GREEN} onClick={() => { onSaveEquips(local); onBack(); }} style={{ marginTop: 8 }} />
       </div>
       <KMFooter />
@@ -66,7 +66,7 @@ export function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar,
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Equipamentos" sub="Gestão completa" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
         <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
@@ -74,19 +74,19 @@ export function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar,
         {lista.map(eq => {
           const obra = obras.find(o => o.id === eq.obraId);
           return (
-            <div key={eq.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+            <div key={eq.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
               <div style={{ fontSize: 30, marginRight: 12 }}>{eq.icon}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>{eq.nome}</div>
-                <div style={{ fontSize: 11, color: "#999" }}>{eq.codigo} • {obra?.nome}</div>
+                <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{eq.nome}</div>
+                <div style={{ fontSize: 11, color: T.texto3 }}>{eq.codigo} • {obra?.nome}</div>
               </div>
               <Badge label={eq.status} color={EQUIP_COLOR[eq.status] || "#888"} small />
               <button onClick={() => abrirEdit(eq)} style={{ background: "none", border: "none", color: BLUE, fontSize: 16, marginLeft: 8, cursor: "pointer" }}>✏️</button>
-              <button onClick={() => onRemover(eq.id)} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+              <button onClick={() => onRemover(eq.id)} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
             </div>
           );
         })}
-        {lista.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 20 }}>Nenhum equipamento.</div>}
+        {lista.length === 0 && <div style={{ textAlign: "center", color: T.texto3, padding: 20 }}>Nenhum equipamento.</div>}
         <Btn label="➕ Adicionar Equipamento" color={NAVY} onClick={abrirNovo} style={{ marginTop: 8 }} />
       </div>
       <KMFooter />
@@ -186,7 +186,7 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ativos & Frota" sub="Veículos e maquinário" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
         <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
@@ -199,21 +199,21 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
           const meusAbast = abastecimentos.filter(x => x.ativoId === a.id);
           const totalAbast = meusAbast.reduce((s, x) => s + x.valor, 0);
           return (
-            <div key={a.id} style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+            <div key={a.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, boxShadow: T.sombra }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 32, marginRight: 12 }}>{ICONS[a.tipo] || "⚙️"}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>{a.nome}</div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{a.tipo} • {a.placa}</div>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{a.nome}</div>
+                  <div style={{ fontSize: 11, color: T.texto2 }}>{a.tipo} • {a.placa}</div>
                   <div style={{ fontSize: 11, color: BLUE }}>📍 {obra?.nome || "—"}</div>
                 </div>
                 <button onClick={() => abrirEdit(a)} style={{ background: "none", border: "none", color: BLUE, fontSize: 16, cursor: "pointer" }}>✏️</button>
-                <button onClick={() => { confirmar(`Remover ${a.nome}?`, () => { onRemover(a.id); }); }} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", fontSize: 16, cursor: "pointer", marginLeft: 4, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+                <button onClick={() => { confirmar(`Remover ${a.nome}?`, () => { onRemover(a.id); }); }} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, fontSize: 16, cursor: "pointer", marginLeft: 4, padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
               </div>
               <div style={{ display: "flex", gap: 6, marginBottom: 8, fontSize: 11 }}>
-                <span style={{ background: "#f0f7ff", color: BLUE, padding: "3px 8px", borderRadius: 4, fontWeight: 700 }}>⏱️ {a.horimetro}h</span>
-                <span style={{ background: "#f0fdf4", color: GREEN, padding: "3px 8px", borderRadius: 4, fontWeight: 700 }}>R$ {a.valorHora}/h</span>
-                {totalAbast > 0 && <span style={{ background: "#fff8f0", color: ORANGE, padding: "3px 8px", borderRadius: 4, fontWeight: 700 }}>⛽ R$ {totalAbast.toFixed(2)}</span>}
+                <span style={{ background: T.infoFundo, color: BLUE, padding: "3px 8px", borderRadius: 4, fontWeight: 700 }}>⏱️ {a.horimetro}h</span>
+                <span style={{ background: T.sucessoFundo, color: GREEN, padding: "3px 8px", borderRadius: 4, fontWeight: 700 }}>R$ {a.valorHora}/h</span>
+                {totalAbast > 0 && <span style={{ background: T.avisoFundo, color: ORANGE, padding: "3px 8px", borderRadius: 4, fontWeight: 700 }}>⛽ R$ {totalAbast.toFixed(2)}</span>}
               </div>
               <button onClick={() => setModalAbast(a)} style={{ width: "100%", padding: "8px", borderRadius: 8, border: "none", background: ORANGE, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>⛽ Registrar Abastecimento</button>
             </div>
@@ -289,11 +289,11 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
         <label style={labelS}>📸 Foto do Cupom</label>
         {formAbast.fotoCupom ? (
           <div style={{ position: "relative", marginBottom: 12 }}>
-            <img src={formAbast.fotoCupom} alt="Cupom" style={{ width: "100%", borderRadius: 10, border: "1.5px solid #dde2ef" }} />
+            <img src={formAbast.fotoCupom} alt="Cupom" style={{ width: "100%", borderRadius: 10, border: `1.5px solid ${T.borda}` }} />
             <button onClick={() => setAB("fotoCupom", null)} style={{ position: "absolute", top: 6, right: 6, background: RED, color: "#fff", border: "none", borderRadius: 16, width: 28, height: 28, cursor: "pointer", fontSize: 14 }}>✕</button>
           </div>
         ) : (
-          <label style={{ display: "block", padding: 14, borderRadius: 10, border: "1.5px dashed #c5d0e5", background: "#f9fafb", textAlign: "center", cursor: "pointer", fontSize: 13, color: "#666", marginBottom: 12 }}>
+          <label style={{ display: "block", padding: 14, borderRadius: 10, border: `1.5px dashed ${T.borda2}`, background: T.superficie2, textAlign: "center", cursor: "pointer", fontSize: 13, color: T.texto2, marginBottom: 12 }}>
             📷 Tirar foto do cupom fiscal
             <input type="file" accept="image/*" capture="environment" onChange={handleFotoCupom} style={{ display: "none" }} />
           </label>
@@ -382,10 +382,10 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Frota & Combustível" sub="Dashboard executivo" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* Filtros */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.sombra }}>
           <label style={labelS}>📅 Período</label>
           <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
             {[
@@ -425,10 +425,10 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
         </div>
 
         {/* Gráfico evolução */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, fontSize: 13, marginBottom: 8 }}>📈 Evolução (últimos 14 dias)</div>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13, marginBottom: 8 }}>📈 Evolução (últimos 14 dias)</div>
           {evolucao.every(e => e.valor === 0) ? (
-            <div style={{ color: "#aaa", fontSize: 11, textAlign: "center", padding: 16 }}>Sem abastecimentos nos últimos 14 dias.</div>
+            <div style={{ color: T.texto3, fontSize: 11, textAlign: "center", padding: 16 }}>Sem abastecimentos nos últimos 14 dias.</div>
           ) : (
             <ResponsiveContainer width="100%" height={140}>
               <LineChart data={evolucao}>
@@ -443,10 +443,10 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
         </div>
 
         {/* Por veículo (barras) */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, fontSize: 13, marginBottom: 8 }}>🚗 Gasto por veículo</div>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13, marginBottom: 8 }}>🚗 Gasto por veículo</div>
           {porVeiculo.length === 0 ? (
-            <div style={{ color: "#aaa", fontSize: 11, textAlign: "center", padding: 16 }}>Nenhum abastecimento no período.</div>
+            <div style={{ color: T.texto3, fontSize: 11, textAlign: "center", padding: 16 }}>Nenhum abastecimento no período.</div>
           ) : (
             <>
               {porVeiculo.map((v, i) => {
@@ -455,15 +455,15 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
                 return (
                   <div key={v.ativo.id} style={{ marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-                      <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: NAVY }}>
+                      <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: T.titulo }}>
                         {v.ativo.tipo === "Carro" ? "🚗" : v.ativo.tipo === "Moto" ? "🏍️" : v.ativo.tipo === "Caminhão" ? "🚛" : "🚜"} {v.ativo.nome}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: NAVY }}>R$ {v.gasto.toFixed(2)}</div>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: T.titulo }}>R$ {v.gasto.toFixed(2)}</div>
                     </div>
-                    <div style={{ height: 8, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: 8, background: T.superficie2, borderRadius: 4, overflow: "hidden" }}>
                       <div style={{ width: pct + "%", height: "100%", background: cores[i % cores.length], transition: "width 0.3s" }}></div>
                     </div>
-                    <div style={{ fontSize: 9, color: "#888", marginTop: 2 }}>
+                    <div style={{ fontSize: 9, color: T.texto2, marginTop: 2 }}>
                       {v.litros.toFixed(0)}L • {v.qtd} abastecimentos
                       {v.ativo.consumoMedio && v.litros > 0 && (
                         <span> • Consumo médio: <b style={{ color: GREEN }}>{v.ativo.consumoMedio} {v.ativo.tipo === "Retroescavadeira" ? "L/h" : "km/L"}</b></span>
@@ -478,18 +478,18 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
 
         {/* Por obra */}
         {porObra.length > 0 && (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontWeight: 800, color: NAVY, fontSize: 13, marginBottom: 8 }}>🏗️ Gasto por obra</div>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+            <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13, marginBottom: 8 }}>🏗️ Gasto por obra</div>
             {porObra.map((o, i) => {
               const pct = (o.gasto / totalGasto) * 100;
               return (
                 <div key={o.obra.id} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: i < porObra.length - 1 ? "1px solid #f3f4f6" : "none" }}>
                   <div style={{ width: 8, height: 36, borderRadius: 4, background: cores[i % cores.length], marginRight: 10 }}></div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>{o.obra.nome}</div>
-                    <div style={{ fontSize: 9, color: "#888" }}>{o.qtd} abastecimentos • {pct.toFixed(1)}% do total</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: T.titulo }}>{o.obra.nome}</div>
+                    <div style={{ fontSize: 9, color: T.texto2 }}>{o.qtd} abastecimentos • {pct.toFixed(1)}% do total</div>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>R$ {o.gasto.toFixed(2)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: T.titulo }}>R$ {o.gasto.toFixed(2)}</div>
                 </div>
               );
             })}
@@ -497,17 +497,17 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
         )}
 
         {/* Lista de veículos pra editar */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ flex: 1, fontWeight: 800, color: NAVY, fontSize: 13 }}>🚙 Frota cadastrada ({(ativos || []).length})</div>
+            <div style={{ flex: 1, fontWeight: 800, color: T.titulo, fontSize: 13 }}>🚙 Frota cadastrada ({(ativos || []).length})</div>
             <button onClick={() => onNav && onNav("ativos")} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>Gerenciar</button>
           </div>
           {(ativos || []).map(a => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f3f4f6" }}>
+            <div key={a.id} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.borda}` }}>
               <div style={{ fontSize: 22, marginRight: 8 }}>{a.tipo === "Carro" ? "🚗" : a.tipo === "Moto" ? "🏍️" : a.tipo === "Caminhão" ? "🚛" : "🚜"}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>{a.nome}</div>
-                <div style={{ fontSize: 9, color: "#888" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: T.titulo }}>{a.nome}</div>
+                <div style={{ fontSize: 9, color: T.texto2 }}>
                   {a.placa || "Sem placa"}
                   {a.responsavel && ` • ${a.responsavel}`}
                   {a.combustivel && ` • ⛽ ${a.combustivel}`}
@@ -570,22 +570,22 @@ export function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSoli
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Mover Pessoal" sub="Solicitar movimentação" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {ok ? (
           <div style={{ textAlign: "center", padding: 32 }}>
             <div style={{ fontSize: 64 }}>✅</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: GREEN, marginTop: 12 }}>Solicitação Enviada!</div>
-            <div style={{ color: "#666", marginTop: 6, fontSize: 13 }}>O gestor receberá o pedido para aprovação.</div>
+            <div style={{ color: T.texto2, marginTop: 6, fontSize: 13 }}>O gestor receberá o pedido para aprovação.</div>
             <Btn label="Nova Solicitação" color={NAVY} onClick={() => { setOk(false); setTrabId(""); setObraDestino(""); setMotivo(""); }} style={{ marginTop: 24 }} />
             <Btn label="Voltar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 10 }} />
           </div>
         ) : (
           <>
-            <div style={{ background: "#fff8e1", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#7b5800", marginBottom: 12 }}>
+            <div style={{ background: T.avisoFundo, borderRadius: 10, padding: "10px 14px", fontSize: 12, color: T.avisoTexto, marginBottom: 12 }}>
               ℹ️ A movimentação só será efetivada após aprovação do gestor.
             </div>
 
-            <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
               <label style={labelS}>Trabalhador (banco geral)</label>
               <select value={trabId} onChange={e => setTrabId(e.target.value)} style={selS}>
                 <option value="">Selecione</option>
@@ -658,7 +658,7 @@ export function TelaMovEquipDetalhe({ mov, obras, equips, ferramentas, usuario, 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Detalhe da Movimentação" sub={mov.status} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* CABEÇALHO */}
         <div style={{ background: `linear-gradient(135deg,${cor},${cor}cc)`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12 }}>
@@ -676,14 +676,14 @@ export function TelaMovEquipDetalhe({ mov, obras, equips, ferramentas, usuario, 
         </div>
 
         {/* TIPO DE MOVIMENTAÇÃO */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}` }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 4 }}>📋 Tipo</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${BLUE}` }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 4 }}>📋 Tipo</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.titulo }}>
             {mov.tipo === "emprestimo" ? "🔁 Empréstimo (volta depois)" : "↪️ Transferência (mudança definitiva)"}
           </div>
           {mov.prazo && mov.tipo === "emprestimo" && (
-            <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
-              📅 Prazo de devolução: <b style={{ color: NAVY }}>{new Date(mov.prazo).toLocaleDateString("pt-BR")}</b>
+            <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>
+              📅 Prazo de devolução: <b style={{ color: T.titulo }}>{new Date(mov.prazo).toLocaleDateString("pt-BR")}</b>
               {prazoInfo?.atrasado && <span style={{ color: RED, fontWeight: 700 }}> • ⚠️ Atrasado {prazoInfo.dias} dias</span>}
               {prazoInfo?.vencendo && <span style={{ color: ORANGE, fontWeight: 700 }}> • ⏱️ Vence em {prazoInfo.dias} dia(s)</span>}
             </div>
@@ -691,51 +691,51 @@ export function TelaMovEquipDetalhe({ mov, obras, equips, ferramentas, usuario, 
         </div>
 
         {/* ROTA */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>🔄 Rota da Movimentação</div>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>🔄 Rota da Movimentação</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1, background: "#fef9e7", borderRadius: 8, padding: 10 }}>
-              <div style={{ fontSize: 9, color: "#8b6f00", fontWeight: 700, textTransform: "uppercase" }}>📤 Origem</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginTop: 2 }}>{mov.obraOrigemNome}</div>
-              {obraOrigem?.local && <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{obraOrigem.local}</div>}
+            <div style={{ flex: 1, background: T.avisoFundo, borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 9, color: T.avisoTexto, fontWeight: 700, textTransform: "uppercase" }}>📤 Origem</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, marginTop: 2 }}>{mov.obraOrigemNome}</div>
+              {obraOrigem?.local && <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>{obraOrigem.local}</div>}
             </div>
-            <div style={{ fontSize: 22, color: NAVY }}>→</div>
-            <div style={{ flex: 1, background: "#f0fdf4", borderRadius: 8, padding: 10 }}>
-              <div style={{ fontSize: 9, color: "#14532d", fontWeight: 700, textTransform: "uppercase" }}>📥 Destino</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginTop: 2 }}>{mov.obraDestinoNome}</div>
-              {obraDestino?.local && <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{obraDestino.local}</div>}
+            <div style={{ fontSize: 22, color: T.titulo }}>→</div>
+            <div style={{ flex: 1, background: T.sucessoFundo, borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 9, color: T.sucessoTexto, fontWeight: 700, textTransform: "uppercase" }}>📥 Destino</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, marginTop: 2 }}>{mov.obraDestinoNome}</div>
+              {obraDestino?.local && <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>{obraDestino.local}</div>}
             </div>
           </div>
         </div>
 
         {/* SOLICITANTE / MOTIVO */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 9, color: "#888", fontWeight: 700, textTransform: "uppercase" }}>👷 Solicitante</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{mov.solicitante}</div>
+              <div style={{ fontSize: 9, color: T.texto2, fontWeight: 700, textTransform: "uppercase" }}>👷 Solicitante</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>{mov.solicitante}</div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 9, color: "#888", fontWeight: 700, textTransform: "uppercase" }}>📅 Data</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{mov.dataSolicitacao || "—"}</div>
+              <div style={{ fontSize: 9, color: T.texto2, fontWeight: 700, textTransform: "uppercase" }}>📅 Data</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>{mov.dataSolicitacao || "—"}</div>
             </div>
           </div>
           {mov.motivo && (
-            <div style={{ background: "#fef9e7", borderRadius: 8, padding: 10, borderLeft: `3px solid ${ORANGE}` }}>
-              <div style={{ fontSize: 10, color: "#8b6f00", fontWeight: 700, marginBottom: 2 }}>📝 Motivo / Observação</div>
-              <div style={{ fontSize: 12, color: "#444", fontStyle: "italic" }}>"{mov.motivo}"</div>
+            <div style={{ background: T.avisoFundo, borderRadius: 8, padding: 10, borderLeft: `3px solid ${ORANGE}` }}>
+              <div style={{ fontSize: 10, color: T.avisoTexto, fontWeight: 700, marginBottom: 2 }}>📝 Motivo / Observação</div>
+              <div style={{ fontSize: 12, color: T.texto, fontStyle: "italic" }}>"{mov.motivo}"</div>
             </div>
           )}
         </div>
 
         {/* INFO DO ITEM */}
         {item && (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${NAVY}` }}>
-            <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>🔍 Sobre o item</div>
-            {item.tipo && <div style={{ fontSize: 11, color: "#666" }}>Tipo: <b style={{ color: NAVY }}>{item.tipo}</b></div>}
-            {item.numeroSerie && <div style={{ fontSize: 11, color: "#666" }}>Nº Série: <b style={{ color: NAVY }}>{item.numeroSerie}</b></div>}
-            {item.estado && <div style={{ fontSize: 11, color: "#666" }}>Estado: <b style={{ color: NAVY }}>{item.estado}</b></div>}
-            {item.obs && <div style={{ fontSize: 11, color: "#666", fontStyle: "italic", marginTop: 4 }}>{item.obs}</div>}
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${NAVY}` }}>
+            <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>🔍 Sobre o item</div>
+            {item.tipo && <div style={{ fontSize: 11, color: T.texto2 }}>Tipo: <b style={{ color: T.titulo }}>{item.tipo}</b></div>}
+            {item.numeroSerie && <div style={{ fontSize: 11, color: T.texto2 }}>Nº Série: <b style={{ color: T.titulo }}>{item.numeroSerie}</b></div>}
+            {item.estado && <div style={{ fontSize: 11, color: T.texto2 }}>Estado: <b style={{ color: T.titulo }}>{item.estado}</b></div>}
+            {item.obs && <div style={{ fontSize: 11, color: T.texto2, fontStyle: "italic", marginTop: 4 }}>{item.obs}</div>}
           </div>
         )}
 
@@ -747,7 +747,7 @@ export function TelaMovEquipDetalhe({ mov, obras, equips, ferramentas, usuario, 
                 <button onClick={() => { onAprovar(mov.id); onBack(); }} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14, marginBottom: 8, boxShadow: "0 4px 12px rgba(42,168,79,0.3)" }}>
                   ✓ APROVAR MOVIMENTAÇÃO
                 </button>
-                <button onClick={() => { confirmar("Negar esta movimentação?", () => { onNegar(mov.id); onBack(); }) }} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${RED}`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                <button onClick={() => { confirmar("Negar esta movimentação?", () => { onNegar(mov.id); onBack(); }) }} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${RED}`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
                   ✕ Negar Movimentação
                 </button>
               </>
@@ -838,18 +838,18 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Mov. Equipamentos" sub="Empréstimos e transferências" onBack={onBack} />
 
-      <div style={{ display: "flex", gap: 6, padding: "10px 12px 0", background: "#fff" }}>
-        <div style={{ flex: 1, background: "#fff8f0", border: `1px solid ${ORANGE}33`, borderRadius: 8, padding: 8, textAlign: "center" }}>
+      <div style={{ display: "flex", gap: 6, padding: "10px 12px 0", background: T.superficie }}>
+        <div style={{ flex: 1, background: T.avisoFundo, border: `1px solid ${ORANGE}33`, borderRadius: 8, padding: 8, textAlign: "center" }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: ORANGE }}>{aguardando}</div>
-          <div style={{ fontSize: 9, color: "#666" }}>Aguardando</div>
+          <div style={{ fontSize: 9, color: T.texto2 }}>Aguardando</div>
         </div>
-        <div style={{ flex: 1, background: "#f0fdf4", border: `1px solid ${GREEN}33`, borderRadius: 8, padding: 8, textAlign: "center" }}>
+        <div style={{ flex: 1, background: T.sucessoFundo, border: `1px solid ${GREEN}33`, borderRadius: 8, padding: 8, textAlign: "center" }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: GREEN }}>{aprovadas}</div>
-          <div style={{ fontSize: 9, color: "#666" }}>Em uso</div>
+          <div style={{ fontSize: 9, color: T.texto2 }}>Em uso</div>
         </div>
       </div>
 
-      <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e5e7eb", paddingTop: 6 }}>
+      <div style={{ display: "flex", background: T.superficie, borderBottom: `1px solid ${T.borda}`, paddingTop: 6 }}>
         {[
           { v: "ativas", l: "🔄 Ativas" },
           { v: "historico", l: "📜 Histórico" },
@@ -862,7 +862,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
         <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 10 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
@@ -871,7 +871,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
         <Btn label="➕ Solicitar Movimentação" color={NAVY} onClick={() => setModal(true)} style={{ marginBottom: 12 }} />
 
         {lista.length === 0 ? (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 24, textAlign: "center", color: "#aaa" }}>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 24, textAlign: "center", color: T.texto3 }}>
             {aba === "ativas" ? "Nenhuma movimentação ativa." : "Nenhuma movimentação no histórico."}
           </div>
         ) : lista.map(m => {
@@ -884,23 +884,23 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
             : m.status === "Negado" ? RED
             : "#888";
           return (
-            <div key={m.id} onClick={() => onVerDetalhe && onVerDetalhe(m)} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
+            <div key={m.id} onClick={() => onVerDetalhe && onVerDetalhe(m)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 6 }}>
                 <div style={{ fontSize: 24, marginRight: 10 }}>{m.tipoItem === "equipamento" ? "⚙️" : "🔨"}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 800, color: NAVY, fontSize: 13 }}>
+                  <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13 }}>
                     {m.itemNome}
-                    {m.itemCodigo && <span style={{ fontSize: 10, color: "#888", marginLeft: 6 }}>{m.itemCodigo}</span>}
+                    {m.itemCodigo && <span style={{ fontSize: 10, color: T.texto2, marginLeft: 6 }}>{m.itemCodigo}</span>}
                   </div>
-                  <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
-                    📤 {m.obraOrigemNome} <span style={{ color: NAVY }}>→</span> 📥 {m.obraDestinoNome}
+                  <div style={{ fontSize: 11, color: T.texto2, marginTop: 2 }}>
+                    📤 {m.obraOrigemNome} <span style={{ color: T.titulo }}>→</span> 📥 {m.obraDestinoNome}
                   </div>
-                  <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>
                     {m.tipo === "emprestimo" ? "🔁 Empréstimo" : "↪️ Transferência"}
                     {m.prazo && m.tipo === "emprestimo" && <span> • Prazo: {new Date(m.prazo).toLocaleDateString("pt-BR")}</span>}
                     <span> • {m.solicitante}</span>
                   </div>
-                  {m.motivo && <div style={{ fontSize: 11, color: "#777", fontStyle: "italic", marginTop: 4 }}>"{m.motivo}"</div>}
+                  {m.motivo && <div style={{ fontSize: 11, color: T.texto2, fontStyle: "italic", marginTop: 4 }}>"{m.motivo}"</div>}
                   {prazoInfo?.atrasado && (
                     <div style={{ fontSize: 11, color: RED, fontWeight: 700, marginTop: 4 }}>⚠️ Atrasado há {prazoInfo.dias} dia(s)</div>
                   )}
@@ -910,7 +910,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Badge label={m.status} color={cor} small />
-                  <span style={{ color: "#bbb", fontSize: 16 }}>›</span>
+                  <span style={{ color: T.desabilitado, fontSize: 16 }}>›</span>
                 </div>
               </div>
 
@@ -953,7 +953,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
         </select>
 
         {itemEscolhido && obraOrigem && (
-          <div style={{ background: "#f0f7ff", borderRadius: 8, padding: 10, fontSize: 11, color: NAVY, marginBottom: 10 }}>
+          <div style={{ background: T.infoFundo, borderRadius: 8, padding: 10, fontSize: 11, color: T.titulo, marginBottom: 10 }}>
             📍 Atualmente na obra: <b>{obraOrigem.nome}</b>
           </div>
         )}
@@ -988,12 +988,12 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
         <input value={form.motivo} onChange={e => set("motivo", e.target.value)} placeholder="Ex: precisa pra concretar a laje" style={inputS} />
 
         {usuario?.perfil === "gestor" && (
-          <div style={{ background: "#f0fdf4", borderRadius: 8, padding: 8, fontSize: 11, color: GREEN, marginBottom: 10 }}>
+          <div style={{ background: T.sucessoFundo, borderRadius: 8, padding: 8, fontSize: 11, color: GREEN, marginBottom: 10 }}>
             ✅ Por ser gestor, esta movimentação será aprovada automaticamente.
           </div>
         )}
         {usuario?.perfil === "encarregado" && (
-          <div style={{ background: "#fff8f0", borderRadius: 8, padding: 8, fontSize: 11, color: ORANGE, marginBottom: 10 }}>
+          <div style={{ background: T.avisoFundo, borderRadius: 8, padding: 8, fontSize: 11, color: ORANGE, marginBottom: 10 }}>
             ⏳ Aguardará aprovação do gestor antes de ser confirmada.
           </div>
         )}
@@ -1019,7 +1019,7 @@ export function TelaMovPessoalDetalhe({ mov, obras, trabalhadores, onBack, onApr
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Detalhe Movimentação" sub={mov.status} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* CABEÇALHO */}
         <div style={{ background: `linear-gradient(135deg,${cor},${cor}cc)`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12 }}>
@@ -1035,61 +1035,61 @@ export function TelaMovPessoalDetalhe({ mov, obras, trabalhadores, onBack, onApr
         </div>
 
         {/* TIPO */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}` }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 4 }}>📋 Tipo</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${BLUE}` }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 4 }}>📋 Tipo</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.titulo }}>
             {mov.tipo === "hoje" ? "📅 Apenas hoje" : "🔄 Mudança definitiva"}
           </div>
-          <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: T.texto2, marginTop: 4 }}>
             {mov.tipo === "hoje" ? "O trabalhador volta pra obra original amanhã" : "O trabalhador troca de obra permanentemente"}
           </div>
         </div>
 
         {/* ROTA */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>🔄 De / Para</div>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 8 }}>🔄 De / Para</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1, background: "#fef9e7", borderRadius: 8, padding: 10 }}>
-              <div style={{ fontSize: 9, color: "#8b6f00", fontWeight: 700, textTransform: "uppercase" }}>📤 Saindo de</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginTop: 2 }}>{oOrigem?.nome || "—"}</div>
-              {oOrigem?.local && <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{oOrigem.local}</div>}
+            <div style={{ flex: 1, background: T.avisoFundo, borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 9, color: T.avisoTexto, fontWeight: 700, textTransform: "uppercase" }}>📤 Saindo de</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, marginTop: 2 }}>{oOrigem?.nome || "—"}</div>
+              {oOrigem?.local && <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>{oOrigem.local}</div>}
             </div>
-            <div style={{ fontSize: 22, color: NAVY }}>→</div>
-            <div style={{ flex: 1, background: "#f0fdf4", borderRadius: 8, padding: 10 }}>
-              <div style={{ fontSize: 9, color: "#14532d", fontWeight: 700, textTransform: "uppercase" }}>📥 Indo para</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginTop: 2 }}>{oDestino?.nome || "—"}</div>
-              {oDestino?.local && <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{oDestino.local}</div>}
+            <div style={{ fontSize: 22, color: T.titulo }}>→</div>
+            <div style={{ flex: 1, background: T.sucessoFundo, borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 9, color: T.sucessoTexto, fontWeight: 700, textTransform: "uppercase" }}>📥 Indo para</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, marginTop: 2 }}>{oDestino?.nome || "—"}</div>
+              {oDestino?.local && <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>{oDestino.local}</div>}
             </div>
           </div>
         </div>
 
         {/* SOLICITANTE / DATA / MOTIVO */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 9, color: "#888", fontWeight: 700, textTransform: "uppercase" }}>👷 Solicitante</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{mov.solicitante}</div>
+              <div style={{ fontSize: 9, color: T.texto2, fontWeight: 700, textTransform: "uppercase" }}>👷 Solicitante</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>{mov.solicitante}</div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 9, color: "#888", fontWeight: 700, textTransform: "uppercase" }}>📅 Data</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{mov.data}</div>
+              <div style={{ fontSize: 9, color: T.texto2, fontWeight: 700, textTransform: "uppercase" }}>📅 Data</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>{mov.data}</div>
             </div>
           </div>
           {mov.motivo && (
-            <div style={{ background: "#fef9e7", borderRadius: 8, padding: 10, borderLeft: `3px solid ${ORANGE}` }}>
-              <div style={{ fontSize: 10, color: "#8b6f00", fontWeight: 700, marginBottom: 2 }}>📝 Motivo</div>
-              <div style={{ fontSize: 12, color: "#444", fontStyle: "italic" }}>"{mov.motivo}"</div>
+            <div style={{ background: T.avisoFundo, borderRadius: 8, padding: 10, borderLeft: `3px solid ${ORANGE}` }}>
+              <div style={{ fontSize: 10, color: T.avisoTexto, fontWeight: 700, marginBottom: 2 }}>📝 Motivo</div>
+              <div style={{ fontSize: 12, color: T.texto, fontStyle: "italic" }}>"{mov.motivo}"</div>
             </div>
           )}
         </div>
 
         {/* INFO TRABALHADOR */}
         {trab && (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${NAVY}` }}>
-            <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>👤 Sobre o trabalhador</div>
-            {trab.funcao && <div style={{ fontSize: 11, color: "#666" }}>Função: <b style={{ color: NAVY }}>{trab.funcao}</b></div>}
-            {trab.diaria && <div style={{ fontSize: 11, color: "#666" }}>Diária: <b style={{ color: GREEN }}>R$ {parseFloat(trab.diaria).toFixed(2)}</b></div>}
-            {trab.tel && <div style={{ fontSize: 11, color: "#666" }}>📞 {trab.tel}</div>}
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra, borderLeft: `4px solid ${NAVY}` }}>
+            <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700, marginBottom: 6 }}>👤 Sobre o trabalhador</div>
+            {trab.funcao && <div style={{ fontSize: 11, color: T.texto2 }}>Função: <b style={{ color: T.titulo }}>{trab.funcao}</b></div>}
+            {trab.diaria && <div style={{ fontSize: 11, color: T.texto2 }}>Diária: <b style={{ color: GREEN }}>R$ {parseFloat(trab.diaria).toFixed(2)}</b></div>}
+            {trab.tel && <div style={{ fontSize: 11, color: T.texto2 }}>📞 {trab.tel}</div>}
           </div>
         )}
 
@@ -1099,7 +1099,7 @@ export function TelaMovPessoalDetalhe({ mov, obras, trabalhadores, onBack, onApr
             <button onClick={() => { onAprovar(mov); onBack(); }} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14, marginBottom: 8, boxShadow: "0 4px 12px rgba(42,168,79,0.3)" }}>
               ✓ APROVAR MOVIMENTAÇÃO
             </button>
-            <button onClick={() => { confirmar("Negar esta movimentação?", () => { onNegar(mov.id); onBack(); }) }} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${RED}`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+            <button onClick={() => { confirmar("Negar esta movimentação?", () => { onNegar(mov.id); onBack(); }) }} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${RED}`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
               ✕ Negar Movimentação
             </button>
           </div>
@@ -1118,7 +1118,7 @@ export function TelaAprovarMov({ obras, trabalhadores, movimentacoes, onBack, on
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Movimentações" sub="Aprovar mudanças de equipe" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="Aguardando">Aguardando</option>
           <option value="Aprovado">Aprovadas</option>
@@ -1126,37 +1126,37 @@ export function TelaAprovarMov({ obras, trabalhadores, movimentacoes, onBack, on
           <option value="todas">Todas</option>
         </select>
 
-        {lista.length === 0 && <div style={{ background: "#fff", borderRadius: 12, padding: 20, textAlign: "center", color: "#aaa" }}>Nenhuma solicitação.</div>}
+        {lista.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhuma solicitação.</div>}
 
         {lista.map(m => {
           const oOrigem = obras.find(o => o.id === m.obraOrigem);
           const oDestino = obras.find(o => o.id === m.obraDestino);
           const cor = m.status === "Aprovado" ? GREEN : m.status === "Negado" ? RED : ORANGE;
           return (
-            <div key={m.id} onClick={() => onVerDetalhe && onVerDetalhe(m)} style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
+            <div key={m.id} onClick={() => onVerDetalhe && onVerDetalhe(m)} style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>👷 {m.trabNome}</div>
-                  <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Solicitado por {m.solicitante} • {m.data}</div>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>👷 {m.trabNome}</div>
+                  <div style={{ fontSize: 11, color: T.texto2, marginTop: 2 }}>Solicitado por {m.solicitante} • {m.data}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Badge label={m.status} color={cor} small />
-                  <span style={{ color: "#bbb", fontSize: 16 }}>›</span>
+                  <span style={{ color: T.desabilitado, fontSize: 16 }}>›</span>
                 </div>
               </div>
 
-              <div style={{ background: "#f5f8fc", borderRadius: 8, padding: "8px 10px", fontSize: 12, marginBottom: 8 }}>
+              <div style={{ background: T.superficie2, borderRadius: 8, padding: "8px 10px", fontSize: 12, marginBottom: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "#888" }}>{oOrigem?.nome || "—"}</span>
-                  <span style={{ color: NAVY, fontSize: 16 }}>→</span>
-                  <span style={{ color: NAVY, fontWeight: 700 }}>{oDestino?.nome}</span>
+                  <span style={{ color: T.texto2 }}>{oOrigem?.nome || "—"}</span>
+                  <span style={{ color: T.titulo, fontSize: 16 }}>→</span>
+                  <span style={{ color: T.titulo, fontWeight: 700 }}>{oDestino?.nome}</span>
                 </div>
-                <div style={{ fontSize: 10, color: "#666", marginTop: 4 }}>
+                <div style={{ fontSize: 10, color: T.texto2, marginTop: 4 }}>
                   {m.tipo === "hoje" ? "📅 Apenas hoje" : "🔄 Mudança definitiva"}
                 </div>
               </div>
 
-              {m.motivo && <div style={{ fontSize: 12, color: "#555", fontStyle: "italic", marginBottom: 8 }}>"{m.motivo}"</div>}
+              {m.motivo && <div style={{ fontSize: 12, color: T.texto2, fontStyle: "italic", marginBottom: 8 }}>"{m.motivo}"</div>}
 
               {m.status === "Aguardando" && (
                 <div style={{ display: "flex", gap: 8 }} onClick={e => e.stopPropagation()}>
@@ -1203,7 +1203,7 @@ export function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, o
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ferramentas" sub="Manuais e elétricas" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 12 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
         <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
@@ -1212,19 +1212,19 @@ export function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, o
         {lista.map(f => {
           const obra = obras.find(o => o.id === f.obraId);
           return (
-            <div key={f.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+            <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
               <div style={{ fontSize: 28, marginRight: 12 }}>{f.icon}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>{f.nome} <span style={{ background: "#dde6f5", color: NAVY, padding: "1px 8px", borderRadius: 8, fontSize: 11, marginLeft: 4 }}>×{f.quantidade}</span></div>
-                <div style={{ fontSize: 11, color: "#888" }}>📍 {obra?.nome}</div>
+                <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{f.nome} <span style={{ background: T.infoFundo, color: T.titulo, padding: "1px 8px", borderRadius: 8, fontSize: 11, marginLeft: 4 }}>×{f.quantidade}</span></div>
+                <div style={{ fontSize: 11, color: T.texto2 }}>📍 {obra?.nome}</div>
               </div>
               <Badge label={f.estado} color={COR_ESTADO[f.estado] || "#888"} small />
               <button onClick={() => abrirEdit(f)} style={{ background: "none", border: "none", color: BLUE, fontSize: 16, marginLeft: 8, cursor: "pointer" }}>✏️</button>
-              <button onClick={() => onRemover(f.id)} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+              <button onClick={() => onRemover(f.id)} style={{ background: T.erroFundo, border: "2px solid #d63b3b", color: RED, fontSize: 16, marginLeft: 4, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
             </div>
           );
         })}
-        {lista.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: 20 }}>Nenhuma ferramenta cadastrada.</div>}
+        {lista.length === 0 && <div style={{ textAlign: "center", color: T.texto3, padding: 20 }}>Nenhuma ferramenta cadastrada.</div>}
         <Btn label="➕ Adicionar Ferramenta" color={NAVY} onClick={abrirNovo} style={{ marginTop: 8 }} />
       </div>
       <KMFooter />
@@ -1319,7 +1319,7 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Manutenções" sub="Preventiva e corretiva" onBack={onBack} />
-      <div style={{ display: "flex", gap: 0, background: "#fff", borderBottom: "1px solid #e5e7eb" }}>
+      <div style={{ display: "flex", gap: 0, background: T.superficie, borderBottom: `1px solid ${T.borda}` }}>
         {[
           { v: "agenda", l: "🗓️ Agenda", n: manutencoes.filter(m => !m.realizada).length },
           { v: "historico", l: "✅ Histórico", n: manutencoes.filter(m => m.realizada).length },
@@ -1333,7 +1333,7 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
           </button>
         ))}
       </div>
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {aba === "agenda" && (
           <>
             {(atrasadas > 0 || urgentes > 0) && (
@@ -1357,7 +1357,7 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
         )}
 
         {ordenada.length === 0 && (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 24, textAlign: "center", color: "#aaa" }}>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 24, textAlign: "center", color: T.texto3 }}>
             {aba === "agenda" ? "🎉 Nenhuma manutenção agendada." : "Nenhuma manutenção concluída ainda."}
           </div>
         )}
@@ -1365,25 +1365,25 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
         {ordenada.map(m => {
           const obra = obras.find(o => o.id === parseInt(m.obraId));
           return (
-            <div key={m.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${m._s.cor}` }}>
+            <div key={m.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${m._s.cor}` }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                 <div style={{ fontSize: 24, marginRight: 10 }}>{getIconeItem(m.tipoItem)}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{getNomeItem(m)}</div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{m.tipo}</div>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{getNomeItem(m)}</div>
+                  <div style={{ fontSize: 11, color: T.texto2 }}>{m.tipo}</div>
                   {obra && <div style={{ fontSize: 10, color: BLUE }}>📍 {obra.nome}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 11, color: m._s.cor, fontWeight: 800 }}>{m._s.txt}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{m.realizada ? `✓ ${m.dataRealizada}` : new Date(m.proxData).toLocaleDateString("pt-BR")}</div>
+                  <div style={{ fontSize: 10, color: T.texto2 }}>{m.realizada ? `✓ ${m.dataRealizada}` : new Date(m.proxData).toLocaleDateString("pt-BR")}</div>
                 </div>
               </div>
-              {m.observacao && <div style={{ fontSize: 11, color: "#666", fontStyle: "italic", marginBottom: 6, paddingLeft: 34 }}>"{m.observacao}"</div>}
+              {m.observacao && <div style={{ fontSize: 11, color: T.texto2, fontStyle: "italic", marginBottom: 6, paddingLeft: 34 }}>"{m.observacao}"</div>}
 
               {!m.realizada && (
                 <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <button onClick={() => marcarRealizada(m.id)} style={{ flex: 1, padding: 7, borderRadius: 8, border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 11 }}>✓ MARCAR REALIZADA</button>
-                  <button onClick={() => { confirmar("Remover esta manutenção?", () => { onRemover(m.id); }); }} style={{ padding: 7, borderRadius: 8, border: "none", background: "#fef2f2", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 11, width: 50 }}>🗑️</button>
+                  <button onClick={() => { confirmar("Remover esta manutenção?", () => { onRemover(m.id); }); }} style={{ padding: 7, borderRadius: 8, border: "none", background: T.erroFundo, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 11, width: 50 }}>🗑️</button>
                 </div>
               )}
             </div>

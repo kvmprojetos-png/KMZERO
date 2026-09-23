@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -75,15 +75,15 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Obras" sub={`${obras.filter(o => o.status === "Ativa").length} ativas • Toque para ver detalhes`} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {/* ESCRITÓRIO: tabela-resumo das obras (não aparece no celular). Clicar na linha abre a obra. */}
         {escritorio && obras.length > 0 && (
-          <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", marginBottom: 14, overflowX: "auto" }}>
+          <div style={{ background: T.superficie, borderRadius: 12, boxShadow: T.sombra, marginBottom: 14, overflowX: "auto" }}>
             <table data-test="obras-tabela" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#eef6f8", textAlign: "left" }}>
                   {["Obra", "Cliente", "Status", "Encarregado", "Trabalhadores", "Início", "Prazo"].map(h => (
-                    <th key={h} style={{ padding: "10px 12px", color: NAVY, fontWeight: 800, fontSize: 12, whiteSpace: "nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding: "10px 12px", color: T.titulo, fontWeight: 800, fontSize: 12, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -95,14 +95,14 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
                     || "—";
                   const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
                   return (
-                    <tr key={o.id} data-test={`obra-linha-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ borderTop: "1px solid #e6edf0", cursor: "pointer" }}>
-                      <td style={{ padding: "9px 12px", fontWeight: 700, color: NAVY }}>{o.nome}</td>
-                      <td style={{ padding: "9px 12px", color: "#444" }}>{nomeCliente}</td>
+                    <tr key={o.id} data-test={`obra-linha-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ borderTop: `1px solid ${T.borda}`, cursor: "pointer" }}>
+                      <td style={{ padding: "9px 12px", fontWeight: 700, color: T.titulo }}>{o.nome}</td>
+                      <td style={{ padding: "9px 12px", color: T.texto }}>{nomeCliente}</td>
                       <td style={{ padding: "9px 12px" }}><Badge label={o.status} color={o.status === "Ativa" ? GREEN : "#888"} small /></td>
-                      <td style={{ padding: "9px 12px", color: "#444" }}>{encarregado}</td>
-                      <td style={{ padding: "9px 12px", color: "#444" }}>{nTrab}</td>
-                      <td style={{ padding: "9px 12px", color: "#444", whiteSpace: "nowrap" }}>{dataBR(o.dataInicioContrato)}</td>
-                      <td style={{ padding: "9px 12px", color: "#444", whiteSpace: "nowrap" }}>{dataBR(o.dataFimContrato)}</td>
+                      <td style={{ padding: "9px 12px", color: T.texto }}>{encarregado}</td>
+                      <td style={{ padding: "9px 12px", color: T.texto }}>{nTrab}</td>
+                      <td style={{ padding: "9px 12px", color: T.texto, whiteSpace: "nowrap" }}>{dataBR(o.dataInicioContrato)}</td>
+                      <td style={{ padding: "9px 12px", color: T.texto, whiteSpace: "nowrap" }}>{dataBR(o.dataFimContrato)}</td>
                     </tr>
                   );
                 })}
@@ -120,20 +120,20 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
           const cron = (cronogramas || {})[o.id] || [];
           const progresso = cron.length > 0 ? Math.round(cron.reduce((s, e) => s + (e.progresso || 0), 0) / cron.length) : 0;
           return (
-            <div key={o.id} data-test={`obra-card-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}`, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer" }}>
+            <div key={o.id} data-test={`obra-card-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}`, boxShadow: T.sombra, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 15 }}>{o.nome}</div>
-                  <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>📍 {o.local}</div>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 15 }}>{o.nome}</div>
+                  <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>📍 {o.local}</div>
                   {o.apontadorId && (
-                    <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>👷 Apontador: {usuarios.find(u => u.id === o.apontadorId)?.nome || "Não encontrado"}</div>
+                    <div style={{ fontSize: 11, color: T.texto, marginTop: 4 }}>👷 Apontador: {usuarios.find(u => u.id === o.apontadorId)?.nome || "Não encontrado"}</div>
                   )}
                   {progresso > 0 && (
                     <div style={{ marginTop: 8, marginBottom: 4 }}>
-                      <div style={{ height: 5, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: 5, background: T.superficie2, borderRadius: 3, overflow: "hidden" }}>
                         <div style={{ width: progresso + "%", height: "100%", background: progresso === 100 ? GREEN : ORANGE, transition: "width 0.3s" }}></div>
                       </div>
-                      <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>📅 Cronograma: {progresso}%</div>
+                      <div style={{ fontSize: 10, color: T.texto2, marginTop: 2 }}>📅 Cronograma: {progresso}%</div>
                     </div>
                   )}
                   <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
@@ -144,7 +144,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
                     {o.tipo && <Badge label={o.tipo === "Pavimentação" ? "🛣️ " + o.tipo : "🏢 " + o.tipo} color="#475569" small />}
                   </div>
                 </div>
-                <span style={{ color: "#bbb", fontSize: 24, marginLeft: 8 }}>›</span>
+                <span style={{ color: T.desabilitado, fontSize: 24, marginLeft: 8 }}>›</span>
               </div>
             </div>
           );
@@ -167,8 +167,8 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
         <label style={labelS}>🚩 Ponto de referência (opcional)</label>
         <input value={form.refLocal || ""} onChange={e => set("refLocal", e.target.value)} placeholder="Ex: Próximo ao posto, esquina com farmácia" style={inputS} />
 
-        <div style={{ background: "#f0f7ff", borderRadius: 10, padding: 10, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#0c4a6e", fontWeight: 700, marginBottom: 4 }}>📡 Localização GPS (opcional)</div>
+        <div style={{ background: T.infoFundo, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: T.infoTexto, fontWeight: 700, marginBottom: 4 }}>📡 Localização GPS (opcional)</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <input value={form.lat || ""} onChange={e => set("lat", e.target.value)} placeholder="Latitude" type="number" step="any" style={{ ...inputS, marginBottom: 0, fontSize: 12 }} />
             <input value={form.lng || ""} onChange={e => set("lng", e.target.value)} placeholder="Longitude" type="number" step="any" style={{ ...inputS, marginBottom: 0, fontSize: 12 }} />
@@ -213,15 +213,15 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
           ))}
         </select>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          <button data-test="gerenciar-clientes" onClick={() => onNav && onNav("clientes")} style={{ flex: 1, background: "#eef2ff", border: "1px solid #c7d2fe", color: NAVY, borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontWeight: 700 }}>Gerenciar clientes</button>
-          <div style={{ flex: 2, background: "#f8fafc", borderRadius: 10, padding: 10, border: "1px solid #e2e8f0", fontSize: 11, color: "#475569" }}>
+          <button data-test="gerenciar-clientes" onClick={() => onNav && onNav("clientes")} style={{ flex: 1, background: T.infoFundo, border: `1px solid ${T.infoBorda}`, color: T.titulo, borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontWeight: 700 }}>Gerenciar clientes</button>
+          <div style={{ flex: 2, background: T.superficie2, borderRadius: 10, padding: 10, border: `1px solid ${T.borda}`, fontSize: 11, color: T.texto2 }}>
             Se o cliente não existir, crie-o em Clientes e depois selecione aqui. Caso queira manter um nome livre, deixe em branco e preencha o campo abaixo.
           </div>
         </div>
 
         {/* ════ CONTRATO DA OBRA ════ */}
-        <div style={{ background: "#fff7e6", border: `1px solid ${GOLD}30`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: "#8a6d1a", letterSpacing: 1, marginBottom: 8 }}>📋 CONTRATO DA OBRA</div>
+        <div style={{ background: T.avisoFundo, border: `1px solid ${GOLD}30`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.avisoTexto, letterSpacing: 1, marginBottom: 8 }}>📋 CONTRATO DA OBRA</div>
 
           <label style={labelS}>Cliente / Contratante</label>
           <input
@@ -249,7 +249,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
             style={inputS}
           />
           {form.valorContrato && parseFloat(form.valorContrato) > 0 && (
-            <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 700, marginTop: -8, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: GREEN, fontWeight: 700, marginTop: -8, marginBottom: 12 }}>
               ✓ R$ {parseFloat(form.valorContrato).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </div>
           )}
@@ -296,7 +296,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
         </select>
 
         {editandoId && (
-          <button onClick={() => { confirmar(`Remover ${form.nome}? Esta ação não pode ser desfeita.`, () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: "#fef2f2", color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir Obra</button>
+          <button onClick={() => { confirmar(`Remover ${form.nome}? Esta ação não pode ser desfeita.`, () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir Obra</button>
         )}
         <Btn label={editandoId ? "SALVAR" : "ADICIONAR"} color={GREEN} onClick={salvar} />
       </Modal>
@@ -363,15 +363,15 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
   const custoTotalMes = totalCustoMaoObra + totalCombustivel + (totalMaterialAprov || 0) + totalAlimentacaoMes;
 
   const Secao = ({ titulo, icone, valor, cor, onClickAcao, acaoLabel, children }) => (
-    <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+    <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
         <div style={{ fontSize: 20, marginRight: 8 }}>{icone}</div>
-        <div style={{ flex: 1, fontWeight: 800, color: NAVY, fontSize: 13 }}>{titulo}</div>
+        <div style={{ flex: 1, fontWeight: 800, color: T.titulo, fontSize: 13 }}>{titulo}</div>
         {valor !== undefined && <div style={{ background: cor, color: "#fff", padding: "3px 10px", borderRadius: 6, fontWeight: 800, fontSize: 12 }}>{valor}</div>}
       </div>
       {children}
       {onClickAcao && (
-        <button onClick={onClickAcao} style={{ width: "100%", marginTop: 8, padding: 8, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{acaoLabel} →</button>
+        <button onClick={onClickAcao} style={{ width: "100%", marginTop: 8, padding: 8, background: T.superficie2, color: T.titulo, border: "none", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{acaoLabel} →</button>
       )}
     </div>
   );
@@ -379,7 +379,7 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title={obra.nome} sub="Detalhes completos" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* CABEÇALHO DA OBRA */}
         <div style={{ background: `linear-gradient(135deg,${NAVY},${NAVY2})`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12 }}>
@@ -457,27 +457,27 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
         )}
 
         {/* RESUMO FINANCEIRO DO MÊS */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>💰 CUSTO ESTIMADO DO MÊS</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>💰 CUSTO ESTIMADO DO MÊS</div>
           <div style={{ fontSize: 26, fontWeight: 900, color: GREEN, marginBottom: 10 }}>R$ {custoTotalMes.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            <div style={{ background: "#f0fdf4", padding: 8, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "#888" }}>👷 Mão de obra</div>
+            <div style={{ background: T.sucessoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: T.texto2 }}>👷 Mão de obra</div>
               <div style={{ fontSize: 12, fontWeight: 800, color: GREEN }}>R$ {totalCustoMaoObra.toFixed(2)}</div>
-              <div style={{ fontSize: 9, color: "#888" }}>{diasTrabalhados} dias</div>
+              <div style={{ fontSize: 9, color: T.texto2 }}>{diasTrabalhados} dias</div>
             </div>
-            <div style={{ background: "#fff8f0", padding: 8, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "#888" }}>⛽ Combustível</div>
+            <div style={{ background: T.avisoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: T.texto2 }}>⛽ Combustível</div>
               <div style={{ fontSize: 12, fontWeight: 800, color: ORANGE }}>R$ {totalCombustivel.toFixed(2)}</div>
             </div>
-            <div style={{ background: "#fef9e7", padding: 8, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "#888" }}>☕ Alimentação</div>
+            <div style={{ background: T.avisoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: T.texto2 }}>☕ Alimentação</div>
               <div style={{ fontSize: 12, fontWeight: 800, color: "#dc7e00" }}>R$ {totalAlimentacaoMes.toFixed(2)}</div>
             </div>
-            <div style={{ background: "#f0f7ff", padding: 8, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "#888" }}>📦 Materiais</div>
+            <div style={{ background: T.infoFundo, padding: 8, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: T.texto2 }}>📦 Materiais</div>
               <div style={{ fontSize: 12, fontWeight: 800, color: BLUE }}>{temCustoMateriais ? `R$ ${totalMaterialAprov.toFixed(2)}` : "—"}</div>
-              {!temCustoMateriais && <div style={{ fontSize: 9, color: "#888" }}>informe o valor nos pedidos aprovados</div>}
+              {!temCustoMateriais && <div style={{ fontSize: 9, color: T.texto2 }}>informe o valor nos pedidos aprovados</div>}
             </div>
           </div>
         </div>
@@ -485,34 +485,34 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
         {/* EQUIPE */}
         <Secao titulo="Equipe nesta obra" icone="👷" valor={trabObra.length} cor={BLUE} onClickAcao={() => onNav && onNav("equipe")} acaoLabel="Ver todos">
           {trabObra.length === 0 ? (
-            <div style={{ color: "#aaa", fontSize: 12, fontStyle: "italic", padding: 6 }}>Sem equipe alocada.</div>
+            <div style={{ color: T.texto3, fontSize: 12, fontStyle: "italic", padding: 6 }}>Sem equipe alocada.</div>
           ) : trabObra.slice(0, 5).map(t => (
-            <div key={t.id} style={{ display: "flex", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #f3f4f6" }}>
+            <div key={t.id} style={{ display: "flex", alignItems: "center", padding: "5px 0", borderBottom: `1px solid ${T.borda}` }}>
               {t.foto ? (
                 <img src={t.foto} alt="" style={{ width: 28, height: 28, borderRadius: 14, objectFit: "cover", marginRight: 8 }} />
               ) : (
                 <div style={{ width: 28, height: 28, borderRadius: 14, background: NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, marginRight: 8 }}>👷</div>
               )}
               <div style={{ flex: 1, fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: NAVY }}>{t.nome}</div>
-                <div style={{ fontSize: 10, color: "#888" }}>{t.cargo}</div>
+                <div style={{ fontWeight: 600, color: T.titulo }}>{t.nome}</div>
+                <div style={{ fontSize: 10, color: T.texto2 }}>{t.cargo}</div>
               </div>
               {t.diaria && <div style={{ fontSize: 11, color: GREEN, fontWeight: 700 }}>R$ {t.diaria}/dia</div>}
             </div>
           ))}
-          {trabObra.length > 5 && <div style={{ fontSize: 11, color: "#888", textAlign: "center", padding: 4 }}>... e mais {trabObra.length - 5}</div>}
+          {trabObra.length > 5 && <div style={{ fontSize: 11, color: T.texto2, textAlign: "center", padding: 4 }}>... e mais {trabObra.length - 5}</div>}
         </Secao>
 
         {/* ATIVOS / FROTA */}
         {ativosObra.length > 0 && (
           <Secao titulo="Ativos e Frota" icone="🚜" valor={ativosObra.length} cor={ORANGE} onClickAcao={() => onNav && onNav("ativos")} acaoLabel="Gerenciar">
             {ativosObra.map(a => (
-              <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #f3f4f6", fontSize: 12 }}>
+              <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.borda}`, fontSize: 12 }}>
                 <div>
-                  <div style={{ fontWeight: 600, color: NAVY }}>{a.nome}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{a.placa || a.tipo}</div>
+                  <div style={{ fontWeight: 600, color: T.titulo }}>{a.nome}</div>
+                  <div style={{ fontSize: 10, color: T.texto2 }}>{a.placa || a.tipo}</div>
                 </div>
-                <div style={{ textAlign: "right", fontSize: 10, color: "#666" }}>
+                <div style={{ textAlign: "right", fontSize: 10, color: T.texto2 }}>
                   {a.horimetro && <div>{a.horimetro}h</div>}
                   <div style={{ color: GREEN, fontWeight: 700 }}>R$ {(a.valorHora || 0)}/h</div>
                 </div>
@@ -525,16 +525,16 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
         {equipsObra.length > 0 && (
           <Secao titulo="Equipamentos" icone="⚙️" valor={equipsObra.length} cor="#475569" onClickAcao={() => onNav && onNav("equip_gestao")} acaoLabel="Gerenciar">
             {equipsObra.slice(0, 5).map(e => (
-              <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #f3f4f6", fontSize: 12 }}>
+              <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.borda}`, fontSize: 12 }}>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: 16, marginRight: 6 }}>{e.icon || "⚙️"}</span>
-                  <span style={{ fontWeight: 600, color: NAVY }}>{e.nome}</span>
-                  <span style={{ fontSize: 10, color: "#888", marginLeft: 6 }}>{e.codigo}</span>
+                  <span style={{ fontWeight: 600, color: T.titulo }}>{e.nome}</span>
+                  <span style={{ fontSize: 10, color: T.texto2, marginLeft: 6 }}>{e.codigo}</span>
                 </div>
                 <Badge label={e.status} color={EQUIP_COLOR[e.status]} small />
               </div>
             ))}
-            {equipsObra.length > 5 && <div style={{ fontSize: 11, color: "#888", textAlign: "center", padding: 4 }}>... e mais {equipsObra.length - 5}</div>}
+            {equipsObra.length > 5 && <div style={{ fontSize: 11, color: T.texto2, textAlign: "center", padding: 4 }}>... e mais {equipsObra.length - 5}</div>}
           </Secao>
         )}
 
@@ -542,17 +542,17 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
         {pedidosObra.length > 0 && (
           <Secao titulo="Pedidos de Material" icone="📦" valor={pedidosObra.length} cor="#7c3aed">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 4 }}>
-              <div style={{ background: "#f0fdf4", padding: 6, borderRadius: 6, textAlign: "center" }}>
+              <div style={{ background: T.sucessoFundo, padding: 6, borderRadius: 6, textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: GREEN }}>{pedidosObra.filter(p => p.status === "Aprovado").length}</div>
-                <div style={{ fontSize: 9, color: "#666" }}>Aprovados</div>
+                <div style={{ fontSize: 9, color: T.texto2 }}>Aprovados</div>
               </div>
-              <div style={{ background: "#fff8f0", padding: 6, borderRadius: 6, textAlign: "center" }}>
+              <div style={{ background: T.avisoFundo, padding: 6, borderRadius: 6, textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: ORANGE }}>{pedidosObra.filter(p => p.status === "Aguardando").length}</div>
-                <div style={{ fontSize: 9, color: "#666" }}>Aguardando</div>
+                <div style={{ fontSize: 9, color: T.texto2 }}>Aguardando</div>
               </div>
-              <div style={{ background: "#fef2f2", padding: 6, borderRadius: 6, textAlign: "center" }}>
+              <div style={{ background: T.erroFundo, padding: 6, borderRadius: 6, textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: RED }}>{pedidosObra.filter(p => p.status === "Negado").length}</div>
-                <div style={{ fontSize: 9, color: "#666" }}>Negados</div>
+                <div style={{ fontSize: 9, color: T.texto2 }}>Negados</div>
               </div>
             </div>
           </Secao>
@@ -560,7 +560,7 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
 
         {/* ANEXOS */}
         <Secao titulo="Anexos" icone="📎" valor="" cor="#0891b2" onClickAcao={() => onNav && onNav("anexos_obra")} acaoLabel="Gerenciar anexos">
-          <div style={{ fontSize: 11, color: "#666", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: T.texto2, lineHeight: 1.5 }}>
             Projetos, contratos, ART/RRT, planilhas, licenças e demais documentos da obra.
           </div>
         </Secao>
@@ -571,18 +571,18 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
             {cron.slice(0, 5).map((e, i) => {
               const cor = e.progresso === 100 ? GREEN : e.progresso > 0 ? ORANGE : "#aaa";
               return (
-                <div key={e.id} style={{ display: "flex", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #f3f4f6", fontSize: 12 }}>
+                <div key={e.id} style={{ display: "flex", alignItems: "center", padding: "4px 0", borderBottom: `1px solid ${T.borda}`, fontSize: 12 }}>
                   <div style={{ width: 22, height: 22, borderRadius: 11, background: cor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 10, marginRight: 8 }}>{i + 1}</div>
-                  <div style={{ flex: 1, color: NAVY, fontSize: 11 }}>{e.nome}</div>
+                  <div style={{ flex: 1, color: T.titulo, fontSize: 11 }}>{e.nome}</div>
                   <div style={{ fontSize: 10, color: cor, fontWeight: 700 }}>{e.progresso || 0}%</div>
                 </div>
               );
             })}
-            {cron.length > 5 && <div style={{ fontSize: 11, color: "#888", textAlign: "center", padding: 4 }}>... e mais {cron.length - 5} etapas</div>}
+            {cron.length > 5 && <div style={{ fontSize: 11, color: T.texto2, textAlign: "center", padding: 4 }}>... e mais {cron.length - 5} etapas</div>}
           </Secao>
         ) : (
           <Secao titulo="Cronograma" icone="📅" valor="—" cor="#aaa" onClickAcao={() => onNav && onNav("cronograma")} acaoLabel="Criar cronograma">
-            <div style={{ color: "#aaa", fontSize: 11, fontStyle: "italic" }}>Cronograma ainda não criado.</div>
+            <div style={{ color: T.texto3, fontSize: 11, fontStyle: "italic" }}>Cronograma ainda não criado.</div>
           </Secao>
         )}
 
@@ -590,12 +590,12 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
         {rdosObra.length > 0 && (
           <Secao titulo="RDOs Emitidos" icone="📄" valor={rdosObra.length} cor={BLUE} onClickAcao={() => onNav && onNav("rdo")} acaoLabel="Ver todos">
             {rdosObra.slice(0, 3).map(r => (
-              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #f3f4f6", fontSize: 12 }}>
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.borda}`, fontSize: 12 }}>
                 <div>
-                  <span style={{ fontWeight: 600, color: NAVY }}>RDO Nº {String(r.numero).padStart(3, "0")}</span>
+                  <span style={{ fontWeight: 600, color: T.titulo }}>RDO Nº {String(r.numero).padStart(3, "0")}</span>
                   {r.autoGerado && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700, marginLeft: 6 }}>⚡ AUTO</span>}
                 </div>
-                <span style={{ fontSize: 11, color: "#666" }}>{r.data}</span>
+                <span style={{ fontSize: 11, color: T.texto2 }}>{r.data}</span>
               </div>
             ))}
           </Secao>
@@ -604,7 +604,7 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
         {/* MANUTENÇÕES */}
         {manutObra.length > 0 && (
           <Secao titulo="Manutenções" icone="🔧" valor={manutObra.filter(m => !m.realizada).length} cor={RED} onClickAcao={() => onNav && onNav("manutencao")} acaoLabel="Gerenciar">
-            <div style={{ fontSize: 11, color: "#666" }}>
+            <div style={{ fontSize: 11, color: T.texto2 }}>
               {manutObra.filter(m => !m.realizada).length} pendente(s) • {manutObra.filter(m => m.realizada).length} concluída(s)
             </div>
           </Secao>
@@ -627,7 +627,7 @@ export function TelaMapa({ obras, trabalhadores, onBack, onEditar }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Mapa de Obras" sub="Visão geral" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ background: `linear-gradient(135deg,${NAVY},#243b7a)`, borderRadius: 14, padding: 16, marginBottom: 14, color: "#fff", boxShadow: "0 4px 14px rgba(15,33,81,0.3)" }}>
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}>
@@ -642,8 +642,8 @@ export function TelaMapa({ obras, trabalhadores, onBack, onEditar }) {
         </div>
 
         {/* Mapa visual estilizado */}
-        <div style={{ background: "#dde6f5", borderRadius: 14, padding: 14, marginBottom: 14, position: "relative", height: 200, overflow: "hidden", border: "1px solid #c5d0e5" }}>
-          <div style={{ position: "absolute", top: 8, left: 12, fontSize: 11, color: "#888", fontWeight: 700 }}>📍 Mapa visual</div>
+        <div style={{ background: T.infoFundo, borderRadius: 14, padding: 14, marginBottom: 14, position: "relative", height: 200, overflow: "hidden", border: `1px solid ${T.borda2}` }}>
+          <div style={{ position: "absolute", top: 8, left: 12, fontSize: 11, color: T.texto2, fontWeight: 700 }}>📍 Mapa visual</div>
           {/* Grid de fundo */}
           <svg width="100%" height="100%" style={{ position: "absolute", top: 0, left: 0 }}>
             {[...Array(8)].map((_, i) => <line key={"h" + i} x1="0" y1={i * 25} x2="100%" y2={i * 25} stroke="#c5d0e5" strokeWidth="0.5" />)}
@@ -662,15 +662,15 @@ export function TelaMapa({ obras, trabalhadores, onBack, onEditar }) {
         </div>
 
         {/* Lista de obras com info detalhada */}
-        <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 14 }}>📋 Obras Cadastradas</div>
+        <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 14 }}>📋 Obras Cadastradas</div>
         {obras.map(o => {
           const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
           return (
-            <div key={o.id} onClick={() => onEditar && onEditar(o)} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}` }}>
+            <div key={o.id} onClick={() => onEditar && onEditar(o)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : "#ccc"}` }}>
               <div style={{ fontSize: 28, marginRight: 12 }}>📍</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>{o.nome}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>{o.local}</div>
+                <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{o.nome}</div>
+                <div style={{ fontSize: 11, color: T.texto2 }}>{o.local}</div>
                 <div style={{ fontSize: 11, color: BLUE, marginTop: 2 }}>👷 {nTrab} trabalhador(es)</div>
               </div>
               <Badge label={o.status} color={o.status === "Ativa" ? GREEN : "#888"} small />

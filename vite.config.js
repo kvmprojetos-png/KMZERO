@@ -3,8 +3,13 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Versão do package.json vira __APP_VERSION__ no código (rodapé do login/menu/Ajuda):
+// pelo print do cliente o suporte sabe qual build ele está vendo.
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8'));
 
 // A vitrine (index.html da raiz) fica sem manifest e sem service worker: só o app em /app/ é PWA.
 // O vite-plugin-pwa injeta essas tags em TODO html do build; aqui elas são tiradas só da vitrine.
@@ -31,6 +36,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // O registro fica em src/main.jsx (registerSW + controllerchange): o registerSW.js
+      // injetado pelo plugin não recarregava a página quando o SW novo assumia.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         id: '/app/',
@@ -72,6 +80,9 @@ export default defineConfig({
     }),
     vitrineSemPwa()
   ],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version)
+  },
   build: {
     target: 'es2018',
     chunkSizeWarningLimit: 2000,
