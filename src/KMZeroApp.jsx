@@ -6,7 +6,7 @@ import { logoutFirebase, resultadoRedirecionamento, aguardarSessao } from "./fir
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
-import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
+import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
@@ -446,6 +446,21 @@ export default function App() {
     return resto;
   }), []);
   useSyncColecao("config", empresaArr, setEmpresaArr, syncAtivo);
+  // Empresa sem razão social na tela Empresa: completa com o cadastro de "Criar minha empresa"
+  // (só preenche o que estiver vazio; o que o gestor editou em Sistema → Empresa prevalece).
+  useEffect(() => {
+    if (!syncAtivo || (empresa && empresa.razaoSocial)) return;
+    let ativo = true;
+    carregarCadastroEmpresa().then(cad => {
+      if (!ativo || !cad) return;
+      setEmpresa(e => {
+        const atual = e || {};
+        const faltando = Object.fromEntries(Object.entries(cad).filter(([k, v]) => v && !atual[k]));
+        return Object.keys(faltando).length ? { ...atual, ...faltando } : atual;
+      });
+    });
+    return () => { ativo = false; };
+  }, [syncAtivo, empresaIdState, empresa?.razaoSocial]);
 
   // Cronogramas (objeto por obra → 1 doc por obra)
   const cronogramasArr = useMemo(() => Object.entries(cronogramas || {}).map(([obraId, etapas]) => ({ id: obraId, obraId, etapas: etapas || [] })), [cronogramas]);

@@ -178,6 +178,22 @@ export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, em
 }
 
 /* Perfil completo do login (usuarios/{uid}): empresaId, perfil, nome, obraId, ativo... */
+/* Cadastro feito em "Criar minha empresa" (empresas/{empresaId}). O app usa esses
+   dados como ponto de partida da tela Empresa: nome no menu, cabeçalho dos PDFs. */
+export async function carregarCadastroEmpresa() {
+  const fb = cloudRefs();
+  if (!fb || !_empresaId) return null;
+  try {
+    const snap = await getDoc(doc(fb.db, "empresas", _empresaId));
+    if (!snap.exists()) return null;
+    const { gestorUid, criadoEm, ...dados } = snap.data();
+    return dados;
+  } catch (e) {
+    console.warn("carregarCadastroEmpresa:", e);
+    return null;
+  }
+}
+
 export async function carregarPerfilNuvem(firebaseUid) {
   const fb = cloudRefs();
   if (!fb) return { ok: false, erro: "Firebase nao inicializado." };
