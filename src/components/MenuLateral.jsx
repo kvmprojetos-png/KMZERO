@@ -1,4 +1,5 @@
 import { NAVY, GOLD, RED } from "../theme.js";
+import { AvatarUsuario, cargoDoUsuario } from "./ui.jsx";
 
 /* Menu lateral do modo escritório (gestor em tela larga, >= 1024 px).
    No celular este componente não é renderizado — o app de campo segue igual. */
@@ -68,7 +69,15 @@ export function MenuLateral({ tela, onNav, usuario, empresa, badges = {}, onLogo
         </div>
         <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: 2.5, marginTop: 2 }}>GESTÃO DE OBRAS</div>
         <div style={{ marginTop: 12, fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={nomeEmpresa}>{nomeEmpresa}</div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={nomeGestor}>{nomeGestor}</div>
+        {/* Quem está logado — toca para abrir Minha conta */}
+        <button type="button" onClick={() => onNav && onNav("minha_conta")} title={`${nomeGestor}${usuario?.email ? " · " + usuario.email : ""} — Minha conta`}
+          style={{ marginTop: 12, width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)", cursor: "pointer", fontFamily: "inherit", textAlign: "left", boxSizing: "border-box" }}>
+          <AvatarUsuario usuario={usuario} tamanho={36} />
+          <span style={{ minWidth: 0, flex: 1, lineHeight: 1.2 }}>
+            <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nomeGestor}</span>
+            <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cargoDoUsuario(usuario)}{usuario?.email ? " · " + usuario.email : ""}</span>
+          </span>
+        </button>
       </div>
 
       {/* Grupos e itens */}

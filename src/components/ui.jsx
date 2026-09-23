@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
+import { useModoEscritorio } from "../lib/useLargura.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 
 export const Badge = ({ label, color, small }) => (
@@ -84,6 +85,49 @@ export function EmptyState({ icon = "📦", titulo, subtitulo, botaoLabel, onBot
   );
 }
 
+/* ── Quem está logado ──
+   O KMZeroApp fornece { usuario, onAbrirConta } por contexto; qualquer cabeçalho mostra
+   a pessoa sem precisar receber props (foto do Google ou iniciais + nome + cargo). */
+export const UsuarioContext = createContext(null);
+
+export const cargoDoUsuario = u => (u?.cargo && String(u.cargo).trim()) || (u?.perfil === "gestor" ? "Gestor" : "Encarregado");
+
+export function AvatarUsuario({ usuario, tamanho = 34, anel = GOLD }) {
+  const [semFoto, setSemFoto] = useState(false);
+  const iniciais = String(usuario?.nome || usuario?.email || "?").trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+  const base = { width: tamanho, height: tamanho, minWidth: tamanho, borderRadius: "50%", boxShadow: `0 0 0 2px ${anel}`, flexShrink: 0 };
+  if (usuario?.foto && !semFoto) {
+    // no-referrer: as fotos do Google (lh3.googleusercontent.com) às vezes recusam com referrer de outro site
+    return <img src={usuario.foto} alt="" referrerPolicy="no-referrer" onError={() => setSemFoto(true)} style={{ ...base, objectFit: "cover", background: "#fff" }} />;
+  }
+  return <div aria-hidden="true" style={{ ...base, background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: Math.round(tamanho * 0.4) }}>{iniciais || "?"}</div>;
+}
+
+// Pessoa logada no cabeçalho: no celular só a foto; no escritório foto + nome + cargo
+export function UsuarioLogado({ compacto }) {
+  const ctx = useContext(UsuarioContext);
+  const escritorio = useModoEscritorio();
+  const u = ctx?.usuario;
+  if (!u) return null;
+  const mostrarNome = compacto === undefined ? escritorio : !compacto;
+  const conteudo = (
+    <>
+      {mostrarNome && (
+        <span style={{ textAlign: "right", lineHeight: 1.15, minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{u.nome}</span>
+          <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.65)", whiteSpace: "nowrap" }}>{cargoDoUsuario(u)}</span>
+        </span>
+      )}
+      <AvatarUsuario usuario={u} tamanho={34} />
+    </>
+  );
+  const estilo = { display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "none", padding: 0, fontFamily: "inherit", flexShrink: 0 };
+  const titulo = `${u.nome}${u.email ? " · " + u.email : ""}`;
+  return ctx.onAbrirConta
+    ? <button type="button" onClick={ctx.onAbrirConta} title={titulo + " — Minha conta"} aria-label={`Conectado como ${u.nome}. Abrir Minha conta`} style={{ ...estilo, cursor: "pointer" }}>{conteudo}</button>
+    : <div title={titulo} aria-label={`Conectado como ${u.nome}`} style={estilo}>{conteudo}</div>;
+}
+
 export function KMHeader({ title, sub, onBack, right }) {
   return (
     <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "0 14px", flexShrink: 0, paddingTop: "env(safe-area-inset-top, 0px)" }}>
@@ -121,7 +165,10 @@ export function KMHeader({ title, sub, onBack, right }) {
           <div><span style={{ fontWeight: 900, fontSize: 22, color: "#fff", letterSpacing: -1 }}>KM</span><span style={{ fontWeight: 900, fontSize: 22, color: GOLD, letterSpacing: -1 }}>ZERO</span></div>
           <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: 2.5, marginTop: -2 }}>GESTÃO DE OBRAS</div>
         </div>
-        {right !== undefined ? right : <div style={{ width: 36, height: 36, borderRadius: 18, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>👷</div>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          {right}
+          <UsuarioLogado />
+        </div>
       </div>
       {(title || sub) && (
         <div style={{ paddingTop: 8, paddingBottom: 10 }}>

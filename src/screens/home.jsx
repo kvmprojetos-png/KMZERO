@@ -8,7 +8,7 @@ import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDoc
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, UsuarioLogado } from "../components/ui.jsx";
 import { useModoEscritorio } from "../lib/useLargura.js";
 
 export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, onNav, onLogout }) {
@@ -31,6 +31,7 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
             <div style={{ fontSize: 8, color: "rgba(255,255,255,0.5)", letterSpacing: 2.5 }}>GESTÃO DE OBRAS</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <UsuarioLogado compacto />
             <button onClick={() => onNav("mensagens")} style={{ position: "relative", background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 18, width: 36, height: 36, cursor: "pointer", fontSize: 16 }}>
               💬
               {novasMsgs > 0 && <span style={{ position: "absolute", top: -2, right: -2, background: RED, color: "#fff", borderRadius: 10, padding: "1px 5px", fontSize: 9, fontWeight: 800 }}>{novasMsgs}</span>}
