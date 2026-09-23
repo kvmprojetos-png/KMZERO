@@ -969,7 +969,16 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const ancora = new Date(t.ultimoPagamento + "T12:00:00");
     let presentes = 0, faltas = 0, atestados = 0, feriados = 0, contados = 0;
     let cursor = new Date(ancora), primeiroDiaUtil = null, ultimoDiaUtil = null, guard = 0;
-    while (contados < nUteis && guard < 120) {
+    // Mensal: o ciclo vai do dia seguinte ao último pagamento até o próximo "dia X" do mês
+    // (ficha: diaPagamentoMes). Semanal/quinzenal: 5 ou 10 dias úteis, como antes.
+    let fimMensal = null;
+    if (tipo === "mensal") {
+      const diaPg = Math.min(31, Math.max(1, parseInt(t.diaPagamentoMes, 10) || 5));
+      const noMes = (ano, mes) => new Date(ano, mes, Math.min(diaPg, new Date(ano, mes + 1, 0).getDate()), 12);
+      fimMensal = noMes(ancora.getFullYear(), ancora.getMonth());
+      if (fimMensal <= ancora) fimMensal = noMes(ancora.getFullYear(), ancora.getMonth() + 1);
+    }
+    while ((fimMensal ? cursor < fimMensal : contados < nUteis) && guard < 400) {
       guard++;
       cursor.setDate(cursor.getDate() + 1);
       if (cursor.getDay() === 0 || cursor.getDay() === 6) continue;
@@ -995,7 +1004,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       adiantIds = vales.map(a => a.id);
     }
     const liquido = Math.max(0, bruto - adiantDesconto);
-    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: ultimoDiaUtil };
+    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: fimMensal ? `${fimMensal.getFullYear()}-${String(fimMensal.getMonth() + 1).padStart(2, "0")}-${String(fimMensal.getDate()).padStart(2, "0")}` : ultimoDiaUtil };
   };
 
   const calcular = (t) => {
