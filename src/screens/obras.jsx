@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
@@ -306,8 +305,13 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
     try { const [d, m, y] = r.data.split("/"); return parseInt(m) - 1 === mes && parseInt(y) === ano; } catch { return false; }
   }).reduce((s, r) => s + (parseFloat(r.totalAlimentacao) || 0), 0);
 
-  const totalMaterialAprov = pedidosObra.filter(p => p.status === "Aprovado" && p.data && p.data.includes(`/${String(mes + 1).padStart(2, "0")}/${ano}`)).length * 100;
-  const custoTotalMes = totalCustoMaoObra + totalCombustivel + totalMaterialAprov + totalAlimentacaoMes;
+  // Materiais: só soma valor REAL informado no pedido aprovado; sem valor, fica "—" (nada inventado)
+  const pedidosAprovMes = pedidosObra.filter(p => p.status === "Aprovado" && p.data && p.data.includes(`/${String(mes + 1).padStart(2, "0")}/${ano}`));
+  const valorPedido = p => { const n = parseFloat(p.valor ?? p.valorTotal); return Number.isFinite(n) ? n : null; };
+  const pedidosComValor = pedidosAprovMes.filter(p => valorPedido(p) !== null);
+  const totalMaterialAprov = pedidosComValor.length ? pedidosComValor.reduce((s, p) => s + valorPedido(p), 0) : null;
+  const temCustoMateriais = totalMaterialAprov !== null;
+  const custoTotalMes = totalCustoMaoObra + totalCombustivel + (totalMaterialAprov || 0) + totalAlimentacaoMes;
 
   const Secao = ({ titulo, icone, valor, cor, onClickAcao, acaoLabel, children }) => (
     <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
@@ -378,10 +382,10 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
                 {obra.dataFimContrato && <span>🏁 Prazo: <b>{new Date(obra.dataFimContrato + "T12:00:00").toLocaleDateString("pt-BR")}</b></span>}
               </div>
             )}
-            {/* Margem estimada (Valor contrato - custo do mês × meses estimados) */}
+            {/* Margem estimada (Valor contrato - custo do mês × meses estimados) — só com custo real de materiais */}
             {(() => {
               const valor = parseFloat(obra.valorContrato);
-              if (custoTotalMes > 0 && obra.dataInicioContrato && obra.dataFimContrato) {
+              if (temCustoMateriais && custoTotalMes > 0 && obra.dataInicioContrato && obra.dataFimContrato) {
                 const ini = new Date(obra.dataInicioContrato + "T12:00:00");
                 const fim = new Date(obra.dataFimContrato + "T12:00:00");
                 const mesesObra = Math.max(1, Math.round((fim - ini) / (1000 * 60 * 60 * 24 * 30)));
@@ -422,8 +426,9 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
               <div style={{ fontSize: 12, fontWeight: 800, color: "#dc7e00" }}>R$ {totalAlimentacaoMes.toFixed(2)}</div>
             </div>
             <div style={{ background: "#f0f7ff", padding: 8, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "#888" }}>📦 Materiais (est.)</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: BLUE }}>R$ {totalMaterialAprov.toFixed(2)}</div>
+              <div style={{ fontSize: 9, color: "#888" }}>📦 Materiais</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: BLUE }}>{temCustoMateriais ? `R$ ${totalMaterialAprov.toFixed(2)}` : "—"}</div>
+              {!temCustoMateriais && <div style={{ fontSize: 9, color: "#888" }}>informe o valor nos pedidos aprovados</div>}
             </div>
           </div>
         </div>

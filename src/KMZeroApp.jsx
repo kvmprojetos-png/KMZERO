@@ -1,12 +1,12 @@
 import { LINKS_PADRAO } from "./screens/equipe.jsx";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual, criarContaFirebase } from "./firebase.js";
+import { logoutFirebase, resultadoRedirecionamento, aguardarSessao } from "./firebase.js";
 
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
-import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, buscarEmpresaIdDoUsuario, registrarEmpresa, registrarUsuarioEmpresa, carregarPerfilNuvem, aplicarPerfilNuvem, jsonEstavel, store } from "./lib/store.js";
+import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
@@ -14,7 +14,7 @@ import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirma
 import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
 
 /* ── Telas separadas por domínio ── */
-import { TelaPerfilPIN, TelaPIN, TelaLogin, TelaMinhaConta, TelaAcessosApp } from "./screens/auth.jsx";
+import { TelaEntrar, TelaPrimeiroAcesso, TelaMinhaConta, TelaAcessosApp } from "./screens/auth.jsx";
 import { TelaRegistro } from "./screens/registro.jsx";
 import { TelaHome, TelaPainelGestor, CategoriaCard, TelaDashboard, TelaRelatorio, TelaRelatorioConsolidado, TelaAlertas, gerarAlertas } from "./screens/home.jsx";
 import { TelaObras, TelaObraDetalhe, TelaMapa } from "./screens/obras.jsx";
@@ -75,6 +75,8 @@ export default function App() {
 
   const [empresaIdState, setEmpresaIdState] = useState(null);
   const [usuarios, setUsuarios]   = useState([]);
+  const [usuarioGoogle, setUsuarioGoogle] = useState(null); // conta Google sem empresa (primeiro acesso)
+  const [erroEntrada, setErroEntrada] = useState("");        // erro vindo do login por redirecionamento
   const [obras, setObras]         = useState([]);
   const [trabalhadores, setTrab]  = useState([]);
   const [equips, setEquips]       = useState([]);
@@ -182,7 +184,11 @@ export default function App() {
   // Salva foto: local imediato (offline-first) + nuvem em segundo plano
   const salvarFotoObraSync = useCallback(f => {
     setFotosObras(fs => [f, ...fs]);
-    enviarFotoNuvem(f);
+    // Depois do upload, troca o base64 pela URL da nuvem (o localStorage para de guardar a foto inteira)
+    enviarFotoNuvem(f).then(url => {
+      if (typeof url !== "string" || !url) return;
+      setFotosObras(fs => fs.map(x => String(x.id) === String(f.id) ? { ...x, foto: url, fotoUrl: url } : x));
+    }).catch(e => console.error("salvarFotoObraSync:", e));
   }, []);
 
   // Recebe fotos dos outros aparelhos em tempo real (gestor vê fotos do encarregado)
@@ -229,7 +235,11 @@ export default function App() {
   const [carregando, setCarregando] = useState(true);
   const empresaCarregadaRef = useRef(null); // empresa cujos dados estão em memória (prefixo do localStorage)
 
-  const obraAtual = usuario?.obraId ? obras.find(o => o.id === usuario.obraId) || obras[0] : obras[0];
+  // Gestor: sem obra fixa cai na primeira obra. Equipe: só a obra vinculada (sem obra → aviso, nunca a obra de outro)
+  const usuarioEhGestor = usuario?.perfil === "gestor";
+  const temObraId = usuario?.obraId !== undefined && usuario?.obraId !== null && usuario?.obraId !== "";
+  const obraVinculada = temObraId ? obras.find(o => String(o.id) === String(usuario.obraId)) || null : null;
+  const obraAtual = (usuarioEhGestor || !usuario) ? (obraVinculada || obras[0]) : obraVinculada;
   const presencasHoje = historico[hojeStr()] || {};
 
   // Confere na nuvem se o acesso ainda vale (gestor pode ter removido) e atualiza obra/nome/cargo
@@ -336,6 +346,13 @@ export default function App() {
         setUsuario(userLogado);
         setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
         verificarAcessoNuvem(userLogado); // em segundo plano
+      } else {
+        // Sem sessão local: pode ser a volta do login por redirecionamento (Google),
+        // ou a sessão Google gravada no aparelho ainda vale (ex.: app fechado no meio do 1º acesso).
+        const viaRedirect = await resultadoRedirecionamento();
+        if (viaRedirect && viaRedirect.erro) setErroEntrada(viaRedirect.erro);
+        const sessao = (viaRedirect && viaRedirect.uid) ? viaRedirect : await aguardarSessao();
+        if (sessao) await concluirLoginGoogle(sessao);
       }
 
       // ⭐ AUTO-POPULA 30 DIAS apenas se ativado manualmente em Sistema > Gerar 30 dias
@@ -380,11 +397,20 @@ export default function App() {
   // o encarregado lança na obra aparece pro gestor. (pedidos, mensagens, RDOs,
   // presenças e fotos já tinham sync próprio acima — continuam iguais.)
   const syncAtivo = !carregando && !!usuario?.firebaseUid && !!empresaIdState;
-  const syncGestor = syncAtivo && usuario?.perfil === "gestor";
+
   useSyncColecao("obras",           obras,           setObras,           syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("trabalhadores",   trabalhadores,   setTrab,            syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("equips",          equips,          setEquips,          syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("acessos",         usuarios,        setUsuarios,        syncGestor, { ordenar: porIdAsc }); // só gestor (tem senha temporária)
+  // Equipe com acesso ao app = perfis da nuvem (usuarios/) + convites pendentes (só o gestor vê).
+  // Substitui a lista local: quem entra é quem tem conta Google com perfil na empresa.
+  useEffect(() => {
+    if (!syncAtivo) return;
+    let perfis = null, convites = [];
+    const publicar = () => { if (perfis) setUsuarios([...perfis, ...convites]); };
+    const paradas = [observarEquipeNuvem(ps => { perfis = ps; publicar(); })];
+    if (usuario?.perfil === "gestor") paradas.push(observarConvitesNuvem(cs => { convites = cs; publicar(); }));
+    return () => paradas.forEach(p => { try { p && p(); } catch {} });
+  }, [syncAtivo, usuario?.perfil, empresaIdState]);
   useSyncColecao("fornecedores",    fornecedores,    setFornecedores,    syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("clientes",        clientes,        setClientes,        syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("ativos",          ativos,          setAtivos,          syncAtivo, { ordenar: porIdAsc });
@@ -450,6 +476,12 @@ export default function App() {
     setTrab(ts => ts.map(x => x.id === t.id ? t : x));
     setTrabSelecionado(t);
   };
+  // Folha arquivada: marca os vales descontados (descontadoEm + folhaId) para não descontar de novo em outra folha
+  const marcarValesDescontados = (ids, info) => {
+    const set = new Set((ids || []).map(String));
+    if (!set.size) return;
+    setAdiant(ads => ads.map(a => set.has(String(a.id)) ? { ...a, ...info, descontado: true } : a));
+  };
   // Restaurar backup = MESCLAR: registros do arquivo entram/atualizam (mesmo id vence), nada é apagado.
   // Com a nuvem ativa, apagar aqui apagaria na empresa inteira — por isso não substitui listas.
   const mesclarPorId = (atual, novos) => {
@@ -495,6 +527,15 @@ export default function App() {
     return arr.map((x, i) => i === idx ? { ...x, ...u } : x);
   };
 
+  // Depois de "Entrar com Google": perfil → entra; convite → cria o perfil e entra; nada → primeiro acesso
+  const concluirLoginGoogle = async (userGoogle) => {
+    const r = await resolverEntradaGoogle(userGoogle);
+    if (r.tipo === "perfil") { await login(r.usuario); return { ok: true }; }
+    if (r.tipo === "sem_convite") { setUsuarioGoogle(userGoogle); setTelaRaw("primeiro_acesso"); return { ok: true, semConvite: true }; }
+    if (r.desativado) { try { await logoutFirebase(); } catch {} }
+    return { ok: false, erro: r.erro };
+  };
+
   const login = async (u) => {
     const eidNovo = u.empresaId || null;
     if (eidNovo !== (empresaCarregadaRef.current || null)) {
@@ -522,22 +563,13 @@ export default function App() {
     else setTela("home");
   };
 
-  // Atualizar usuário (PIN, biometria, etc) — persiste em usuarios + atualiza logado
-  const atualizarUsuario = (uAtualizado) => {
-    setUsuarios(us => us.map(x => x.id === uAtualizado.id ? uAtualizado : x));
-    if (usuario?.id === uAtualizado.id) {
-      setUsuario(uAtualizado);
-      store.set("usuarioLogado", uAtualizado);
-    }
-  };
-
   // Helper: pra onde voltar baseado no perfil
   const telaInicial = () => {
     if (!usuario) return "login";
     if (usuario.perfil === "gestor") return "gestor";
     return "home";
   };
-  const logout = async () => {
+  const sairDaConta = async () => {
     try { await logoutFirebase(); } catch (e) {}
     setUsuario(null);
     setEmpresaIdState(null);
@@ -546,6 +578,17 @@ export default function App() {
     // Recarrega para limpar TODO o estado em memória (evita levar dados desta empresa
     // para a nuvem de outra empresa se o próximo login for de outra conta)
     window.location.reload();
+  };
+  // "Sair" chamado pelos botões da home/painel (confirmado=false) e pelo modal de
+  // Minha Conta (confirmado=true, a pessoa já confirmou lá).
+  const logout = (confirmado = false) => {
+    // TODO(human): regra do botão "Sair" no campo.
+    // Depois de sair, só se entra de novo com internet (login pelo Google).
+    // Decida: (A) se navigator.onLine === false, BLOQUEAR com alert("...") e não sair;
+    //         (B) deixar sair mesmo sem sinal, avisando no texto da confirmação.
+    // Escolha também o texto da confirmação e chame:
+    //   confirmar(texto, () => sairDaConta());      // pede confirmação (janela do app)
+    //   if (confirmado) return sairDaConta();        // veio do modal de Minha Conta: sai direto
   };
   const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
 
@@ -641,7 +684,7 @@ export default function App() {
             <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Acesso Restrito</div>
             <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, marginBottom: 20 }}>
               Esta área é apenas para o gestor.<br/>
-              Se precisar, fale com o Kleber.
+              Se precisar, fale com o gestor da empresa.
             </div>
             <button onClick={() => setTela("home")} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
               ← Voltar ao Início
@@ -653,14 +696,36 @@ export default function App() {
     );
   }
 
+  // 🏗️ Telas de campo precisam de obra: equipe sem obra vinculada vê aviso em vez de tela branca
+  const TELAS_COM_OBRA = new Set(["fluxo", "material", "fotos_solo", "equip_solo", "diario"]);
   const render = () => {
+    if (usuario && !usuarioEhGestor && !obraAtual && TELAS_COM_OBRA.has(tela)) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+          <KMHeader title="Sem obra vinculada" sub="Fale com o gestor" onBack={() => setTela("home")} />
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
+            <div>
+              <div style={{ fontSize: 64, marginBottom: 16 }}>🏗️</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Sem obra vinculada</div>
+              <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, marginBottom: 20 }}>
+                Peça ao gestor para vincular você a uma obra em Sistema → Acessos do App.
+              </div>
+              <button onClick={() => window.location.reload()} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13, marginRight: 8 }}>🔄 Atualizar</button>
+              <button onClick={() => setTela("home")} style={{ background: "#eee", color: NAVY, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
+            </div>
+          </div>
+          <KMFooter />
+        </div>
+      );
+    }
     switch (tela) {
-      case "login":      return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRemoverUsuario={id => setUsuarios(us => us.filter(x => String(x.id) !== String(id)))} onRegistro={() => setTela("registro")} />;
-      case "registro":   return <TelaRegistro onBack={() => setTela("login")} onRegistrado={login} />;
+      case "login":      return <TelaEntrar onGoogle={concluirLoginGoogle} erroInicial={erroEntrada} />;
+      case "primeiro_acesso": return <TelaPrimeiroAcesso usuarioGoogle={usuarioGoogle} onCriarEmpresa={() => setTelaRaw("registro")} onVerificar={() => usuarioGoogle ? concluirLoginGoogle(usuarioGoogle) : Promise.resolve({ ok: false, erro: "Entre com o Google de novo." })} onSair={async () => { try { await logoutFirebase(); } catch {} setUsuarioGoogle(null); setTelaRaw("login"); }} />;
+      case "registro":   return <TelaRegistro usuarioGoogle={usuarioGoogle} onBack={() => setTelaRaw("primeiro_acesso")} onRegistrado={login} />;
       case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} onNav={setTela} onLogout={logout} />;
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
       case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={criarPedidoSync} />;
-      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => f.obraId === obraAtual?.id).length} onBack={() => setTela("home")} onSalvar={f => setFotosObras(fs => [f, ...fs])} />;
+      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => f.obraId === obraAtual?.id).length} onBack={() => setTela("home")} onSalvar={salvarFotoObraSync} />;
       case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} usuario={usuario} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => f.id !== id))} />;
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
@@ -671,24 +736,9 @@ export default function App() {
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "mov_equip":  return <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} onVerDetalhe={m => { setMovEquipSel(m); setTela("mov_equip_detalhe"); }} />;
       case "mov_equip_detalhe": return movEquipSel ? <TelaMovEquipDetalhe mov={movEquip.find(x => x.id === movEquipSel.id) || movEquipSel} obras={obras} equips={equips} ferramentas={ferramentas} usuario={usuario} onBack={voltar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} /> : <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} />;
-      case "equipe":     return <TelaEquipe obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onAdd={(t, login) => {
+      case "equipe":     return <TelaEquipe obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onAdd={(t) => {
         setTrab(ts => [...ts, t]);
-        // Se o gestor pediu pra criar login, gera usuário também
-        if (login && login.email) {
-          const novoUsuario = {
-            id: Date.now() + 1,
-            nome: t.nome,
-            email: login.email.toLowerCase().trim(),
-            senha: login.senha || "123",
-            pin: "",
-            biometriaAtiva: false,
-            perfil: "encarregado",
-            obraId: t.obraId,
-            tel: t.tel || "",
-          };
-          setUsuarios(us => [...us, novoUsuario]);
-          setTimeout(() => alert(`✅ Login criado!\n\n📧 Email: ${novoUsuario.email}\n🔑 Senha: ${novoUsuario.senha}\n\nAnote e passe pra ${t.nome}. No primeiro acesso ela cria o PIN.`), 200);
-        }
+        // Acesso ao app é separado: Sistema → Acessos do App (Gmail da pessoa)
       }} onRemove={(id) => {
         // Remove trabalhador
         const trab = trabalhadores.find(t => t.id === id);
@@ -698,8 +748,9 @@ export default function App() {
           const usuarioVinculado = usuarios.find(u => u.nome.toLowerCase().trim() === trab.nome.toLowerCase().trim() && u.perfil !== "gestor");
           if (usuarioVinculado) {
             setTimeout(() => {
-              confirmar(`Também remover o LOGIN de "${trab.nome}" do sistema?\n\n(Ele não aparecerá mais na tela de login)`, () => {
-                setUsuarios(us => us.filter(u => u.id !== usuarioVinculado.id));
+              confirmar(`Também desativar o ACESSO AO APP de "${trab.nome}"?\n\n(Ela não conseguirá mais entrar com o Google)`, () => {
+                if (usuarioVinculado.convite || !usuarioVinculado.firebaseUid) return;
+                definirAcessoAtivo(usuarioVinculado.firebaseUid, false);
               });
             }, 300);
           }
@@ -717,7 +768,7 @@ export default function App() {
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} usuario={usuario} onBack={voltar} onEditar={editarTrabalhador} onEditarPresenca={editarPresencaDia} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={enviarMensagemSync} onMarcarLida={marcarLidaSync} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
-      case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} />;
+      case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} onMarcarValesDescontados={marcarValesDescontados} />;
       case "equip_gestao":return <TelaEquipamentosGestao obras={obras} equips={equips} onBack={voltar} onAdd={eq => setEquips(es => [...es, eq])} onEditar={eq => setEquips(es => es.map(x => x.id === eq.id ? eq : x))} onRemover={id => setEquips(es => es.filter(e => e.id !== id))} />;
       case "ativos":     return <TelaAtivos obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onAdd={a => setAtivos(as => [...as, a])} onEditar={a => setAtivos(as => as.map(x => x.id === a.id ? a : x))} onRemover={id => setAtivos(as => as.filter(a => a.id !== id))} onAbastecer={a => setAbast(abs => [a, ...abs])} />;
       case "frota":      return <TelaFrota obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
@@ -729,12 +780,11 @@ export default function App() {
       case "empresa":    return <TelaConfigEmpresa empresa={empresa} onSave={setEmpresa} onBack={voltar} />;
       case "minha_conta": return <TelaMinhaConta usuario={usuario} empresa={empresa} onBack={voltar} onLogout={logout} />;
       case "ajuda":      return <TelaAjuda empresa={empresa} onBack={voltar} />;
-      case "acessos":    return <TelaAcessosApp usuarios={usuarios} obras={obras} onBack={voltar} onAdd={u => setUsuarios(us => [...us, u])} onEditar={u => setUsuarios(us => us.map(x => x.id === u.id ? u : x))} onRemover={id => setUsuarios(us => us.filter(u => u.id !== id))} />;
-      case "perfil_pin": return <TelaPerfilPIN usuario={usuario} onAtualizar={atualizarUsuario} onBack={voltar} />;
+      case "acessos":    return <TelaAcessosApp usuario={usuario} usuarios={usuarios} obras={obras} empresa={empresa} onBack={voltar} />;
       case "produtividade": return <TelaProdutividade obras={obras} usuario={usuario} produtividade={produtividade} onBack={voltar} onAdd={p => setProd(ps => [p, ...ps])} onRemove={id => setProd(ps => ps.filter(p => p.id !== id))} />;
       case "recebimento":   return <TelaRecebimento obras={obras} pedidos={pedidos} usuario={usuario} recebimentos={recebimentos} onBack={voltar} onAdd={r => setReceb(rs => [r, ...rs])} />;
-      case "folha_quinzenal": return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} />;
-      case "hist_folha":      return <TelaHistFolha obras={obras} trabalhadores={trabalhadores} folhasSalvas={folhasSalvas} onBack={voltar} onRemover={id => setFolhasSalvas(fs => fs.filter(f => f.id !== id))} />;
+      case "folha_quinzenal": return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} onMarcarValesDescontados={marcarValesDescontados} />;
+      case "hist_folha":      return <TelaHistFolha obras={obras} trabalhadores={trabalhadores} folhasSalvas={folhasSalvas} onBack={voltar} onRemover={id => { setFolhasSalvas(fs => fs.filter(f => f.id !== id)); setAdiant(ads => ads.map(a => String(a.folhaId) === String(id) ? { ...a, descontadoEm: null, folhaId: null, folhaPeriodo: null, descontado: false } : a)); }} />;
       case "manutencao":      return <TelaManutencao obras={obras} ativos={ativos} ferramentas={ferramentas} equips={equips} manutencoes={manutencoes} onBack={voltar} onAdd={salvarManutencao} onRemover={id => setManut(ms => ms.filter(m => m.id !== id))} />;
       case "solicitar_mov": return <TelaSolicitarMov obras={obras} trabalhadores={trabalhadores} usuario={usuario} onBack={() => setTela("home")} onSolicitar={m => setMov(ms => [m, ...ms])} />;
       case "aprovar_mov":   return <TelaAprovarMov obras={obras} trabalhadores={trabalhadores} movimentacoes={movimentacoes} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => m.id === id ? { ...m, status: "Negado" } : m))} onVerDetalhe={m => { setMovPessSel(m); setTela("mov_pess_detalhe"); }} />;
@@ -789,6 +839,9 @@ export default function App() {
       case "gerar_simulacao": return <TelaGerarSimulacao onGerar={() => {
         confirmar("⚠️ ATENÇÃO!\n\nIsto vai SUBSTITUIR todos os RDOs, pedidos, fotos, despesas, presenças, etc. por dados FICTÍCIOS.\n\n☁️ Com a nuvem ativa, isso vai para a NUVEM e para TODOS os aparelhos da empresa.\n\nUse apenas numa empresa de teste.\n\nDeseja continuar?", () => {
           const sim = gerarDadosMes30Dias();
+          // Lista de exemplo (fictícia) só entra aqui, e só se a empresa ainda não tiver os seus
+          if (!trabalhadores.length) setTrab(sim.trabalhadores);
+          if (!obras.length) setObras(sim.obras);
           setHistorico(sim.historico);
           setFotosObras(sim.fotosObras);
           setRdos(sim.rdosEmitidos);
@@ -805,7 +858,7 @@ export default function App() {
           voltar();
         });
       }} onBack={voltar} />;
-      default:           return <TelaLogin usuarios={usuarios} obras={obras} onLogin={login} onAtualizarUsuario={atualizarUsuario} onRemoverUsuario={id => setUsuarios(us => us.filter(x => String(x.id) !== String(id)))} onRegistro={() => setTela("registro")} />;
+      default:           return <TelaEntrar onGoogle={concluirLoginGoogle} erroInicial={erroEntrada} />;
     }
   };
 

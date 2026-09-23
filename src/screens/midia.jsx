@@ -2,7 +2,6 @@ import { carimbarFoto } from "./suprimentos.jsx";
 import { CATEGORIAS_ANEXO_GESTOR, CATEGORIAS_ANEXO_ENCARREGADO } from "./sistema.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { loginFirebase, logoutFirebase, observarAutenticacao, recuperarSenha, atualizarSenha, usuarioAtual } from "../firebase.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
@@ -167,6 +166,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const baixarFoto = (foto) => {
     const link = document.createElement("a");
     link.href = foto.foto;
+    if (/^https?:/i.test(foto.foto || "")) { link.target = "_blank"; link.rel = "noreferrer"; } // foto já na nuvem (URL): abre em nova aba; download direto só vale pra base64
     link.download = `${foto.obraNome.replace(/[^a-z0-9]/gi, "_")}-${foto.data.replace(/\//g, "-")}-${foto.id}.jpg`;
     document.body.appendChild(link);
     link.click();

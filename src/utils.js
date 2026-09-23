@@ -1,13 +1,36 @@
-export const hojeStr = () => new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+// Data LOCAL no formato "AAAA-MM-DD" (nunca usar toISOString() para chave de dia: é UTC e vira o dia seguinte após as 21h no Brasil)
+export const dataLocalIso = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export const hojeStr = () => dataLocalIso(); // YYYY-MM-DD
 export const fmtData = (iso) => { const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); };
 export const ultimosDias = (n) => {
   const arr = [];
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
-    arr.push(d.toISOString().split("T")[0]);
+    arr.push(dataLocalIso(d));
   }
   return arr;
 };
+
+/* ── ALIMENTAÇÃO ── */
+// Chaves gravadas na empresa (tela Sistema → Empresa) para cada tipo de refeição
+export const CHAVE_PRECO_ALIM = { cafeManha: "valorCafeManha", cafeTarde: "valorCafeTarde", marmita: "valorMarmita", lanche: "valorLanche" };
+// Preço configurado para o tipo ("cafeManha" | "cafeTarde" | "marmita" | "lanche"), ou null se a empresa ainda não configurou.
+// Nunca inventa valor: quem chama decide mostrar "—" e avisar.
+export function precoAlim(empresa, tipo) {
+  const chave = CHAVE_PRECO_ALIM[tipo];
+  if (!chave || !empresa) return null;
+  const v = empresa[chave];
+  if (v === undefined || v === null || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+// Soma do que foi marcado ({ cafeManha: true, ... }) usando só os tipos com preço configurado
+export function somaAlim(empresa, marcados) {
+  const a = marcados || {};
+  return Object.keys(CHAVE_PRECO_ALIM).reduce((s, k) => s + (a[k] ? (precoAlim(empresa, k) ?? 0) : 0), 0);
+}
+// true se algum tipo de refeição ainda está sem preço (para mostrar o aviso "Configure os preços em Sistema → Empresa")
+export const faltaPrecoAlim = (empresa) => Object.keys(CHAVE_PRECO_ALIM).some(k => precoAlim(empresa, k) === null);
 
 /* ── PALETTE ── */
 

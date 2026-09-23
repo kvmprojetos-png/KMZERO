@@ -1,4 +1,5 @@
 import { BLUE, GREEN, RED, ORANGE } from "../theme.js";
+import { dataLocalIso } from "../utils.js";
 
 export const DEFAULT_FORNECEDORES = [
   // LOJAS DE MATERIAL DE CONSTRUÇÃO — ALEGRE/ES
@@ -8,7 +9,7 @@ export const DEFAULT_FORNECEDORES = [
     razaoSocial: "Everaldo Leal Domingos",
     cnpj: "08.074.253/0001-11",
     categoria: "Material de construção",
-    contato: "Everaldo Leal",
+    contato: "",
     telefone: "(28) 3552-1416",
     whatsapp: "(28) 99886-0000",
     email: "",
@@ -154,122 +155,48 @@ export const DEFAULT_OBRAS = [
   { id: 4, nome: "Quadra Poliesportiva Jerônimo Monteiro",                  local: "Jerônimo Monteiro - ES", endereco: "Jerônimo Monteiro - ES", refLocal: "", lat: null, lng: null, status: "Ativa", tipo: "Edificação" },
 ];
 
+// Lista de EXEMPLO com dados obviamente fictícios (repositório é público).
+// Empresa nova começa SEM trabalhadores: esta lista só entra pela simulação
+// "Gerar 30 dias" (gerarDadosMes30Dias) — nunca no estado inicial.
+const trabalhadorExemplo = (id, cargo, obraId, diaria) => ({
+  id, nome: `Trabalhador Exemplo ${id}`, cargo, obraId,
+  cpf: "000.000.000-00", rg: "0000000", nasc: "01/01/1990",
+  tel: "(00) 00000-0000", endereco: "Rua Exemplo, 1",
+  tamCalca: "42", tamCamisa: "G", tamBota: "41",
+  diaria: String(diaria),
+});
+
 export const DEFAULT_TRABALHADORES = [
-  // OBRA 1 — Emílio Marins
-  { id: 1,  nome: "Geovane Pereira de Souza",      cargo: "Encarregado / Operador Retroescavadeira", obraId: 1,
-    cpf: "108.453.227-89", rg: "2.345.678 SPTC/ES", nasc: "15/03/1982",
-    tel: "(28) 99988-1234", endereco: "Rua das Acácias, 145 - Centro, Alegre - ES",
-    tamCalca: "44", tamCamisa: "GG", tamBota: "42",
-    diaria: "145" },
+  // OBRA 1
+  trabalhadorExemplo(1,  "Encarregado / Operador Retroescavadeira", 1, 145),
+  trabalhadorExemplo(2,  "Pedreiro",    1, 145),
+  trabalhadorExemplo(3,  "Pedreiro",    1, 145),
+  trabalhadorExemplo(4,  "Pedreiro",    1, 145),
+  trabalhadorExemplo(5,  "Pedreiro",    1, 145),
+  trabalhadorExemplo(6,  "Pedreiro",    1, 145),
+  trabalhadorExemplo(7,  "Auxiliar",    1, 100),
+  trabalhadorExemplo(8,  "Auxiliar",    1, 100),
+  trabalhadorExemplo(9,  "Auxiliar",    1, 100),
+  trabalhadorExemplo(10, "Pintor",      1, 145),
+  trabalhadorExemplo(11, "Auxiliar",    1, 100),
 
-  { id: 2,  nome: "Adão Cortezes da Silva", cargo: "Pedreiro", obraId: 1,
-    cpf: "092.614.037-00", rg: "1.876.345 SPTC/ES", nasc: "11/09/1976",
-    tel: "(28) 99926-2485", endereco: "Rua João Pessoa, 234 - Bairro Triângulo, Alegre - ES",
-    tamCalca: "42", tamCamisa: "G", tamBota: "41",
-    diaria: "145" },
+  // OBRA 2
+  trabalhadorExemplo(12, "Encarregado", 2, 145),
+  trabalhadorExemplo(13, "Pintor",      2, 145),
+  trabalhadorExemplo(14, "Eletricista", 2, 145),
 
-  { id: 3,  nome: "Tico (Antônio Carlos da Silva)", cargo: "Pedreiro", obraId: 1,
-    cpf: "057.892.346-12", rg: "1.234.567 SPTC/ES", nasc: "22/06/1985",
-    tel: "(28) 99815-6724", endereco: "Rua Bela Vista, 89 - Vila do Sul, Alegre - ES",
-    tamCalca: "40", tamCamisa: "G", tamBota: "40",
-    diaria: "145" },
-
-  { id: 4,  nome: "Wilian dos Santos Pereira", cargo: "Pedreiro", obraId: 1,
-    cpf: "143.567.892-44", rg: "2.156.789 SPTC/ES", nasc: "08/12/1988",
-    tel: "(28) 99764-3812", endereco: "Rua Treze de Maio, 156 - Centro, Alegre - ES",
-    tamCalca: "44", tamCamisa: "GG", tamBota: "42",
-    diaria: "145" },
-
-  { id: 5,  nome: "Ramom Ferreira Lima", cargo: "Pedreiro", obraId: 1,
-    cpf: "176.234.567-91", rg: "2.987.654 SPTC/ES", nasc: "30/04/1990",
-    tel: "(28) 99623-4571", endereco: "Rua Felício Alcuri, 45 - Bairro Gioia, Alegre - ES",
-    tamCalca: "40", tamCamisa: "G", tamBota: "40",
-    diaria: "145" },
-
-  { id: 6,  nome: "Carlos Eduardo Moreira", cargo: "Pedreiro", obraId: 1,
-    cpf: "098.765.432-15", rg: "1.654.321 SPTC/ES", nasc: "17/02/1979",
-    tel: "(28) 99812-5634", endereco: "Av. Oscar de Almeida Gama, 78 - Centro, Alegre - ES",
-    tamCalca: "42", tamCamisa: "G", tamBota: "41",
-    diaria: "145" },
-
-  { id: 7,  nome: "João Victor Ribeiro Machado", cargo: "Auxiliar", obraId: 1,
-    cpf: "192.327.167-98", rg: "3.456.789 SPTC/ES", nasc: "14/08/2002",
-    tel: "(28) 99942-3427",
-    endereco: "Rua Loteamento Lúcio Chavier, Vila do Sul, Alegre - ES",
-    tamCalca: "42", tamCamisa: "G", tamBota: "41/42",
-    diaria: "100" },
-
-  { id: 8,  nome: "João Paulo (João Capeta)", cargo: "Auxiliar",  obraId: 1,
-    cpf: "165.432.871-26", rg: "2.564.789 SPTC/ES", nasc: "05/11/1995",
-    tel: "(28) 99756-2348", endereco: "Rua Ararai, 234 - Distrito de Ararai, Alegre - ES",
-    tamCalca: "40", tamCamisa: "M", tamBota: "39",
-    diaria: "100" },
-
-  { id: 9,  nome: "Jhonatan Souza Almeida", cargo: "Auxiliar", obraId: 1,
-    cpf: "187.654.321-08", rg: "3.234.567 SPTC/ES", nasc: "27/07/1998",
-    tel: "(28) 99687-4521", endereco: "Rua Monsenhor Pavesi, 67 - Centro, Alegre - ES",
-    tamCalca: "40", tamCamisa: "G", tamBota: "40",
-    diaria: "100" },
-
-  { id: 10, nome: "Roney Carvalho Santos", cargo: "Pintor", obraId: 1,
-    cpf: "121.345.678-32", rg: "1.987.654 SPTC/ES", nasc: "12/05/1983",
-    tel: "(28) 99834-5612", endereco: "Rua Joaquim Borges, 123 - Centro, Alegre - ES",
-    tamCalca: "42", tamCamisa: "GG", tamBota: "41",
-    diaria: "145" },
-
-  { id: 11, nome: "Nego (Nelson Marques)", cargo: "Auxiliar", obraId: 1,
-    cpf: "134.567.890-44", rg: "2.345.612 SPTC/ES", nasc: "19/09/1992",
-    tel: "(28) 99578-3421", endereco: "Rua Principal, 89 - Distrito do Café, Alegre - ES",
-    tamCalca: "44", tamCamisa: "G", tamBota: "42",
-    diaria: "100" },
-
-  // OBRA 2 — IFES
-  { id: 12, nome: "Rhiard Cavalcante Mendes", cargo: "Encarregado", obraId: 2,
-    cpf: "156.789.012-65", rg: "2.876.543 SPTC/ES", nasc: "08/01/1986",
-    tel: "(28) 99812-6743", endereco: "Av. Haroldo Bastos Valbão, 234 - Rive, Alegre - ES",
-    tamCalca: "42", tamCamisa: "G", tamBota: "41",
-    diaria: "145" },
-
-  { id: 13, nome: "Bidão (Sebastião Ribeiro)", cargo: "Pintor", obraId: 2,
-    cpf: "143.876.543-21", rg: "1.456.789 SPTC/ES", nasc: "23/10/1974",
-    tel: "(28) 99645-2387", endereco: "Rua Euclides Jaccoud Junior, 78 - Rive, Alegre - ES",
-    tamCalca: "44", tamCamisa: "GG", tamBota: "42",
-    diaria: "145" },
-
-  { id: 14, nome: "Bruno Henrique Costa", cargo: "Eletricista", obraId: 2,
-    cpf: "176.543.210-87", rg: "2.654.321 SPTC/ES", nasc: "16/06/1989",
-    tel: "(28) 99723-8456", endereco: "Rua Antônio Correa, 45 - Bairro Boa Vista, Alegre - ES",
-    tamCalca: "40", tamCamisa: "G", tamBota: "40",
-    diaria: "145" },
-
-  // OBRA 4 — Quadra Poliesportiva Jerônimo Monteiro
-  { id: 15, nome: "Marcos Oliveira Cardoso", cargo: "Encarregado", obraId: 4,
-    cpf: "198.234.567-43", rg: "3.012.345 SPTC/ES", nasc: "11/04/1981",
-    tel: "(28) 99845-6712", endereco: "Rua Floriano Peixoto, 156 - Centro, Jerônimo Monteiro - ES",
-    tamCalca: "42", tamCamisa: "G", tamBota: "41",
-    diaria: "145" },
-
-  { id: 16, nome: "Marcelo Pereira da Silva", cargo: "Pedreiro", obraId: 4,
-    cpf: "165.789.234-78", rg: "2.789.012 SPTC/ES", nasc: "29/07/1987",
-    tel: "(28) 99578-3412", endereco: "Rua João Rita, 78 - Centro, Jerônimo Monteiro - ES",
-    tamCalca: "42", tamCamisa: "GG", tamBota: "42",
-    diaria: "145" },
+  // OBRA 4
+  trabalhadorExemplo(15, "Encarregado", 4, 145),
+  trabalhadorExemplo(16, "Pedreiro",    4, 145),
 
   // ESCRITÓRIO / GERÊNCIA
-  { id: 17, nome: "Kleber Vieira Martins", cargo: "Engenheiro / Diretor", obraId: 0,
-    cpf: "075.345.678-90", rg: "1.234.567 SPTC/ES", nasc: "—",
-    tel: "(28) 99925-8172", endereco: "Alegre - ES",
-    diaria: "170" },
-
-  { id: 18, nome: "Mozart Andrade Silveira", cargo: "Mestre de Obras", obraId: 0,
-    cpf: "143.234.567-12", rg: "2.456.789 SPTC/ES", nasc: "14/02/1972",
-    tel: "(28) 99812-3456", endereco: "Centro, Alegre - ES",
-    diaria: "250" },
+  trabalhadorExemplo(17, "Engenheiro / Diretor", 0, 170),
+  trabalhadorExemplo(18, "Mestre de Obras",      0, 250),
 ];
 
 /* ════════════════════════════════════
    GERADOR DE 30 DIAS — pré-popula tudo
-   Isso roda uma vez quando o app abre vazio
+   Só roda pela tela "Gerar 30 dias" (dados fictícios, empresa de teste)
 ════════════════════════════════════ */
 export function gerarDadosMes30Dias() {
   const hoje = new Date();
@@ -281,9 +208,9 @@ export function gerarDadosMes30Dias() {
     { id: 15, obraId: 4 }, { id: 16, obraId: 4 },
   ];
   const obrasAtivas = [
-    { id: 1, nome: "Drenagem Rua Emílio Marins (Trecho 2)", encarregado: "Geovane" },
-    { id: 2, nome: "Reforma e Ampliação - IFES", encarregado: "Rhiard" },
-    { id: 4, nome: "Quadra Poliesportiva Jerônimo Monteiro", encarregado: "Marcos" },
+    { id: 1, nome: "Drenagem Rua Emílio Marins (Trecho 2)", encarregado: "Trabalhador Exemplo 1" },
+    { id: 2, nome: "Reforma e Ampliação - IFES", encarregado: "Trabalhador Exemplo 12" },
+    { id: 4, nome: "Quadra Poliesportiva Jerônimo Monteiro", encarregado: "Trabalhador Exemplo 15" },
   ];
 
   // Materiais e despesas
@@ -357,7 +284,7 @@ export function gerarDadosMes30Dias() {
   for (let d = 29; d >= 0; d--) {
     const data = new Date(hoje);
     data.setDate(hoje.getDate() - d);
-    const isoData = data.toISOString().split("T")[0];
+    const isoData = dataLocalIso(data);
     const dataStr = data.toLocaleDateString("pt-BR");
     const ts = data.getTime();
     const diaSemana = data.getDay();
@@ -503,7 +430,7 @@ export function gerarDadosMes30Dias() {
           descricao: desp.descricao,
           valor: desp.valor,
           data: dataStr,
-          autor: "Kleber Vieira Martins",
+          autor: "Gestor Exemplo",
           ts,
         });
       });
@@ -531,12 +458,12 @@ export function gerarDadosMes30Dias() {
           id: ts + movNum,
           numero: movNum++,
           trabId: trabEsc.id,
-          trabNome: ["Adão Cortezes da Silva", "Tico", "Wilian", "Carlos", "Roney"][Math.floor(Math.random() * 5)],
+          trabNome: `Trabalhador Exemplo ${trabEsc.id}`,
           obraOrigem: 1,
           obraDestino: 2,
           tipo: Math.random() < 0.6 ? "hoje" : "definitiva",
           motivo: ["Reforço para a concretagem", "Apoio na alvenaria", "Substituir falta da equipe"][Math.floor(Math.random() * 3)],
-          solicitante: "Geovane",
+          solicitante: "Trabalhador Exemplo 1",
           status: d <= 1 ? "Aguardando" : "Aprovado",
           data: dataStr,
           ts,
@@ -558,9 +485,9 @@ export function gerarDadosMes30Dias() {
         obraDestinoId: 2,
         obraDestinoNome: "Reforma e Ampliação - IFES",
         tipo: "emprestimo",
-        prazo: new Date(ts + 7 * 86400000).toISOString().split("T")[0],
+        prazo: dataLocalIso(new Date(ts + 7 * 86400000)),
         motivo: "Concretagem da fundação",
-        solicitante: "Rhiard",
+        solicitante: "Trabalhador Exemplo 12",
         status: d <= 2 ? "Aguardando" : "Aprovado",
         dataSolicitacao: dataStr,
         ts,
@@ -604,7 +531,7 @@ export function gerarDadosMes30Dias() {
       adiantamentos.push({
         id: ts,
         trabId,
-        trabNome: d === 22 ? "Adão Cortezes da Silva" : "Ramom",
+        trabNome: `Trabalhador Exemplo ${trabId}`,
         valor: 200,
         data: dataStr,
         descontado: false,
@@ -655,7 +582,11 @@ export function gerarDadosMes30Dias() {
     });
   }
 
-  return { historico, fotosObras, rdosEmitidos, pedidos, movimentacoes, movEquip, diario, despesasAvulsas, adiantamentos, recebimentos, abastecimentos, produtividade };
+  // trabalhadores/obras de exemplo: a tela de simulação só usa se a empresa ainda não tiver os seus
+  const trabalhadores = DEFAULT_TRABALHADORES.map(t => ({ ...t }));
+  const obras = DEFAULT_OBRAS.map(o => ({ ...o }));
+
+  return { historico, fotosObras, rdosEmitidos, pedidos, movimentacoes, movEquip, diario, despesasAvulsas, adiantamentos, recebimentos, abastecimentos, produtividade, trabalhadores, obras };
 }
 
 export const DEFAULT_EQUIPS = [
@@ -1821,15 +1752,15 @@ export const EMPRESA_TEMPLATE = {
 
 // Funcionários do escritório (custo INDIRETO, rateado entre obras ativas)
 export const DEFAULT_FUNC_ESCRITORIO = [
-  { id: 1, nome: "Mozart", cargo: "Engenheiro Orçamentista", salarioMensal: 0, ativo: true, dataAdmissao: "" },
+  { id: 1, nome: "Funcionário Exemplo", cargo: "Engenheiro Orçamentista", salarioMensal: 0, ativo: true, dataAdmissao: "" },
 ];
 
 export const DEFAULT_ATIVOS = [
   // Retroescavadeiras
-  { id: 1, tipo: "Retroescavadeira", nome: "Retroescavadeira 01", placa: "", marca: "", modelo: "", ano: "", obraId: 1, horimetro: 0, valorHora: 80, responsavel: "Geovane", combustivel: "Diesel", consumoMedio: 8, status: "Ativo" },
+  { id: 1, tipo: "Retroescavadeira", nome: "Retroescavadeira 01", placa: "", marca: "", modelo: "", ano: "", obraId: 1, horimetro: 0, valorHora: 80, responsavel: "Trabalhador Exemplo 1", combustivel: "Diesel", consumoMedio: 8, status: "Ativo" },
 
-  // Carro do Kleber (placeholder pra ser editado)
-  { id: 2, tipo: "Carro", nome: "Carro do Kleber", placa: "", marca: "", modelo: "", ano: "", cor: "", obraId: null, km: 0, valorHora: 0, responsavel: "Kleber Vieira Martins", combustivel: "Gasolina", consumoMedio: 10, status: "Ativo" },
+  // Carro da empresa (exemplo, pra ser editado)
+  { id: 2, tipo: "Carro", nome: "Carro da empresa", placa: "", marca: "", modelo: "", ano: "", cor: "", obraId: null, km: 0, valorHora: 0, responsavel: "Gestor Exemplo", combustivel: "Gasolina", consumoMedio: 10, status: "Ativo" },
 ];
 
 // Valores-hora por cargo (R$/h) para apropriação de custo
