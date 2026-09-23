@@ -192,6 +192,9 @@
       .hero .sub { margin-top: 18px; font-size: clamp(16px, 1.5vw, 19px); line-height: 1.6; color: var(--km-texto2); max-width: 560px; }
       .acoes { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 12px; }
       @media (max-width: 479px) { .acoes .btn { width: 100%; } }
+      /* Link de texto abaixo dos botões do hero ("Ver como funciona") */
+      .link-txt { display: inline-block; margin-top: 14px; font-size: 14px; font-weight: 600; color: var(--km-contorno); text-decoration: underline; text-underline-offset: 3px; padding: 6px 0; }
+      .link-txt:hover { color: var(--km-titulo); }
       .selos { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; font-weight: 500; color: var(--km-texto2); list-style: none; padding: 0; }
       .selos li { display: flex; align-items: center; gap: 8px; }
       .selos .ico { width: 16px; height: 16px; color: var(--verde); }
@@ -402,6 +405,7 @@
       .oferta { background: var(--km-superficie); border: 1.5px solid var(--ouro); border-radius: 16px; padding: 24px 22px; }
       .oferta .selo { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); background: var(--ouro); border-radius: 99px; padding: 5px 12px; margin-bottom: 14px; }
       .oferta ul { list-style: none; padding: 0; display: grid; gap: 10px; margin-bottom: 20px; }
+      .oferta .btn { margin: 0 10px 10px 0; }
       .oferta li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; color: var(--km-texto); }
       .oferta li .ico { width: 18px; height: 18px; color: var(--ouro); margin-top: 2px; }
 
@@ -522,9 +526,10 @@
             <p class="sub">Presença, fotos carimbadas, pedidos de material, diário de obra e folha de pagamento em um lugar só. A equipe lança no canteiro, mesmo sem sinal. Você acompanha e aprova de onde estiver.</p>
             <div class="acoes">
               <a class="btn btn-ouro" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener">Falar no WhatsApp</a>
-              <!-- Quando a demonstração passar no checklist: 'Ver demonstração' → /app/?demo=1 -->
-              <a class="btn btn-contorno" href="#como-funciona">Ver como funciona</a>
+              <!-- Demonstração pública sem login: empresa fictícia "Construtora Exemplo", nada vai para a nuvem -->
+              <a class="btn btn-contorno" href="/app/?demo=1">Ver demonstração</a>
             </div>
+            <a class="link-txt" href="#como-funciona">Ver como funciona</a>
             <ul class="selos">
               <li><svg class="ico"><use href="#i-check"/></svg>Sem instalar nada</li>
               <li><svg class="ico"><use href="#i-check"/></svg>Funciona sem sinal</li>
@@ -819,6 +824,7 @@
                 <li><svg class="ico"><use href="#i-check"/></svg>Condição de lançamento a combinar</li>
               </ul>
               <a class="btn btn-ouro" href="https://wa.me/5528999258172?text=Ol%C3%A1!%20Vi%20o%20site%20do%20KMZERO%20Obras%20e%20quero%20conhecer%20o%20sistema.%20Tenho%20___%20obras%20e%20___%20pessoas%20na%20equipe." target="_blank" rel="noopener">Quero conhecer o KMZERO</a>
+              <a class="btn btn-contorno" href="/app/?demo=1">Ver demonstração</a>
             </div>
           </div>
         </div>

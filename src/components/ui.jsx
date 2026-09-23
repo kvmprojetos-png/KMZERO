@@ -1,36 +1,60 @@
 import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { useModoEscritorio } from "../lib/useLargura.js";
+import { TELAS_MENU } from "../lib/layoutEscritorio.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
+
+/* ── Modo escritório ──
+   O KMZeroApp fornece { tela } quando o gestor está em tela larga e fora das telas de
+   entrada (o mesmo flag que liga o menu lateral) — e null no app de campo. A moldura
+   (KMHeader, KMFooter, Btn, Tabela) lê daqui, NUNCA do hook de largura sozinho: o
+   encarregado no PC e o login em monitor largo continuam com a moldura do celular. */
+export const EscritorioContext = createContext(null);
+export const useEscritorio = () => useContext(EscritorioContext);
+
+// Dentro de um Modal o Btn continua 100% mesmo no escritório (o modal é estreito)
+export const ModalContext = createContext(false);
 
 export const Badge = ({ label, color, small }) => (
   <span style={{ background: color, color: "#fff", borderRadius: 20, padding: small ? "3px 9px" : "5px 13px", fontSize: small ? 11 : 13, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>
 );
 
-export const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx, danger, ...rest }) => (
-  <button
-    {...rest}
-    type={rest.type || "button"}
-    onClick={onClick}
-    disabled={disabled}
-    style={css({
-      // Desabilitado segue o tema (cinza fixo sumia no escuro); habilitado continua na cor do botão
-      background: disabled ? T.desabilitadoFundo : color,
-      color: disabled ? T.desabilitado : text,
-      border: danger ? "2px solid " + RED : "none",
-      borderRadius: 10,
-      padding: "14px 0",
-      fontSize: 15,
-      fontWeight: 800,
-      cursor: disabled ? "default" : "pointer",
-      width: "100%",
-      minHeight: 48,
-      letterSpacing: 0.8,
-      textTransform: "uppercase",
-      boxShadow: disabled ? "none" : `0 3px 10px ${color}55`,
-      touchAction: "manipulation",
-    }, sx || {})}
-  >{label}</button>
-);
+export const Btn = ({ label, color = NAVY, text = "#fff", onClick, disabled, style: sx, danger, ...rest }) => {
+  const escritorio = !!useEscritorio();
+  const emModal = useContext(ModalContext);
+  // No escritório (fora de modal) o botão tem largura automática: um botão de 1250 px é o
+  // que mais denuncia "tela de celular esticada". No celular continua 100% / 48 px de toque.
+  const compacto = escritorio && !emModal;
+  return (
+    <button
+      {...rest}
+      type={rest.type || "button"}
+      onClick={onClick}
+      disabled={disabled}
+      style={css({
+        // Desabilitado segue o tema (cinza fixo sumia no escuro); habilitado continua na cor do botão
+        background: disabled ? T.desabilitadoFundo : color,
+        color: disabled ? T.desabilitado : text,
+        border: danger ? "2px solid " + RED : "none",
+        borderRadius: 10,
+        padding: compacto ? "10px 18px" : "14px 0",
+        fontSize: compacto ? 13 : 15,
+        fontWeight: 800,
+        cursor: disabled ? "default" : "pointer",
+        width: compacto ? "auto" : "100%",
+        minWidth: compacto ? 160 : undefined,
+        minHeight: compacto ? 40 : 48,
+        display: compacto ? "inline-flex" : undefined,
+        alignItems: compacto ? "center" : undefined,
+        justifyContent: compacto ? "center" : undefined,
+        gap: compacto ? 8 : undefined,
+        letterSpacing: 0.8,
+        textTransform: "uppercase",
+        boxShadow: disabled ? "none" : `0 3px 10px ${color}55`,
+        touchAction: "manipulation",
+      }, sx || {})}
+    >{label}</button>
+  );
+};
 
 // ════ EmptyState — componente reutilizável para listas vazias ════
 export function EmptyState({ icon = "📦", titulo, subtitulo, botaoLabel, onBotao, cor = NAVY }) {
@@ -149,7 +173,32 @@ export function LogoKM({ tamanho = 24, tagline = true, cor = "#fff", style: sx }
   );
 }
 
-export function KMHeader({ title, sub, onBack, right }) {
+/* Cabeçalho de tela. No celular: logo + voltar + pessoa logada + título (como sempre).
+   No escritório vira BARRA DE PÁGINA: 56 px, navy plano nos dois temas (os slots `right`
+   das telas usam fundo rgba branca e precisam de fundo escuro), sem logo e sem pessoa
+   logada (o menu lateral já tem os dois). "‹ Voltar" só quando há onBack E a tela não
+   está no menu (telas de detalhe) — ou quando a tela passa `voltar` (subtelas internas,
+   como o detalhe da obra dentro de "obras"). Sem título e sem sub não renderiza nada. */
+export function KMHeader({ title, sub, onBack, right, voltar }) {
+  const escritorio = useEscritorio();
+  if (escritorio) {
+    if (!title && !sub) return null;
+    const mostrarVoltar = !!onBack && (voltar || !TELAS_MENU.has(escritorio.tela));
+    return (
+      <div className="km-barra-pagina" style={{ background: T.barra, minHeight: 56, padding: "0 24px", display: "flex", alignItems: "center", gap: 16, position: "sticky", top: 0, zIndex: 20, borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, boxSizing: "border-box" }}>
+        {mostrarVoltar && (
+          <button type="button" onClick={onBack} aria-label="Voltar" style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "6px 0", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+            ‹ Voltar
+          </button>
+        )}
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", padding: "10px 0" }}>
+          {title && <div style={{ fontSize: 20, fontWeight: 700, color: "#fff", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>}
+          {sub   && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.2, minWidth: 0 }}>{sub}</div>}
+        </div>
+        {right && <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>{right}</div>}
+      </div>
+    );
+  }
   return (
     <div style={{ background: `linear-gradient(180deg,${NAVY} 0%,${NAVY2} 100%)`, padding: "0 14px", flexShrink: 0, paddingTop: "env(safe-area-inset-top, 0px)" }}>
       <div style={{ display: "flex", alignItems: "center", paddingTop: 12, paddingBottom: 6, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -212,6 +261,8 @@ export function Grade({ min = 320, gap = 12, children, style }) {
 }
 
 export function KMFooter() {
+  // No escritório não há rodapé institucional: a marca já está no menu lateral
+  if (useEscritorio()) return null;
   return (
     <div style={{ background: `linear-gradient(180deg,${NAVY2} 0%,${NAVY} 100%)`, padding: "10px 0", paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))", textAlign: "center", flexShrink: 0 }}>
       <span style={{ fontWeight: 900, fontSize: 16, color: "#fff", letterSpacing: -0.5 }}>KM</span>
@@ -296,6 +347,8 @@ export function FotoViewer({ src, legenda, onClose }) {
 export function Modal({ show, title, children, onClose }) {
   if (!show) return null;
   return (
+    // ModalContext: o Btn lá dentro fica 100% mesmo no escritório (ver Btn)
+    <ModalContext.Provider value={true}>
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16, overscrollBehavior: "contain" }}>
       {/* superficie3: o modal flutua acima das cartelas, então fica um tom acima delas no escuro */}
       <div onClick={e => e.stopPropagation()} style={{ background: T.superficie3, borderRadius: 20, padding: 20, width: "100%", maxWidth: 400, maxHeight: "85vh", overflowY: "auto", boxShadow: T.sombra2, WebkitOverflowScrolling: "touch" }}>
@@ -308,11 +361,55 @@ export function Modal({ show, title, children, onClose }) {
         </div>
       </div>
     </div>
+    </ModalContext.Provider>
+  );
+}
+
+/* ── TABELA — lista densa do escritório ──
+   colunas: [{ chave, titulo, alinhar ("left" | "right" | "center"), largura, render(linha, i) }]
+   linhas: array de objetos (chave `id` ou índice como key); onLinha(linha): clique na linha.
+   13 px, linha de 36 px, cabeçalho fixo em T.superficie2, zebra, hover, números em
+   tabular-nums. Não guarda estado (o wrapper remonta a tela a cada navegação). */
+export function Tabela({ colunas = [], linhas = [], onLinha, vazio = "Nada por aqui.", style: sx, ...rest }) {
+  return (
+    <div {...rest} style={{ background: T.superficie, border: `1px solid ${T.borda}`, borderRadius: 12, overflow: "auto", ...(sx || {}) }}>
+      <style>{`
+        .km-tabela { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .km-tabela th { position: sticky; top: 0; z-index: 1; background: var(--km-superficie2); color: var(--km-texto2); font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; padding: 0 12px; height: 36px; white-space: nowrap; border-bottom: 1px solid var(--km-borda); }
+        .km-tabela td { padding: 0 12px; height: 36px; color: var(--km-texto); border-bottom: 1px solid var(--km-borda); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+        .km-tabela tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--km-superficie2) 50%, transparent); }
+        .km-tabela tbody tr:last-child td { border-bottom: none; }
+        .km-tabela tbody tr.km-tabela-clicavel { cursor: pointer; }
+        .km-tabela tbody tr:hover td { background: var(--km-superficie2); }
+      `}</style>
+      <table className="km-tabela">
+        <thead>
+          <tr>
+            {colunas.map(c => (
+              <th key={c.chave} style={{ textAlign: c.alinhar || "left", width: c.largura }}>{c.titulo}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.length === 0 && (
+            <tr><td colSpan={colunas.length} style={{ textAlign: "center", color: T.texto3, height: 48 }}>{vazio}</td></tr>
+          )}
+          {linhas.map((l, i) => (
+            <tr key={l?.id ?? i} className={onLinha ? "km-tabela-clicavel" : undefined} onClick={onLinha ? () => onLinha(l, i) : undefined}>
+              {colunas.map(c => (
+                <td key={c.chave} style={{ textAlign: c.alinhar || "left" }}>{c.render ? c.render(l, i) : l?.[c.chave]}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 /* ── CONFIRMAR — substituto do confirm() que funciona no iPhone iframe ──
-   Cria modal visual via DOM. Sempre usa overlay próprio (mais confiável). */
+   Cria modal visual via DOM (fora da árvore React, por isso não passa pelo ModalContext:
+   os botões já são 50% cada, em HTML puro). Sempre usa overlay próprio (mais confiável). */
 export function confirmar(mensagem, onConfirm) {
   // Remove overlay anterior se houver
   const existente = document.getElementById("km-confirm-overlay");

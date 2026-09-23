@@ -35,6 +35,8 @@ class ErrorBoundary extends React.Component {
   }
   componentDidCatch(erro, info) {
     console.error("Erro na tela:", erro, info && info.componentStack);
+    // Se quebrou antes de carregar, o splash do index.html ficaria na frente do aviso
+    try { document.querySelectorAll(".loading-splash").forEach(el => el.remove()); } catch {}
   }
   tentarDeNovo() {
     window.location.reload();

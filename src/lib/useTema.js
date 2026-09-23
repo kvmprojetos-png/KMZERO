@@ -8,6 +8,15 @@ import { LARGURA_ESCRITORIO } from "./useLargura.js";
 
 export const CHAVE_TEMA = "_kmzero_tema";
 const PREFERENCIAS = ["claro", "escuro", "auto"];
+// Evento da mesma aba: quando um alternador grava, os outros useTema (menu, Minha conta, gráficos) acompanham
+const EVENTO_TEMA = "kmzero-tema";
+
+// As três opções do alternador (menu lateral e Minha conta): ícone = nome em Icones.jsx
+export const OPCOES_TEMA = [
+  { valor: "claro",  rotulo: "Claro",      icone: "sun",     dica: "Tema claro" },
+  { valor: "escuro", rotulo: "Escuro",     icone: "moon",    dica: "Tema escuro" },
+  { valor: "auto",   rotulo: "Automático", icone: "monitor", dica: "Automático: escuro no computador, claro no celular" },
+];
 
 // Cor da barra do navegador/PWA: navy no claro (casa com o KMHeader), fundo escuro no escuro
 const THEME_COLOR = { claro: "#052f3d", escuro: "#081a21" };
@@ -61,14 +70,17 @@ export function useTema() {
   // Outra aba (ou a vitrine na mesma origem) mudou a preferência: acompanha
   useEffect(() => {
     const aoStorage = e => { if (!e.key || e.key === CHAVE_TEMA) setPreferenciaState(lerPreferencia()); };
+    const aoEvento = e => setPreferenciaState(PREFERENCIAS.includes(e.detail) ? e.detail : lerPreferencia());
     window.addEventListener("storage", aoStorage);
-    return () => window.removeEventListener("storage", aoStorage);
+    window.addEventListener(EVENTO_TEMA, aoEvento);
+    return () => { window.removeEventListener("storage", aoStorage); window.removeEventListener(EVENTO_TEMA, aoEvento); };
   }, []);
 
   const setPreferencia = useCallback(nova => {
     const p = PREFERENCIAS.includes(nova) ? nova : "auto";
     try { localStorage.setItem(CHAVE_TEMA, p); } catch {}
     setPreferenciaState(p);
+    try { window.dispatchEvent(new CustomEvent(EVENTO_TEMA, { detail: p })); } catch {}
   }, []);
 
   return { preferencia, tema, setPreferencia, paleta: PALETAS[tema] };

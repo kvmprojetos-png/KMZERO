@@ -45,6 +45,19 @@ function resumoUsuario(u) {
      };
 }
 
+/* Marca "a página saiu para o Google" antes do redirecionamento. Na volta,
+   resultadoRedirecionamento() lê e apaga a marca: se o Google não devolveu
+   ninguém, a tela de entrada consegue dizer isso em vez de ficar muda. */
+const CHAVE_REDIRECT = "_kmzero_redirect";
+function marcarRedirect() { try { sessionStorage.setItem(CHAVE_REDIRECT, "1"); } catch {} }
+function lerEApagarRedirect() {
+     try {
+            const v = sessionStorage.getItem(CHAVE_REDIRECT) === "1";
+            sessionStorage.removeItem(CHAVE_REDIRECT);
+            return v;
+     } catch { return false; }
+}
+
 /* Abre a janela do Google. Onde a janela é bloqueada (alguns celulares e o app
    instalado), cai para o redirecionamento: a página sai, o Google devolve e o
    app termina o login em resultadoRedirecionamento(). */
@@ -56,25 +69,30 @@ export async function entrarComGoogle() {
             const codigo = e && e.code;
             if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported"].includes(codigo)) {
                      try {
+                            marcarRedirect();
                             await signInWithRedirect(auth, provedorGoogle);
-                            return { ok: true, redirecionando: true };
+                            return { ok: true, redirecionando: true, codigo };
                      } catch (e2) {
                             return { ok: false, erro: traduzErroFirebase(e2.code), codigo: e2.code };
                      }
             }
             if (codigo === "auth/popup-closed-by-user" || codigo === "auth/cancelled-popup-request") {
-                     return { ok: false, cancelado: true, erro: "Login cancelado." };
+                     return { ok: false, cancelado: true, erro: "Login cancelado.", codigo };
             }
             return { ok: false, erro: traduzErroFirebase(codigo), codigo };
      }
 }
 
 /* Chamar uma vez ao abrir o app: devolve o usuário se a página acabou de voltar
-   de um login por redirecionamento; senão null. */
+   de um login por redirecionamento; senão null. Quando a página SAIU para o
+   Google (marca gravada) e voltou sem usuário, devolve { semUsuario: true }
+   para a tela avisar — desde que aguardarSessao() também não encontre ninguém. */
 export async function resultadoRedirecionamento() {
+     const saiuParaGoogle = lerEApagarRedirect();
      try {
             const r = await getRedirectResult(auth);
-            return r && r.user ? resumoUsuario(r.user) : null;
+            if (r && r.user) return resumoUsuario(r.user);
+            return saiuParaGoogle ? { semUsuario: true, codigo: "redirect-sem-usuario" } : null;
      } catch (e) {
             console.warn("getRedirectResult:", e);
             return { erro: traduzErroFirebase(e.code), codigo: e.code };
@@ -105,17 +123,25 @@ export function usuarioAtual() {
      return auth.currentUser;
 }
 
-function traduzErroFirebase(codigo) {
+/* Mensagens para a pessoa (a tela de entrada mostra por código em AvisoEntrada;
+   estas são o texto de reserva). O que é instrução de console do Firebase vai
+   para console.warn — quem resolve é o suporte, não quem está tentando entrar. */
+const INSTRUCOES_CONSOLE = {
+     "auth/unauthorized-domain": "Libere este endereço no Firebase: Authentication → Settings → Authorized domains.",
+     "auth/operation-not-allowed": "Ative o login com Google no Firebase: Authentication → Sign-in method → Google.",
+};
+export function traduzErroFirebase(codigo) {
      const traducoes = {
-            "auth/unauthorized-domain": "Este endereço ainda não está liberado no Firebase. No console: Authentication → Settings → Authorized domains.",
-            "auth/operation-not-allowed": "O login com Google não está ativado no Firebase. No console: Authentication → Sign-in method → Google.",
-            "auth/user-disabled": "Esta conta foi desativada. Procure o gestor.",
+            "auth/unauthorized-domain": "O KMZERO ainda não está liberado para este endereço. Avise o suporte.",
+            "auth/operation-not-allowed": "O KMZERO ainda não está liberado para este endereço. Avise o suporte.",
+            "auth/user-disabled": "Esta conta Google foi desativada. Fale com o suporte.",
             "auth/account-exists-with-different-credential": "Este e-mail já entrou de outra forma. Use a mesma conta Google de antes.",
-            "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos.",
-            "auth/network-request-failed": "Sem conexão. Verifique a internet.",
+            "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+            "auth/network-request-failed": "Você está sem internet. O primeiro acesso precisa de sinal; depois o app abre offline.",
             "auth/internal-error": "O Google não respondeu. Tente de novo.",
      };
-     return traducoes[codigo] || "Não foi possível entrar. Tente de novo.";
+     if (INSTRUCOES_CONSOLE[codigo]) console.warn(`[KMZERO] ${codigo}: ${INSTRUCOES_CONSOLE[codigo]}`);
+     return traducoes[codigo] || "Não foi possível entrar. Tente de novo; se continuar, fale com o suporte.";
 }
 
 export { auth, firebaseApp, db, firebaseConfig };

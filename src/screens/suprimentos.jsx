@@ -706,32 +706,23 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
 
         {/* AÇÕES */}
         <div style={{ marginTop: 12 }}>
+          {/* Ações de página em <Btn>: 100% no celular, largura automática lado a lado no escritório */}
+          <div className="km-chips" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {pedido.status === "Aguardando" ? (
             <>
-              <button onClick={abrirEdicao} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${BLUE}`, background: T.infoFundo, color: BLUE, fontWeight: 800, cursor: "pointer", fontSize: 13, marginBottom: 8 }}>
-                ✏️ Editar Itens do Pedido
-              </button>
-              <button onClick={() => setModal(true)} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14, marginBottom: 8, boxShadow: "0 4px 12px rgba(42,168,79,0.3)" }}>
-                ✓ APROVAR E GERAR PDF DO PEDIDO
-              </button>
-              <button onClick={negarPedido} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${RED}`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-                ✕ Negar Pedido
-              </button>
+              <Btn label="✏️ Editar Itens do Pedido" color={T.infoFundo} text={BLUE} onClick={abrirEdicao} style={{ border: `1.5px solid ${BLUE}`, boxShadow: "none" }} />
+              <Btn label="✓ Aprovar e gerar PDF do pedido" color={GREEN} onClick={() => setModal(true)} />
+              <Btn label="✕ Negar Pedido" color={T.superficie} text={RED} onClick={negarPedido} style={{ border: `1.5px solid ${RED}`, boxShadow: "none" }} />
             </>
           ) : pedido.status === "Aprovado" ? (
             <>
-              <button onClick={baixarPDF} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: NAVY, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14, marginBottom: 8, boxShadow: "0 4px 12px rgba(15,33,81,0.3)" }}>
-                📥 Baixar / Enviar Pedido (PDF A6)
-              </button>
-              <button onClick={removerPedido} style={{ width: "100%", padding: 10, borderRadius: 12, border: `1px solid ${RED}33`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>
-                🗑️ Excluir Pedido
-              </button>
+              <Btn label="📥 Baixar / Enviar Pedido (PDF A6)" color={NAVY} onClick={baixarPDF} />
+              <Btn label="🗑️ Excluir Pedido" color={T.superficie} text={RED} onClick={removerPedido} style={{ border: `1px solid ${RED}33`, boxShadow: "none" }} />
             </>
           ) : (
-            <button onClick={removerPedido} style={{ width: "100%", padding: 12, borderRadius: 12, border: `1px solid ${RED}33`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-              🗑️ Excluir Pedido
-            </button>
+            <Btn label="🗑️ Excluir Pedido" color={T.superficie} text={RED} onClick={removerPedido} style={{ border: `1px solid ${RED}33`, boxShadow: "none" }} />
           )}
+          </div>
         </div>
       </div>
       <KMFooter />
@@ -1385,7 +1376,8 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
 
   if (step === "novo") return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title="Selecionar Pedido" onBack={() => setStep("lista")} />
+      {/* voltar: etapas internas de "recebimento" (que está no menu) — a barra de página precisa do "‹ Voltar" */}
+      <KMHeader title="Selecionar Pedido" onBack={() => setStep("lista")} voltar />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ fontSize: 13, color: T.texto2, marginBottom: 10 }}>Selecione o pedido aprovado que está sendo recebido:</div>
         {aprovados.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhum pedido aprovado para receber.</div>}
@@ -1402,7 +1394,7 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
 
   if (step === "foto") return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title="Foto da Entrega" sub={pedidoSel?.material} onBack={() => setStep("novo")} />
+      <KMHeader title="Foto da Entrega" sub={pedidoSel?.material} onBack={() => setStep("novo")} voltar />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ background: T.superficie, borderRadius: 14, padding: 16, marginBottom: 12, textAlign: "center" }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>📦</div>
@@ -1423,7 +1415,7 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
 
   if (step === "confirmar") return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title="Validar Recebimento" sub={pedidoSel?.material} onBack={() => setStep("foto")} />
+      <KMHeader title="Validar Recebimento" sub={pedidoSel?.material} onBack={() => setStep("foto")} voltar />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         {foto && <img src={foto} alt="" style={{ width: "100%", borderRadius: 12, marginBottom: 12, boxShadow: T.sombra }} />}
 

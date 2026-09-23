@@ -8,8 +8,7 @@ import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDoc
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
-import { useModoEscritorio } from "../lib/useLargura.js";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, useEscritorio } from "../components/ui.jsx";
 
 export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 }) {
   const [fotos, setFotos] = useState([]);
@@ -146,7 +145,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroData, setFiltroData] = useState("");
   const [fotoExpandida, setFotoExpandida] = useState(null);
-  const escritorio = useModoEscritorio(); // celular: 3 miniaturas por linha (como sempre); escritório: quantas couberem de 160 px
+  const escritorio = !!useEscritorio(); // celular: 3 miniaturas por linha (como sempre); escritório: quantas couberem de 160 px
 
   const fotosFiltradas = fotos
     .filter(f => filtroObra === "todas" || String(f.obraId) === String(filtroObra))

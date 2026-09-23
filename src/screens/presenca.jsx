@@ -7,7 +7,7 @@ import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDoc
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Tabela, useEscritorio } from "../components/ui.jsx";
 
 export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos, pedidos, diario, usuario, empresa, historico, rdosEmitidos, fotosObras = [], onBack, onSavePresencas, onAutoEmitirRDO, onSalvarFotoObra }) {
   const [etapa, setEtapa] = useState(0);
@@ -475,6 +475,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
 ════════════════════════════════════ */
 
 export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
+  const escritorio = !!useEscritorio(); // escritório: calendário à esquerda (células de 56 px) e detalhe do dia à direita
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
   const hoje = new Date();
   const [mes, setMes] = useState(hoje.getMonth());
@@ -528,9 +529,11 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
         <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12, maxWidth: 440 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
-        {/* No PC o calendário tem largura limitada e o detalhe do dia fica ao lado; no celular empilha. */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
-        <div style={{ flex: "1 1 300px", maxWidth: 440, background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra }}>
+        {/* No escritório: grid com o calendário (420-560 px) à esquerda e o detalhe do dia à direita; no celular empilha. */}
+        <div style={escritorio
+          ? { display: "grid", gridTemplateColumns: "minmax(420px, 560px) 1fr", gap: 24, alignItems: "flex-start" }
+          : { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ flex: "1 1 300px", maxWidth: escritorio ? "none" : 440, background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <button onClick={() => navMes(-1)} style={{ background: T.superficie2, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 16 }}>‹</button>
             <div style={{ fontWeight: 800, color: T.titulo, fontSize: 14 }}>{meses[mes]} {ano}</div>
@@ -542,7 +545,8 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
             {cells.map((d, i) => (
               <button key={i} disabled={!d} onClick={() => setDiaSel(d)} style={{
-                aspectRatio: "1", border: diaSel === d ? `2px solid ${NAVY}` : "none", borderRadius: 8,
+                ...(escritorio ? { height: 56 } : { aspectRatio: "1" }),
+                border: diaSel === d ? `2px solid ${NAVY}` : "none", borderRadius: 8,
                 background: corDoDia(d), color: !d || corDoDia(d) === T.superficie2 ? T.texto3 : "#fff",
                 fontWeight: 700, fontSize: 13, cursor: d ? "pointer" : "default", opacity: d ? 1 : 0,
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
@@ -565,11 +569,26 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
           </div>
         </div>
 
+        {escritorio && !diaSel && (
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 24, boxShadow: T.sombra, color: T.texto3, fontSize: 13, textAlign: "center" }}>
+            Clique num dia para ver as presenças da equipe.
+          </div>
+        )}
         {diaSel && (
-          <div style={{ flex: "1 1 280px", maxWidth: 440, background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra }}>
+          <div style={{ flex: "1 1 280px", maxWidth: escritorio ? "none" : 440, background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra }}>
             <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📅 Dia {diaSel}/{mes + 1}/{ano}</div>
             {trabObra.length === 0 && <div style={{ color: T.texto3, fontSize: 13 }}>Sem trabalhadores nesta obra.</div>}
-            {trabObra.map(t => (
+            {escritorio && trabObra.length > 0 && (
+              <Tabela
+                linhas={trabObra}
+                colunas={[
+                  { chave: "nome", titulo: "Trabalhador", render: t => <span style={{ fontWeight: 700, color: T.titulo }}>{t.nome}</span> },
+                  { chave: "cargo", titulo: "Cargo", render: t => <span style={{ color: T.texto2 }}>{t.cargo || "—"}</span> },
+                  { chave: "status", titulo: "Presença", alinhar: "right", render: t => <Badge label={presenDia[t.id] || "Sem ponto"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small /> },
+                ]}
+              />
+            )}
+            {!escritorio && trabObra.map(t => (
               <div key={t.id} style={{ display: "flex", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${T.borda}` }}>
                 <span style={{ flex: 1, fontSize: 13, color: T.titulo }}>{t.nome}</span>
                 <Badge label={presenDia[t.id] || "Sem ponto"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small />
@@ -856,6 +875,7 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
 ════════════════════════════════════ */
 
 export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamentos, abastecimentos = [], ativos = [], empresa, onBack, onSalvarFolha, onMarcarPago, onMarcarValesDescontados }) {
+  const escritorio = !!useEscritorio(); // escritório: a lista da folha vira Tabela; no celular fica a grade compacta de sempre
   const [folhaArquivadaId, setFolhaArquivadaId] = useState(null); // folha arquivada nesta tela: seus vales continuam aparecendo (PDF depois de arquivar)
   const hoje = new Date();
   // ════ ESCOLHA DO REGIME DA FOLHA (definida pelo gestor) ════
@@ -1209,7 +1229,8 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
         {/* ════ 4 BOTÕES DE TIPO DE FOLHA (escolha simples) ════ */}
         <div style={{ background: T.superficie, borderRadius: 14, padding: 12, marginBottom: 10, boxShadow: T.sombra }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: T.titulo, letterSpacing: 2, marginBottom: 8 }}>📋 TIPO DA FOLHA</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          {/* Escritório: os 6 tipos numa linha só (chips); celular: 2 colunas como sempre */}
+          <div style={{ display: "grid", gridTemplateColumns: escritorio ? "repeat(6, minmax(140px, 1fr))" : "1fr 1fr", gap: 6 }}>
             {[
               { k: "diaria", l: "📅 Diária", c: "#0891b2", d: "1 dia específico" },
               { k: "semanal", l: "📆 Semanal", c: "#16a34a", d: "7 dias corridos" },
@@ -1462,7 +1483,25 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
         </div>
 
         {tipoRegime !== "ciclo" && (<>
-        {/* Tabela compacta */}
+        {/* ESCRITÓRIO: tabela densa com todas as colunas (dados já calculados em calcular(t)) */}
+        {escritorio ? (
+          <Tabela
+            style={{ marginBottom: 12 }}
+            vazio="Sem dias trabalhados nesta quinzena."
+            linhas={trabComMov.map(t => ({ id: t.id, t, c: calcular(t) }))}
+            colunas={[
+              { chave: "nome", titulo: "Nome", render: l => <span style={{ fontWeight: 700, color: T.titulo }}>{l.t.nome}</span> },
+              { chave: "cargo", titulo: "Cargo", render: l => <span style={{ color: T.texto2 }}>{l.t.cargo}{l.c.formaCalculo === "mensal_fixo" && <span style={{ color: T.roxoTexto, fontWeight: 700 }}> · Salário fixo</span>}</span> },
+              { chave: "presentes", titulo: "Presenças", alinhar: "right", render: l => String(l.c.presentes).replace(".", ",") },
+              { chave: "faltas", titulo: "Faltas", alinhar: "right", render: l => <span style={{ color: l.c.faltas > 0 ? RED : T.texto3, fontWeight: l.c.faltas > 0 ? 700 : 400 }}>{l.c.faltas}</span> },
+              { chave: "atestados", titulo: "Atestados", alinhar: "right", render: l => l.c.atestados },
+              { chave: "feriados", titulo: "Feriados", alinhar: "right", render: l => <span style={{ color: l.c.feriados > 0 ? T.avisoTexto : T.texto3, fontWeight: l.c.feriados > 0 ? 700 : 400 }}>{l.c.feriados}</span> },
+              { chave: "vale", titulo: "Vale", alinhar: "right", render: l => l.c.adiantDesconto > 0 ? <span style={{ color: ORANGE, fontWeight: 700 }}>R$ {l.c.adiantDesconto.toFixed(2)}</span> : <span style={{ color: T.texto3 }}>—</span> },
+              { chave: "diaria", titulo: "Diária", alinhar: "right", render: l => `R$ ${l.c.formaCalculo === "mensal_fixo" ? (l.c.salarioFixo / 30).toFixed(2) : l.c.diaria.toFixed(2)}` },
+              { chave: "liquido", titulo: "Líquido", alinhar: "right", render: l => <span style={{ fontWeight: 800, color: GREEN }}>R$ {l.c.liquido.toFixed(2)}</span> },
+            ]}
+          />
+        ) : (
         <div style={{ background: T.superficie, borderRadius: 12, overflow: "hidden", boxShadow: T.sombra, marginBottom: 12 }}>
           <div style={{ background: NAVY, color: "#fff", padding: "8px 12px", fontSize: 11, fontWeight: 700, display: "grid", gridTemplateColumns: "1fr 40px 70px 80px", gap: 6 }}>
             <span>Nome / Cargo</span><span style={{ textAlign: "center" }}>Dias</span><span style={{ textAlign: "right" }}>Diária</span><span style={{ textAlign: "right" }}>Líquido</span>
@@ -1483,14 +1522,17 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
             );
           })}
         </div>
+        )}
 
         <div style={{ background: T.infoFundo, borderRadius: 10, padding: "10px 14px", fontSize: 11, color: T.infoTexto, marginBottom: 8 }}>
           💡 <b>Regime atual:</b> {tipoRegime === "diaria" ? "Diária (1 dia específico)" : tipoRegime === "semanal" ? "Semanal (7 dias)" : tipoRegime === "quinzenal" ? `${quinzena}ª Quinzena (${dia1}-${dia2}/${mes + 1})` : tipoRegime === "mensal" ? "Mensal (mês completo)" : (persInicio && persFim ? `Personalizado (${new Date(persInicio + "T12:00:00").toLocaleDateString("pt-BR")} - ${new Date(persFim + "T12:00:00").toLocaleDateString("pt-BR")})` : "Personalizado (defina as datas acima)")}. Faltas não pagam. Atestados pagam. Adiantamentos descontados no fechamento.
         </div>
 
+        {/* km-chips: no escritório os dois botões ficam lado a lado, com largura automática */}
+        <div className="km-chips">
         <Btn label="📄 EXPORTAR FOLHA EM PDF" color={GOLD} onClick={exportarPDF} />
 
-        <button onClick={() => {
+        <Btn label={folhaArquivadaId ? "✅ Folha arquivada no histórico" : "📥 Arquivar esta folha no histórico"} color={T.superficie} text={T.contorno} disabled={!!folhaArquivadaId} style={{ marginTop: escritorio ? 0 : 8, border: `1.5px solid ${folhaArquivadaId ? T.borda : T.contorno}`, boxShadow: "none", textTransform: "none", letterSpacing: 0 }} onClick={() => {
           if (!confirm(`Salvar folha da ${quinzena}ª quinzena de ${meses[mes]}/${ano}${equipeFiltro !== "todas" ? " — " + nomeEquipe(equipeFiltro) : ""} no histórico?`)) return;
           const periodo = `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
           const itens = trabFiltro.map(t => {
@@ -1513,9 +1555,8 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
           setFolhaArquivadaId(idFolha);
           setSalvoAviso(true);
           setTimeout(() => setSalvoAviso(false), 3000);
-        }} disabled={!!folhaArquivadaId} style={{ width: "100%", padding: 12, marginTop: 8, background: T.superficie, color: T.contorno, border: `1.5px solid ${T.contorno}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: folhaArquivadaId ? "default" : "pointer", opacity: folhaArquivadaId ? 0.6 : 1 }}>
-          {folhaArquivadaId ? "✅ Folha arquivada no histórico" : "📥 Arquivar esta folha no histórico"}
-        </button>
+        }} />
+        </div>
 
         {salvoAviso && (
           <div style={{ background: T.sucessoFundo, color: GREEN, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, marginTop: 8, textAlign: "center" }}>
@@ -1575,13 +1616,11 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
             const datas = [...new Set(pagaveis.map(x => x.c.proxPagamento))].sort();
             const semCiclo = trabFiltro.length - pagaveis.length;
             return (
-              <button type="button" onClick={() => {
+              <Btn label={`✓ Marcar ${nomeEquipe(equipeFiltro)} como paga (${pagaveis.length}) · ${datas.map(fmtD).join(", ")}`} color={GREEN} style={{ marginTop: 8, textTransform: "none", letterSpacing: 0 }} onClick={() => {
                 const aviso = `Marcar ${nomeEquipe(equipeFiltro)} como PAGA?\n\n${pagaveis.length} pessoa(s) · líquido R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\nPagamento: ${datas.map(fmtD).join(", ")}${semCiclo ? `\n\n${semCiclo} sem "último pagamento" ficam de fora.` : ""}\n\nGere o PDF antes: depois de marcar, o ciclo de cada um avança para o próximo período.`;
                 if (!confirm(aviso)) return;
                 pagaveis.forEach(({ t, c }) => onMarcarPago && onMarcarPago(t, c.proxPagamento));
-              }} style={{ width: "100%", padding: 12, marginTop: 8, background: GREEN, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
-                ✓ Marcar {nomeEquipe(equipeFiltro)} como paga ({pagaveis.length}) · {datas.map(fmtD).join(", ")}
-              </button>
+              }} />
             );
           })()}
           </>
@@ -1597,6 +1636,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
 ════════════════════════════════════ */
 
 export function TelaHistFolha({ obras, trabalhadores, folhasSalvas, onBack, onRemover }) {
+  const escritorio = !!useEscritorio(); // escritório: lista em Tabela; celular: cartões de sempre
   const [busca, setBusca] = useState("");
 
   const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -1620,7 +1660,26 @@ export function TelaHistFolha({ obras, trabalhadores, folhasSalvas, onBack, onRe
           </div>
         )}
 
-        {lista.map(f => (
+        {escritorio && lista.length > 0 && (
+          <Tabela
+            linhas={lista}
+            colunas={[
+              { chave: "folha", titulo: "Folha", render: f => <span style={{ fontWeight: 700, color: T.titulo }}>{f.quinzena}ª quinzena de {meses[f.mes]}/{f.ano}</span> },
+              { chave: "periodo", titulo: "Período", render: f => f.periodo },
+              { chave: "equipe", titulo: "Equipe", render: f => f.equipe ? (f.equipe === "sem" ? "Sem equipe" : `Equipe ${f.equipe}`) : "—" },
+              { chave: "trab", titulo: "Trab.", alinhar: "right", render: f => f.itens?.length || 0 },
+              { chave: "faltas", titulo: "Faltas", alinhar: "right", render: f => f.itens?.reduce((s, i) => s + i.faltas, 0) || 0 },
+              { chave: "vales", titulo: "Vales", alinhar: "right", render: f => f.totalAdiant > 0 ? <span style={{ color: RED, fontWeight: 700 }}>R$ {f.totalAdiant.toFixed(2)}</span> : "—" },
+              { chave: "liquido", titulo: "Líquido pago", alinhar: "right", render: f => <span style={{ fontWeight: 800, color: GREEN }}>R$ {f.totalLiquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span> },
+              { chave: "salvo", titulo: "Salvo em", render: f => <span style={{ color: T.texto2 }}>{new Date(f.ts).toLocaleString("pt-BR")}</span> },
+              { chave: "acao", titulo: "", alinhar: "right", largura: 48, render: f => (
+                <button type="button" title="Remover folha" onClick={e => { e.stopPropagation(); confirmar(`Remover folha de ${meses[f.mes]}/${f.ano}?`, () => { onRemover(f.id); }); }} style={{ background: "transparent", border: "none", color: RED, cursor: "pointer", fontSize: 14, padding: "4px 6px", borderRadius: 6 }}>🗑️</button>
+              ) },
+            ]}
+          />
+        )}
+
+        {!escritorio && lista.map(f => (
           <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${GREEN}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
               <div>

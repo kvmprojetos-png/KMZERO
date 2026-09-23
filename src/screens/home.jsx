@@ -9,9 +9,11 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, UsuarioLogado } from "../components/ui.jsx";
-import { useModoEscritorio } from "../lib/useLargura.js";
+import { useEscritorio } from "../components/ui.jsx";
 import { useTema } from "../lib/useTema.js";
 import { SinoAvisos } from "./avisos.jsx";
+// Nomes das telas iguais aos do menu lateral ("Indicadores", "Alertas", "Avisos"…) e e-mail do desenvolvedor
+import { EMAIL_DEV, labelDaTela } from "../components/menuGrupos.js";
 
 export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, avisosNaoLidos = 0, onNav, onLogout }) {
   const presentes = Object.values(presencasHoje).filter(v => v === "Presente").length;
@@ -194,7 +196,7 @@ function tsLancamento(r) {
 const maisRecentes = (lista, n) => [...(lista || [])].sort((a, b) => tsLancamento(b) - tsLancamento(a)).slice(0, n);
 
 export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, rdosEmitidos = [], fotosObras = [], avisosNaoLidos = 0, onNav, onLogout, onAprovar, onNegar }) {
-  const escritorio = useModoEscritorio(); // largura >= 1024: versão de escritório; abaixo, o app de campo continua igual
+  const escritorio = !!useEscritorio(); // modo escritório (gestor em tela larga): versão de escritório; no app de campo continua igual
   const pendentes = pedidos.filter(p => p.status === "Aguardando").length;
   const movPendentes = (movimentacoes || []).filter(m => m.status === "Aguardando").length;
   const movEquipPendentes = (movEquip || []).filter(m => m.status === "Aguardando").length;
@@ -233,7 +235,10 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
     setPrazo("");
   };
 
-  // Categorias do menu — ordenadas por uso/importância
+  // Categorias do menu (celular) — ordenadas por uso/importância.
+  // Os nomes vêm de menuGrupos.js (os mesmos do menu lateral); os tiles estreitos do celular
+  // mantêm um rótulo curto quando o nome do menu não cabe ("Custos/Obra", "Aniv. / EPI").
+  const L = (nav, curto) => curto || labelDaTela(nav, nav);
   const categorias = [
     {
       titulo: "📋 Operação Diária",
@@ -241,15 +246,15 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       desc: "Relatórios, presenças e custos",
       itens: [
         { icon: "📄", l: "RDO ABNT",      nav: "rdo",         c: GOLD,         destaque: true },
-        { icon: "📦", l: "Pedidos",       nav: "pedidos",     c: pendentes > 0 ? RED : "#0891b2", badge: pendentes },
+        { icon: "📦", l: L("pedidos"),    nav: "pedidos",     c: pendentes > 0 ? RED : "#0891b2", badge: pendentes },
         { icon: "💵", l: "Custos/Obra",   nav: "custos",      c: "#16a34a" },
-        { icon: "�", l: "Pagamentos",    nav: "pagamentos", c: "#10b981" },
-        { icon: "�💸", l: "Desp. Avulsas", nav: "despesas",    c: "#ea580c" },
+        { icon: "🧾", l: L("pagamentos"), nav: "pagamentos", c: "#10b981" },
+        { icon: "💸", l: "Desp. Avulsas", nav: "despesas",    c: "#ea580c" },
         { icon: "📷", l: "Galeria Fotos", nav: "galeria",     c: "#7c3aed" },
-        { icon: "📊", l: "Dashboard",     nav: "dashboard",   c: "#0d9488" },
-        { icon: "📅", l: "Calendário",    nav: "calendario",  c: "#7c3aed" },
+        { icon: "📊", l: L("dashboard"),  nav: "dashboard",   c: "#0d9488" },
+        { icon: "📅", l: L("calendario"), nav: "calendario",  c: "#7c3aed" },
         { icon: "🗺️", l: "Mapa Obras",   nav: "mapa",        c: "#16a34a" },
-        { icon: "🚨", l: "Alertas",       nav: "alertas",     c: totalAlertas > 0 ? RED : "#9ca3af", badge: totalAlertas },
+        { icon: "🚨", l: L("alertas"),    nav: "alertas",     c: totalAlertas > 0 ? RED : "#9ca3af", badge: totalAlertas },
       ],
     },
     {
@@ -257,17 +262,17 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       cor: BLUE,
       desc: "Equipe, folha e gestão de pessoas",
       itens: [
-        { icon: "💰", l: "Folha de Pagamento", nav: "folha_quinzenal", c: "#15803d" },
+        { icon: "💰", l: L("folha_quinzenal"), nav: "folha_quinzenal", c: "#15803d" },
         { icon: "📋", l: "Histórico Folhas", nav: "hist_folha",      c: "#059669" },
-        { icon: "💸", l: "Adiantamentos",   nav: "adiantamentos",   c: "#ea580c" },
-        { icon: "🔄", l: "Movimentações",   nav: "aprovar_mov",     c: movPendentes > 0 ? RED : "#0e7490", badge: movPendentes },
-        { icon: "👥", l: "Equipe",          nav: "equipe",          c: BLUE },
+        { icon: "💸", l: L("adiantamentos"), nav: "adiantamentos",   c: "#ea580c" },
+        { icon: "🔄", l: L("aprovar_mov"),  nav: "aprovar_mov",     c: movPendentes > 0 ? RED : "#0e7490", badge: movPendentes },
+        { icon: "👥", l: L("equipe"),       nav: "equipe",          c: BLUE },
         { icon: "📋", l: "Fichas",          nav: "ficha",           c: ORANGE },
-        { icon: "📞", l: "Contatos",        nav: "contatos",        c: "#0284c7" },
-        { icon: "🏥", l: "Exames (ASO)",    nav: "exames",          c: "#dc2626" },
+        { icon: "📞", l: L("contatos"),     nav: "contatos",        c: "#0284c7" },
+        { icon: "🏥", l: L("exames"),       nav: "exames",          c: "#dc2626" },
         { icon: "🎂", l: "Aniv. / EPI",     nav: "rh",              c: "#f59e0b" },
-        { icon: "🌴", l: "Férias",          nav: "ferias",          c: "#0e7490" },
-        { icon: "💵", l: "Folha Mensal",    nav: "folha",           c: "#059669" },
+        { icon: "🌴", l: L("ferias"),       nav: "ferias",          c: "#0e7490" },
+        { icon: "💵", l: "Folha Mensal",    nav: "folha_quinzenal", c: "#059669" },
       ],
     },
     {
@@ -275,18 +280,18 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       cor: NAVY,
       desc: "Obras, máquinas e materiais",
       itens: [
-        { icon: "🏗️", l: "Obras",          nav: "obras",         c: NAVY },
-        { icon: "📅", l: "Cronograma",      nav: "cronograma",    c: "#7c3aed" },
-        { icon: "🎯", l: "Cronograma Pro",  nav: "cronograma_pro", c: "#5b21b6" },
-        { icon: "🔄", l: "Mov. Equip.",      nav: "mov_equip",     c: movEquipPendentes > 0 ? RED : "#0e7490", badge: movEquipPendentes },
+        { icon: "🏗️", l: L("obras"),          nav: "obras",         c: NAVY },
+        { icon: "📅", l: L("cronograma"),     nav: "cronograma",    c: "#7c3aed" },
+        { icon: "🎯", l: L("cronograma_pro"), nav: "cronograma_pro", c: "#5b21b6" },
+        { icon: "🔄", l: L("mov_equip"),      nav: "mov_equip",     c: movEquipPendentes > 0 ? RED : "#0e7490", badge: movEquipPendentes },
         { icon: "🚜", l: "Ativos/Frota",    nav: "ativos",        c: "#ea580c" },
-        { icon: "⛽", l: "Combustível",     nav: "frota",         c: "#dc7e00" },
-        { icon: "🔧", l: "Manutenções",     nav: "manutencao",    c: "#dc2626" },
+        { icon: "⛽", l: L("frota"),          nav: "frota",         c: "#dc7e00" },
+        { icon: "🔧", l: L("manutencao"),     nav: "manutencao",    c: "#dc2626" },
         { icon: "⚙️", l: "Equipamentos",   nav: "equip_gestao",  c: "#475569" },
-        { icon: "🔨", l: "Ferramentas",     nav: "ferramentas",   c: "#7c2d12" },
-        { icon: "🏪", l: "Fornecedores",    nav: "fornecedores",  c: "#16a34a" },
-        { icon: "�", l: "Clientes",       nav: "clientes",     c: "#475569" },
-        { icon: "�📥", l: "Recebimentos",    nav: "recebimento",   c: "#0891b2" },
+        { icon: "🔨", l: L("ferramentas"),    nav: "ferramentas",   c: "#7c2d12" },
+        { icon: "🏪", l: L("fornecedores"),   nav: "fornecedores",  c: "#16a34a" },
+        { icon: "🤝", l: L("clientes"),       nav: "clientes",     c: "#475569" },
+        { icon: "📥", l: L("recebimento"),    nav: "recebimento",   c: "#0891b2" },
       ],
     },
     {
@@ -294,11 +299,11 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       cor: "#a855f7",
       desc: "Relatórios e mensagens",
       itens: [
-        { icon: "📐", l: "Produtividade",   nav: "produtividade", c: "#15803d" },
-        { icon: "📈", l: "Consolidado",     nav: "consolidado",   c: "#a855f7" },
+        { icon: "📐", l: L("produtividade"), nav: "produtividade", c: "#15803d" },
+        { icon: "📈", l: L("consolidado"),   nav: "consolidado",   c: "#a855f7" },
         { icon: "📓", l: "Diário Obra",     nav: "diario",        c: "#2563eb" },
-        { icon: "🔔", l: "Avisos",          nav: "avisos",        c: "#0891b2", badge: avisosNaoLidos },
-        { icon: "💬", l: "Mensagens",       nav: "mensagens",     c: "#db2777", badge: novasMsgs },
+        { icon: "🔔", l: L("avisos"),        nav: "avisos",        c: "#0891b2", badge: avisosNaoLidos },
+        { icon: "💬", l: L("mensagens"),     nav: "mensagens",     c: "#db2777", badge: novasMsgs },
       ],
     },
     {
@@ -308,22 +313,23 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       itens: [
         { icon: "👤", l: "Minha Conta",   nav: "minha_conta", c: "#0891b2" },
         { icon: "🆘", l: "Ajuda & Suporte", nav: "ajuda", c: "#16a34a" },
-        { icon: "🔗", l: "Links Úteis",   nav: "links",   c: "#0284c7" },
-        { icon: "🔑", l: "Usuários e Permissões", nav: "acessos", c: "#0891b2" },
-        { icon: "🏢", l: "Empresa",       nav: "empresa", c: "#334155" },
-        { icon: "💾", l: "Exportar Dados",        nav: "backup",  c: "#6b7280" },
+        { icon: "🔗", l: L("links"),      nav: "links",   c: "#0284c7" },
+        { icon: "🔑", l: L("acessos"),    nav: "acessos", c: "#0891b2" },
+        { icon: "🏢", l: L("empresa"),    nav: "empresa", c: "#334155" },
+        { icon: "💾", l: L("backup"),     nav: "backup",  c: "#6b7280" },
         // Itens abaixo só aparecem para o desenvolvedor (Kleber)
-        ...(usuario?.email === "kvmprojetos@gmail.com" ? [
-          { icon: "🔧", l: "Painel Técnico",  nav: "diagnostico", c: "#dc2626" },
-          { icon: "🎬", l: "Popular Demo",  nav: "gerar_simulacao", c: "#7c3aed" },
-          { icon: "🧹", l: "Limpar Banco",    nav: "zerar_tudo", c: "#dc2626" },
+        ...(usuario?.email === EMAIL_DEV ? [
+          { icon: "🔧", l: L("diagnostico"),     nav: "diagnostico", c: "#dc2626" },
+          { icon: "🎬", l: L("gerar_simulacao"), nav: "gerar_simulacao", c: "#7c3aed" },
+          { icon: "🧹", l: L("zerar_tudo"),      nav: "zerar_tudo", c: "#dc2626" },
         ] : []),
       ],
     },
   ];
 
-  // Total de avisos pra mostrar no resumo
-  const totalAvisos = totalAlertas + movPendentes + pendentes + novasMsgs;
+  // Pendências: soma de alertas do sistema + movimentações + pedidos + mensagens (o indicador que soma tudo).
+  // "Alertas" = o que o sistema detecta; "Avisos" = notificações/recados — nomes distintos, conceitos distintos.
+  const totalPendencias = totalAlertas + movPendentes + pendentes + novasMsgs;
 
   // MODAL APROVAÇÃO COM PAGAMENTO E PRAZO — o mesmo nas duas versões (celular e escritório)
   const modalAprovacao = (
@@ -402,7 +408,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       { v: trabalhadores.length,  l: "Trabalhadores",      nav: "equipe",     c: NAVY },
       { v: presentesHoje,         l: "Presentes hoje",     nav: "calendario", c: GREEN },
       { v: pendentes,             l: "Pedidos aguardando", nav: "pedidos",    c: pendentes > 0 ? ORANGE : T.texto3 },
-      { v: totalAvisos,           l: "Avisos",             nav: "alertas",    c: totalAvisos > 0 ? RED : GREEN },
+      { v: totalPendencias,       l: "Pendências",         nav: "alertas",    c: totalPendencias > 0 ? RED : GREEN },
     ];
     const outrasPendencias = [
       { icon: "🔄", l: "Movimentações de pessoal",      v: movPendentes,      nav: "aprovar_mov" },
@@ -414,9 +420,8 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
 
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-        <KMHeader right={
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}><SinoAvisos n={avisosNaoLidos} onClick={() => onNav("avisos")} /><button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button></div>
-        } />
+        {/* Sem cabeçalho no escritório: o menu lateral já tem Sair e o badge de Avisos (KMHeader sem título vira null) */}
+        <KMHeader />
         <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 24 }}>
           <div style={{ maxWidth: 1400, margin: "0 auto" }}>
 
@@ -592,9 +597,9 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
             <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{trabalhadores.length}</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>👥 Equipe</div>
           </div>
-          <div onClick={() => onNav("alertas")} style={{ flex: 1, background: totalAvisos > 0 ? RED : GREEN, borderRadius: 12, padding: "10px 6px", textAlign: "center", cursor: "pointer", boxShadow: `0 3px 10px ${totalAvisos > 0 ? RED + "40" : GREEN + "40"}` }}>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{totalAvisos}</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>🚨 Avisos</div>
+          <div onClick={() => onNav("alertas")} style={{ flex: 1, background: totalPendencias > 0 ? RED : GREEN, borderRadius: 12, padding: "10px 6px", textAlign: "center", cursor: "pointer", boxShadow: `0 3px 10px ${totalPendencias > 0 ? RED + "40" : GREEN + "40"}` }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{totalPendencias}</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>🚨 Pendências</div>
           </div>
         </div>
 
@@ -987,7 +992,7 @@ export function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title="Dashboard" sub="Visão geral" onBack={onBack} />
+      <KMHeader title={labelDaTela("dashboard", "Indicadores")} sub="Números e gráficos" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 14 }}>
           <option value="todas">Todas as obras</option>

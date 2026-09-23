@@ -469,9 +469,7 @@ export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
             <label style={labelS}>Observações do contrato</label>
             <textarea value={form.obsContrato} onChange={e => set("obsContrato", e.target.value)} rows={3} placeholder="Cláusulas, retenções, encargos..." style={{ ...inputS, resize: "vertical", fontFamily: "inherit" }} />
 
-            <button onClick={salvar} disabled={!alterado} style={{ width: "100%", marginTop: 14, padding: 12, background: alterado ? GREEN : T.desabilitadoFundo /* cinza fixo #d1d5db virava mancha clara no tema escuro */, color: "#fff", border: "none", borderRadius: 12, fontWeight: 700, cursor: alterado ? "pointer" : "not-allowed" }}>
-              {alterado ? "Salvar alterações" : "Sem alterações"}
-            </button>
+            <Btn label={alterado ? "Salvar alterações" : "Sem alterações"} color={GREEN} disabled={!alterado} onClick={salvar} style={{ marginTop: 14 }} />
           </div>
         ) : (
           <div style={{ background: T.superficie, borderRadius: 14, padding: 20, textAlign: "center", color: T.texto2, marginTop: 14 }}>

@@ -179,16 +179,14 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 4, fontSize: 14 }}>💾 Salvar Backup</div>
           <div style={{ fontSize: 11, color: T.texto2, marginBottom: 12 }}>Recomendação: faça backup ao menos 1× por semana.</div>
 
-          <button onClick={compartilhar} style={{ width: "100%", padding: 14, marginBottom: 8, background: BLUE, color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: `0 4px 14px ${BLUE}44`, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            📲 Compartilhar (WhatsApp / Drive / Email)
-          </button>
+          <Btn label="📲 Compartilhar (WhatsApp / Drive / Email)" color={BLUE} onClick={compartilhar} style={{ marginBottom: 8 }} />
           <div style={{ fontSize: 10, color: T.texto2, textAlign: "center", marginBottom: 10 }}>Funciona melhor no celular</div>
 
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             <button onClick={enviarWhatsApp} style={{ flex: 1, padding: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>💬 WhatsApp</button>
             <button onClick={enviarEmail} style={{ flex: 1, padding: 10, background: RED, color: "#fff", border: "none", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>📧 E-mail</button>
           </div>
-          <button onClick={exportar} style={{ width: "100%", padding: 12, background: GREEN, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>💾 Baixar Arquivo .json</button>
+          <Btn label="💾 Baixar Arquivo .json" color={GREEN} onClick={exportar} />
         </div>
 
         <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
@@ -1179,9 +1177,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               </div>
             </button>
 
-            <button onClick={onBack} style={{ width: "100%", marginTop: 6, padding: 12, background: T.superficie2, color: T.titulo, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              Cancelar
-            </button>
+            <Btn label="Cancelar" color={T.superficie2} text={T.titulo} onClick={onBack} style={{ marginTop: 6, boxShadow: "none" }} />
           </>
         )}
 
@@ -1220,13 +1216,9 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               </ul>
             </div>
 
-            <button onClick={() => setEtapa(2)} style={{ width: "100%", padding: 14, background: "#f97316", color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 12px rgba(249,115,22,0.3)" }}>
-              🧹 PROSSEGUIR COM A LIMPEZA
-            </button>
+            <Btn label="🧹 Prosseguir com a limpeza" color="#f97316" onClick={() => setEtapa(2)} />
 
-            <button onClick={() => setEtapa(0)} style={{ width: "100%", marginTop: 10, padding: 12, background: T.superficie2, color: T.titulo, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => setEtapa(0)} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 
@@ -1280,9 +1272,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               ✓ CONFIRMAR E ZERAR LANÇAMENTOS
             </button>
 
-            <button onClick={() => { setEtapa(1); setSenhaDigit(""); setErro(""); }} style={{ width: "100%", marginTop: 10, padding: 12, background: T.superficie2, color: T.titulo, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => { setEtapa(1); setSenhaDigit(""); setErro(""); }} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 
@@ -1319,13 +1309,9 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               </div>
             </div>
 
-            <button onClick={() => setEtapa(4)} style={{ width: "100%", padding: 14, background: RED, color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 12px rgba(220,38,38,0.4)" }}>
-              💣 PROSSEGUIR COM RESET TOTAL
-            </button>
+            <Btn label="💣 Prosseguir com reset total" color={RED} onClick={() => setEtapa(4)} />
 
-            <button onClick={() => setEtapa(0)} style={{ width: "100%", marginTop: 10, padding: 12, background: T.superficie2, color: T.titulo, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => setEtapa(0)} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 
@@ -1380,9 +1366,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               💣 CONFIRMAR RESET TOTAL
             </button>
 
-            <button onClick={() => { setEtapa(3); setSenhaDigit(""); setErro(""); }} style={{ width: "100%", marginTop: 10, padding: 12, background: T.superficie2, color: T.titulo, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => { setEtapa(3); setSenhaDigit(""); setErro(""); }} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 

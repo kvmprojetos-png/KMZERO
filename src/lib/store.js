@@ -8,8 +8,19 @@ let _empresaId = null;
 export function setEmpresaId(id) { _empresaId = id; }
 export function getEmpresaId() { return _empresaId; }
 
+/* ── Modo demonstração (/app/?demo=1) ──────────────────────────────────────
+   Interruptor único da nuvem: com _modoDemo ligado, cloudRefs() devolve null e
+   TODAS as funções de nuvem deste arquivo (e de avisos.js, que usa cloudRefs)
+   saem no "if (!fb) return" — nada sobe nem desce do Firestore/Storage.
+   _empresaId continua "demo" só para dar o prefixo demo_ no localStorage e
+   demo_files no IndexedDB (fileStore.js): variáveis separadas, defesas separadas. */
+let _modoDemo = false;
+export function setModoDemo(v) { _modoDemo = !!v; }
+export function emModoDemo() { return _modoDemo; }
+
 let _fb = null;
 export function cloudRefs() {
+  if (_modoDemo) return null; // demo: sem nuvem, antes do cache
   if (_fb) return _fb;
   try {
     const app = getApp();
@@ -202,14 +213,19 @@ export async function carregarPerfilNuvem(firebaseUid) {
     return { ok: true, perfil: snap.exists() ? snap.data() : null };
   } catch (e) {
     console.error("carregarPerfilNuvem:", e);
-    const negado = e.code === "permission-denied";
-    return {
-      ok: false, codigo: e.code,
-      erro: negado
-        ? "Sem permissao para ler seu perfil na nuvem. As regras do Firebase precisam ser publicadas (npm run firebase:deploy-regras)."
-        : "Nao foi possivel consultar seu perfil na nuvem. Verifique a conexao.",
-    };
+    return { ok: false, codigo: e.code, erro: mensagemNuvem(e, "Não foi possível consultar seu perfil na nuvem. Verifique a conexão.") };
   }
+}
+
+/* Mensagem humana para erro da nuvem. permission-denied quase sempre é regra do
+   Firestore não publicada — instrução de console vai para console.warn, e quem
+   está tentando entrar só vê "avise o suporte" (a tela mostra o código junto). */
+export function mensagemNuvem(e, generica) {
+  if (e && e.code === "permission-denied") {
+    console.warn("[KMZERO] permission-denied: as regras do Firebase precisam estar publicadas (npm run firebase:deploy-regras) e a conta Google deve ser a mesma do cadastro/convite.");
+    return "A nuvem recusou o acesso. Avise o suporte.";
+  }
+  return generica;
 }
 
 export async function atualizarPerfilNuvem(firebaseUid, dados) {
@@ -240,9 +256,7 @@ export async function buscarConvite(email) {
     return { ok: true, convite: snap.exists() ? snap.data() : null };
   } catch (e) {
     console.error("buscarConvite:", e);
-    return { ok: false, codigo: e.code, erro: e.code === "permission-denied"
-      ? "Sem permissao para ler o convite. As regras do Firebase precisam ser publicadas (npm run firebase:deploy-regras)."
-      : "Nao foi possivel consultar o convite. Verifique a conexao." };
+    return { ok: false, codigo: e.code, erro: mensagemNuvem(e, "Não foi possível consultar o seu cadastro. Verifique a conexão.") };
   }
 }
 
@@ -267,9 +281,7 @@ export async function aceitarConvite(userGoogle, convite) {
     return { ok: true, perfil };
   } catch (e) {
     console.error("aceitarConvite:", e);
-    return { ok: false, codigo: e.code, erro: e.code === "permission-denied"
-      ? "O convite existe, mas a nuvem recusou criar seu perfil. Confira se entrou com a MESMA conta Google do convite e se as regras do Firebase estao publicadas."
-      : "Nao foi possivel concluir seu acesso. Verifique a conexao e tente de novo." };
+    return { ok: false, codigo: e.code, erro: mensagemNuvem(e, "Não foi possível concluir seu acesso. Verifique a conexão e tente de novo.") };
   }
 }
 
@@ -296,9 +308,7 @@ export async function criarConvite({ email, nome, cargo, obraId, perfil, tel, em
     return { ok: true, email: chave };
   } catch (e) {
     console.error("criarConvite:", e);
-    return { ok: false, codigo: e.code, erro: e.code === "permission-denied"
-      ? "A nuvem recusou o convite: publique as regras do Firebase (npm run firebase:deploy-regras) e tente de novo."
-      : "Nao foi possivel salvar o convite. Verifique a conexao." };
+    return { ok: false, codigo: e.code, erro: mensagemNuvem(e, "Não foi possível salvar o acesso. Verifique a conexão.") };
   }
 }
 
@@ -352,7 +362,7 @@ export function observarConvitesNuvem(callback, onErro) {
    - desativado / erro → { tipo: "erro", erro } */
 export async function resolverEntradaGoogle(userGoogle) {
   const p = await carregarPerfilNuvem(userGoogle.uid);
-  if (!p.ok) return { tipo: "erro", erro: p.erro };
+  if (!p.ok) return { tipo: "erro", erro: p.erro, codigo: p.codigo };
   const montar = perfil => ({
     id: userGoogle.uid,
     firebaseUid: userGoogle.uid,
@@ -367,15 +377,15 @@ export async function resolverEntradaGoogle(userGoogle) {
     ultimoLogin: Date.now(),
   });
   if (p.perfil) {
-    if (p.perfil.ativo === false) return { tipo: "erro", desativado: true, erro: "Seu acesso foi desativado pelo gestor da empresa." };
+    if (p.perfil.ativo === false) return { tipo: "erro", desativado: true, codigo: "acesso-desativado", email: emailChave(userGoogle.email), erro: `O acesso de ${emailChave(userGoogle.email)} foi desativado pelo gestor da empresa.` };
     if (!p.perfil.empresaId) return { tipo: "sem_convite" };
     return { tipo: "perfil", usuario: montar(p.perfil) };
   }
   const c = await buscarConvite(userGoogle.email);
-  if (!c.ok) return { tipo: "erro", erro: c.erro };
+  if (!c.ok) return { tipo: "erro", erro: c.erro, codigo: c.codigo };
   if (!c.convite) return { tipo: "sem_convite" };
   const a = await aceitarConvite(userGoogle, c.convite);
-  if (!a.ok) return { tipo: "erro", erro: a.erro };
+  if (!a.ok) return { tipo: "erro", erro: a.erro, codigo: a.codigo };
   return { tipo: "perfil", usuario: montar(a.perfil) };
 }
 

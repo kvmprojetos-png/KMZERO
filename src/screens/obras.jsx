@@ -6,8 +6,7 @@ import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDoc
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
-import { useModoEscritorio } from "../lib/useLargura.js";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, useEscritorio } from "../components/ui.jsx";
 
 /* Data ISO (AAAA-MM-DD) → DD/MM/AAAA; sem data ou inválida fica "—" */
 const dataBR = (iso) => {
@@ -22,7 +21,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
   const [obraSelecionada, setObraSelecionada] = useState(null);
   const [form, setForm] = useState({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const escritorio = useModoEscritorio(); // largura >= 1024 px: mostra a tabela-resumo acima dos cartões
+  const escritorio = !!useEscritorio(); // modo escritório (gestor em tela larga): mostra a tabela-resumo acima dos cartões
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" }); setModal(true); };
   const abrirEdit = (o) => { setEditandoId(o.id); setForm({ ...o, clienteId: o.clienteId || "", cliente: o.cliente || "", clienteDoc: o.clienteDoc || "" }); setModal(true); };
@@ -378,7 +377,8 @@ export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhado
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-      <KMHeader title={obra.nome} sub="Detalhes completos" onBack={onBack} />
+      {/* voltar: subtela dentro de "obras" (que está no menu) — a barra de página precisa do "‹ Voltar" mesmo assim */}
+      <KMHeader title={obra.nome} sub="Detalhes completos" onBack={onBack} voltar />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* CABEÇALHO DA OBRA */}

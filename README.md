@@ -96,6 +96,23 @@ Alternativa sem terminal: Console Firebase → Firestore Database → Regras →
 - Acessos antigos da equipe criados com "usuário sem @" não entram mais: cadastre o Gmail da pessoa em Acessos do App.
 - Faça o primeiro login **no aparelho que tem os dados reais**: ele envia os cadastros para a nuvem e os outros aparelhos passam a receber. Antes disso, vale exportar um backup em Sistema → Backup.
 
+## 🎬 Modo demonstração
+
+**O que é.** Uma visita ao sistema sem login, como gestor de uma empresa fictícia (“Construtora Exemplo”): 4 obras com nomes neutros, 18 trabalhadores, 30 dias de presenças, RDOs, fotos, pedidos, folha por ciclo, cronogramas, mensagens e avisos de exemplo. É a mesma interface do app real (modo escritório no computador, app de campo no celular) e a fonte das capturas da vitrine.
+
+**Como abrir.** `https://kmzero.vercel.app/app/?demo=1` (apelido: `/app/demo`). Os botões “Ver demonstração” da vitrine e o link “Só quero ver como funciona” da tela de entrada levam para lá. Uma faixa ouro fixa no topo (“Modo demonstração — dados de exemplo”) marca a sessão o tempo todo.
+
+**Como sair.** Qualquer “Sair” (faixa do topo, menu lateral, Painel, Minha conta → “Sair da demonstração”) apaga os dados de exemplo deste navegador (chaves `demo_*` do localStorage e o banco `demo_files` do IndexedDB) e volta para `/`. Abrir `/app/` em seguida mostra a empresa real do navegador exatamente como estava.
+
+**O que NÃO faz.**
+
+- Não toca na nuvem: em `src/lib/store.js`, `setModoDemo(true)` faz `cloudRefs()` devolver `null`, então nenhuma função de Firestore/Storage (store.js, avisos.js, cloudSync.js) envia ou recebe nada. Não há requisição ao Firestore no Network.
+- Não usa a conta Google do navegador: o boot pula `aguardarSessao`, `resultadoRedirecionamento` e `verificarAcessoNuvem`; o visitante (`DEMO_USUARIO`) não tem `firebaseUid` nem e-mail, então a sincronização multiaparelho e o menu do desenvolvedor ficam desligados.
+- Não mexe na empresa real: os dados vivem só no prefixo `demo_` (empresaId `demo`); as chaves `_kmzero_empresaId` e `_kmzero_sessao` nunca são gravadas. Em todo login real o app apaga o que a demo deixou.
+- Não convida ninguém nem manda push: Usuários e acessos fica só de leitura, e os avisos enviados ficam em memória.
+
+A semente vive em `src/data/catalogos.js` (`gerarDadosDemo`, `DEMO_OBRAS`, `DEMO_EMPRESA`, `DEMO_TRABALHADORES`…) e ocupa cerca de 0,5 MB do localStorage; para regerar, basta sair e abrir de novo.
+
 ## 🌐 Site e domínio próprio
 
 O endereço do KMZERO tem duas partes:

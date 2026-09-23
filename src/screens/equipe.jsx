@@ -7,7 +7,7 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, Tabela, useEscritorio } from "../components/ui.jsx";
 
 export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
   const [filtroObra, setFiltroObra] = useState("todas");
@@ -1482,9 +1482,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
         )}
 
         {/* IMPRIMIR FICHA CADASTRAL */}
-        <button onClick={() => gerarFichaCadastralPDF(trabalhador, obra, empresa)} style={{ width: "100%", background: NAVY, color: "#fff", border: "none", borderRadius: 12, padding: "14px", marginTop: 10, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(15,33,81,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          🖨️ IMPRIMIR FICHA CADASTRAL (A4)
-        </button>
+        <Btn label="🖨️ Imprimir ficha cadastral (A4)" color={NAVY} onClick={() => gerarFichaCadastralPDF(trabalhador, obra, empresa)} style={{ marginTop: 10 }} />
         <div style={{ fontSize: 10, color: T.texto2, textAlign: "center", marginTop: 4, fontStyle: "italic" }}>Documento oficial pra arquivo físico (gaveteiro)</div>
       </div>
       <KMFooter />
@@ -2148,6 +2146,7 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
 ════════════════════════════════════ */
 
 export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack, onAdd, onRemove }) {
+  const escritorio = !!useEscritorio(); // escritório: histórico em Tabela; celular: cartões de sempre
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ trabId: "", valor: "", motivo: "", data: new Date().toLocaleDateString("pt-BR") });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -2189,7 +2188,27 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
 
         <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 Histórico</div>
         {adiantamentos.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhum adiantamento registrado.</div>}
-        {[...adiantamentos].sort((a, b) => b.ts - a.ts).map(a => {
+        {escritorio && adiantamentos.length > 0 && (
+          <Tabela
+            linhas={[...adiantamentos].sort((a, b) => b.ts - a.ts).map(a => {
+              const t = trabalhadores.find(x => x.id === a.trabId);
+              const obra = obras.find(o => o.id === t?.obraId);
+              return { ...a, t, obra };
+            })}
+            colunas={[
+              { chave: "data", titulo: "Data", render: a => a.data },
+              { chave: "trab", titulo: "Trabalhador", render: a => <span style={{ fontWeight: 700, color: T.titulo }}>{a.t?.nome || "—"}</span> },
+              { chave: "cargo", titulo: "Cargo · Obra", render: a => <span style={{ color: T.texto2 }}>{[a.t?.cargo, a.obra?.nome].filter(Boolean).join(" · ") || "—"}</span> },
+              { chave: "motivo", titulo: "Motivo", render: a => a.motivo ? <span style={{ color: T.texto2, fontStyle: "italic" }}>{a.motivo}</span> : <span style={{ color: T.texto3 }}>—</span> },
+              { chave: "valor", titulo: "Valor", alinhar: "right", render: a => <span style={{ fontWeight: 800, color: ORANGE }}>R$ {a.valor.toFixed(2)}</span> },
+              { chave: "descontado", titulo: "Descontado em", render: a => a.descontadoEm ? <span style={{ color: GREEN, fontWeight: 700 }}>✅ {a.descontadoEm}</span> : <span style={{ color: T.texto3 }}>Pendente</span> },
+              { chave: "acao", titulo: "", alinhar: "right", largura: 48, render: a => (
+                <button type="button" title="Remover adiantamento" onClick={e => { e.stopPropagation(); confirmar("Remover este adiantamento?", () => { onRemove(a.id); }); }} style={{ background: "transparent", border: "none", color: RED, cursor: "pointer", fontSize: 14, padding: "4px 6px", borderRadius: 6 }}>🗑️</button>
+              ) },
+            ]}
+          />
+        )}
+        {!escritorio && [...adiantamentos].sort((a, b) => b.ts - a.ts).map(a => {
           const t = trabalhadores.find(x => x.id === a.trabId);
           const obra = obras.find(o => o.id === t?.obraId);
           return (
