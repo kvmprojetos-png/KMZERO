@@ -10,8 +10,9 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, UsuarioLogado } from "../components/ui.jsx";
 import { useModoEscritorio } from "../lib/useLargura.js";
+import { SinoAvisos } from "./avisos.jsx";
 
-export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, onNav, onLogout }) {
+export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, avisosNaoLidos = 0, onNav, onLogout }) {
   const presentes = Object.values(presencasHoje).filter(v => v === "Presente").length;
   const faltas    = Object.values(presencasHoje).filter(v => v === "Falta").length;
   const atestados = Object.values(presencasHoje).filter(v => v === "Atestado").length;
@@ -32,6 +33,7 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <UsuarioLogado compacto />
+            <SinoAvisos n={avisosNaoLidos} onClick={() => onNav("avisos")} />
             <button onClick={() => onNav("mensagens")} style={{ position: "relative", background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 18, width: 36, height: 36, cursor: "pointer", fontSize: 16 }}>
               💬
               {novasMsgs > 0 && <span style={{ position: "absolute", top: -2, right: -2, background: RED, color: "#fff", borderRadius: 10, padding: "1px 5px", fontSize: 9, fontWeight: 800 }}>{novasMsgs}</span>}
@@ -189,7 +191,7 @@ function tsLancamento(r) {
 }
 const maisRecentes = (lista, n) => [...(lista || [])].sort((a, b) => tsLancamento(b) - tsLancamento(a)).slice(0, n);
 
-export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, rdosEmitidos = [], fotosObras = [], onNav, onLogout, onAprovar, onNegar }) {
+export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, rdosEmitidos = [], fotosObras = [], avisosNaoLidos = 0, onNav, onLogout, onAprovar, onNegar }) {
   const escritorio = useModoEscritorio(); // largura >= 1024: versão de escritório; abaixo, o app de campo continua igual
   const pendentes = pedidos.filter(p => p.status === "Aguardando").length;
   const movPendentes = (movimentacoes || []).filter(m => m.status === "Aguardando").length;
@@ -293,6 +295,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
         { icon: "📐", l: "Produtividade",   nav: "produtividade", c: "#15803d" },
         { icon: "📈", l: "Consolidado",     nav: "consolidado",   c: "#a855f7" },
         { icon: "📓", l: "Diário Obra",     nav: "diario",        c: "#2563eb" },
+        { icon: "🔔", l: "Avisos",          nav: "avisos",        c: "#0891b2", badge: avisosNaoLidos },
         { icon: "💬", l: "Mensagens",       nav: "mensagens",     c: "#db2777", badge: novasMsgs },
       ],
     },
@@ -402,6 +405,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
     const outrasPendencias = [
       { icon: "🔄", l: "Movimentações de pessoal",      v: movPendentes,      nav: "aprovar_mov" },
       { icon: "🔧", l: "Movimentações de equipamentos", v: movEquipPendentes, nav: "mov_equip" },
+      { icon: "🔔", l: "Avisos novos",                  v: avisosNaoLidos,    nav: "avisos" },
       { icon: "💬", l: "Mensagens novas",               v: novasMsgs,         nav: "mensagens" },
       { icon: "🚨", l: "Alertas",                       v: totalAlertas,      nav: "alertas" },
     ];
@@ -409,7 +413,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
         <KMHeader right={
-          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}><SinoAvisos n={avisosNaoLidos} onClick={() => onNav("avisos")} /><button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button></div>
         } />
         <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 24 }}>
           <div style={{ maxWidth: 1400, margin: "0 auto" }}>
@@ -566,7 +570,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader right={
-        <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}><SinoAvisos n={avisosNaoLidos} onClick={() => onNav("avisos")} /><button onClick={onLogout} style={{ background: "rgba(255,255,255,0.12)", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sair</button></div>
       } />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
         {/* Saudação */}

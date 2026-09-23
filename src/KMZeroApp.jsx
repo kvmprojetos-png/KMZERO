@@ -28,6 +28,9 @@ import { TelaEquip, TelaEquipamentosGestao, TelaFrota, TelaAtivos, TelaFerrament
 import { TelaCustos, TelaDespesasAvulsas, TelaPagamentos } from "./screens/financeiro.jsx";
 import { TelaRDO, gerarPDFRDORabnt, TelaCronograma, TelaCronogramaPro, CurvaSChart, calcularKPIsCronograma, detectarInconsistenciasCronograma, calcularPctPrevistoEtapa, gerarPontosCurvaS, TelaProdutividade } from "./screens/rdo.jsx";
 import { TelaFotos, TelaGaleria, TelaAnexosObra, TelaMensagens, TelaLinks } from "./screens/midia.jsx";
+import { TelaAvisos } from "./screens/avisos.jsx";
+import { observarAvisosNuvem, observarLeituraAvisos, marcarAvisosLidos, publicarAviso, renovarNotificacoes, desligarNotificacoes, situacaoNotificacoes } from "./lib/avisos.js";
+import { avisoEhPara, uidDe } from "./lib/avisosRegras.js";
 import { TelaConfigEmpresa, TelaEscritorio, TelaAjuda, TelaBackup, TelaGerarSimulacao, TelaDiagnostico, TelaZerarTudo } from "./screens/sistema.jsx";
 
 export default function App() {
@@ -85,13 +88,36 @@ export default function App() {
   const [trabalhadores, setTrab]  = useState([]);
   const [equips, setEquips]       = useState([]);
   const [pedidos, setPedidos]     = useState([]);
+  // Refs para os avisos automáticos lerem o valor atual dentro de callbacks estáveis
+  const usuarioRef = useRef(null); usuarioRef.current = usuario;
+  const pedidosRef = useRef([]);   pedidosRef.current = pedidos;
+  const enviarAvisoRef = useRef(null); // preenchido mais abaixo, onde enviarAviso é criado
 
   // ── SYNC PEDIDOS (Fase 2): lançador cria na obra, gestor vê de qualquer cidade ──
-  const criarPedidoSync = useCallback(p => {
+  const criarPedidoSync = useCallback(p0 => {
+    const p = { ...p0, criadoPorUid: p0.criadoPorUid || uidDe(usuarioRef.current) || null };
     setPedidos(ps => [p, ...ps]);
     enviarDocNuvem("pedidos", p.id, p);
+    // Aviso: gestores recebem o pedido novo
+    const itens = (p.itens || []).map(i => [i.material, i.qtd && `(${i.qtd}${i.unidade ? " " + i.unidade : ""})`].filter(Boolean).join(" "));
+    enviarAvisoRef.current?.({
+      tipo: "pedido", titulo: `📦 Pedido de material — ${p.obra || "obra"}`,
+      texto: `${p.enc || "Encarregado"} pediu: ${itens.slice(0, 4).join(", ") || p.material || ""}${itens.length > 4 ? ` e mais ${itens.length - 4}` : ""}`,
+      para: { tipo: "gestores" }, navegarPara: "pedidos",
+    });
   }, []);
   const mudarStatusPedidoSync = useCallback((id, status, extras = {}) => {
+    // Aviso: quem pediu fica sabendo que o gestor aprovou/negou/entregou
+    const antes = pedidosRef.current.find(x => x.id === id);
+    if (antes && antes.status !== status && ["Aprovado", "Negado", "Entregue", "Recebido"].includes(status)) {
+      const icone = status === "Negado" ? "❌" : "✅";
+      enviarAvisoRef.current?.({
+        tipo: "pedido", titulo: `${icone} Pedido ${status.toLowerCase()} — ${antes.obra || "obra"}`,
+        texto: [antes.material, extras.prazoEntrega && `Entrega: ${extras.prazoEntrega}`].filter(Boolean).join(" · "),
+        para: antes.criadoPorUid ? { tipo: "pessoa", uid: antes.criadoPorUid } : { tipo: "obra", obraId: antes.obraId, perfil: "encarregado" },
+        navegarPara: "home",
+      });
+    }
     setPedidos(ps => ps.map(p => {
       if (p.id !== id) return p;
       const novo = { ...p, status, ...extras };
@@ -133,6 +159,58 @@ export default function App() {
       });
     });
   }, [usuario?.firebaseUid]);
+
+  // ── AVISOS (notificações): sininho no app + push no celular (api/notificar) ──
+  const [avisos, setAvisos] = useState([]);
+  const [ultimaLeituraAvisos, setUltimaLeituraAvisos] = useState(0);
+  const [avisoNaTela, setAvisoNaTela] = useState(null); // faixa no topo quando o push não está ligado
+  const enviarAviso = useCallback(async parcial => {
+    const u = usuarioRef.current;
+    if (!u) return { ok: false, erro: "Sem login." };
+    const agora = Date.now();
+    const aviso = { id: String(agora), criadoEm: agora, de: uidDe(u), deNome: u.nome || "", tipo: "manual", ...parcial };
+    setAvisos(as => [aviso, ...as.filter(a => a.id !== aviso.id)]);
+    try { return await publicarAviso(aviso); }
+    catch (e) { console.error("enviarAviso:", e); return { ok: false, erro: "Não foi possível enviar agora." }; }
+  }, []);
+  enviarAvisoRef.current = enviarAviso;
+  useEffect(() => {
+    if (!usuario?.firebaseUid || !empresaIdState) return;
+    const pararA = observarAvisosNuvem(nuvem => setAvisos(loc => {
+      const porId = new Map(loc.map(a => [String(a.id), a]));
+      nuvem.forEach(n => porId.set(String(n.id), n));
+      return [...porId.values()];
+    }));
+    const pararL = observarLeituraAvisos(usuario.firebaseUid, t => setUltimaLeituraAvisos(v => Math.max(v, t)));
+    renovarNotificacoes(usuario);
+    return () => { pararA(); pararL(); };
+  }, [usuario?.firebaseUid, empresaIdState]);
+  const avisosVisiveis = useMemo(() => {
+    if (!usuario) return [];
+    const eu = uidDe(usuario);
+    return avisos.filter(a => a.de === eu || avisoEhPara(a, usuario)).sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0));
+  }, [avisos, usuario]);
+  const avisosNaoLidos = useMemo(() => {
+    const eu = uidDe(usuario);
+    return avisosVisiveis.filter(a => a.de !== eu && (a.criadoEm || 0) > ultimaLeituraAvisos).length;
+  }, [avisosVisiveis, ultimaLeituraAvisos, usuario]);
+  const marcarAvisosLidosAgora = useCallback(() => {
+    const agora = Date.now();
+    setUltimaLeituraAvisos(agora);
+    marcarAvisosLidos(usuarioRef.current?.firebaseUid, agora);
+  }, []);
+  // Aviso novo com o app aberto e sem push ligado: mostra uma faixa no topo por alguns segundos
+  const inicioSessaoRef = useRef(Date.now());
+  const avisosJaMostradosRef = useRef(new Set());
+  useEffect(() => {
+    const eu = uidDe(usuario);
+    const novo = avisosVisiveis.find(a => a.de !== eu && (a.criadoEm || 0) > inicioSessaoRef.current && !avisosJaMostradosRef.current.has(a.id));
+    avisosVisiveis.forEach(a => avisosJaMostradosRef.current.add(a.id));
+    if (!novo || situacaoNotificacoes() === "ligada") return;
+    setAvisoNaTela(novo);
+    const t = setTimeout(() => setAvisoNaTela(x => (x === novo ? null : x)), 8000);
+    return () => clearTimeout(t);
+  }, [avisosVisiveis]);
   const [diario, setDiario]       = useState([]);
   const [ativos, setAtivos]       = useState([]);
   const [abastecimentos, setAbast]= useState([]);
@@ -608,6 +686,7 @@ export default function App() {
     return "home";
   };
   const sairDaConta = async () => {
+    try { await Promise.race([desligarNotificacoes(), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
     try { await logoutFirebase(); } catch (e) {}
     setUsuario(null);
     setEmpresaIdState(null);
@@ -702,10 +781,29 @@ export default function App() {
     pedidos: (pedidos || []).filter(p => p.status === "Aguardando").length,
     aprovar_mov: (movimentacoes || []).filter(m => m.status === "Aguardando").length,
     mensagens: (mensagens || []).filter(m => m.para === usuario.id && !m.lida).length,
+    avisos: avisosNaoLidos,
     alertas: gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos }).length,
-  } : {}, [escritorio, pedidos, movimentacoes, mensagens, usuario, obras, trabalhadores, equips, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos]);
+  } : {}, [escritorio, avisosNaoLidos, pedidos, movimentacoes, mensagens, usuario, obras, trabalhadores, equips, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos]);
   // Pessoa logada para os cabeçalhos (foto do Google + nome). Gestor toca e abre "Minha conta".
   const usuarioCtx = useMemo(() => ({ usuario, onAbrirConta: usuario?.perfil === "gestor" ? () => setTela("minha_conta") : null }), [usuario]);
+
+  // Toque na notificação: com o app aberto, o service worker avisa (push-sw.js);
+  // com o app fechado, ele abre /app/?aviso=ID — nos dois casos vai para a tela Avisos.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    const aoReceber = e => { if (e.data && e.data.tipo === "kmzero-abrir-aviso") setTela("avisos"); };
+    sw.addEventListener("message", aoReceber);
+    return () => sw.removeEventListener("message", aoReceber);
+  }, []);
+  useEffect(() => {
+    if (carregando || !usuario) return;
+    const qs = new URLSearchParams(window.location.search);
+    if (!qs.has("aviso")) return;
+    qs.delete("aviso");
+    window.history.replaceState(null, "", window.location.pathname + (qs.toString() ? `?${qs}` : ""));
+    setTela("avisos");
+  }, [carregando, usuario?.firebaseUid]);
 
   if (carregando) return (
     <div style={{ flex: 1, background: `linear-gradient(175deg,${NAVY},#071030)`, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
@@ -775,7 +873,7 @@ export default function App() {
       case "login":      return <TelaEntrar onGoogle={concluirLoginGoogle} erroInicial={erroEntrada} />;
       case "primeiro_acesso": return <TelaPrimeiroAcesso usuarioGoogle={usuarioGoogle} onCriarEmpresa={() => setTelaRaw("registro")} onVerificar={() => usuarioGoogle ? concluirLoginGoogle(usuarioGoogle) : Promise.resolve({ ok: false, erro: "Entre com o Google de novo." })} onSair={async () => { try { await logoutFirebase(); } catch {} setUsuarioGoogle(null); setTelaRaw("login"); }} />;
       case "registro":   return <TelaRegistro usuarioGoogle={usuarioGoogle} onBack={() => setTelaRaw("primeiro_acesso")} onRegistrado={login} />;
-      case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} onNav={setTela} onLogout={logout} />;
+      case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} />;
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
       case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={criarPedidoSync} />;
       case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => f.obraId === obraAtual?.id).length} onBack={() => setTela("home")} onSalvar={salvarFotoObraSync} />;
@@ -783,7 +881,7 @@ export default function App() {
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
       case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={salvarFotoObraSync} />;
-      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
+      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
       case "obras":      return <TelaObras usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
@@ -819,6 +917,7 @@ export default function App() {
       case "mapa":       return <TelaMapa obras={obras} trabalhadores={trabalhadores} onBack={voltar} onEditar={() => setTela("obras")} />;
       case "clientes":  return <TelaClientes clientes={clientes} onBack={voltar} onAdd={c => setClientes(cs => [...cs, c])} onEditar={c => setClientes(cs => cs.map(x => x.id === c.id ? c : x))} onRemover={id => setClientes(cs => cs.filter(x => x.id !== id))} />;
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} usuario={usuario} onBack={voltar} onEditar={editarTrabalhador} onEditarPresenca={editarPresencaDia} />;
+      case "avisos":     return <TelaAvisos usuario={usuario} usuarios={usuarios} obras={obras} avisos={avisosVisiveis} ultimaLeitura={ultimaLeituraAvisos} onEnviar={enviarAviso} onMarcarLidos={marcarAvisosLidosAgora} onNav={setTela} onBack={voltar} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={enviarMensagemSync} onMarcarLida={marcarLidaSync} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
       case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} onMarcarValesDescontados={marcarValesDescontados} />;
@@ -1086,6 +1185,16 @@ export default function App() {
           .km-tela-transicao { animation: none; }
         }
       `}</style>
+      {avisoNaTela && tela !== "avisos" && (
+        <button onClick={() => { setAvisoNaTela(null); setTela("avisos"); }} style={{
+          position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 10px)", left: "50%", transform: "translateX(-50%)", zIndex: 9999,
+          width: "min(92vw, 420px)", background: NAVY, color: "#fff", border: `2px solid ${GOLD}`, borderRadius: 14,
+          padding: "10px 14px", textAlign: "left", boxShadow: "0 8px 24px rgba(0,0,0,0.25)", cursor: "pointer",
+        }}>
+          <div style={{ fontWeight: 800, fontSize: 13 }}>{avisoNaTela.titulo}</div>
+          {avisoNaTela.texto && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{avisoNaTela.texto}</div>}
+        </button>
+      )}
       {escritorio ? (
         <div className="km-app-wrapper km-escritorio" style={{ width: "100%", maxWidth: "none", minHeight: "100vh", display: "flex", flexDirection: "row", alignItems: "stretch", backgroundColor: LIGHT, position: "relative", boxShadow: "none" }}>
           <MenuLateral tela={tela} onNav={setTela} usuario={usuario} empresa={empresa} badges={badgesMenu} onLogout={logout} />
