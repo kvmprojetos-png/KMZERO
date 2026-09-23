@@ -516,7 +516,22 @@ export default function App() {
     if (dados.trabalhadores) setTrab(a => mesclarPorId(a, dados.trabalhadores));
     if (dados.equips) setEquips(a => mesclarPorId(a, dados.equips));
     if (dados.pedidos) setPedidos(a => mesclarPorId(a, dados.pedidos));
-    if (dados.historico) setHistorico(h => ({ ...h, ...dados.historico }));
+    if (dados.historico) {
+      // Mescla por dia+trabalhador (não substitui o dia inteiro) e envia cada presença à nuvem,
+      // para o ponto importado aparecer em todos os aparelhos e na folha.
+      setHistorico(h => {
+        const novo = { ...h };
+        Object.entries(dados.historico).forEach(([dia, m]) => { novo[dia] = { ...(novo[dia] || {}), ...(m || {}) }; });
+        return novo;
+      });
+      if (usuario?.firebaseUid) {
+        Object.entries(dados.historico).forEach(([dia, m]) => Object.entries(m || {}).forEach(([trabId, status]) => {
+          if (!status) return;
+          const tid = isNaN(Number(trabId)) ? trabId : Number(trabId);
+          enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, status, criadoEm: Date.now(), importado: true });
+        }));
+      }
+    }
     if (dados.usuarios) setUsuarios(a => mesclarPorId(a, dados.usuarios));
     if (dados.mensagens) setMensagens(a => mesclarPorId(a, dados.mensagens));
     if (dados.diario) setDiario(a => mesclarPorId(a, dados.diario));
