@@ -488,17 +488,26 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
   for (let i = 0; i < primDia; i++) cells.push(null);
   for (let d = 1; d <= totalDias; d++) cells.push(d);
 
+  // Só entra na conta quem tem ponto lançado no dia: quem ainda não tinha sido
+  // contratado, estava de férias ou em outra obra não pode "puxar" a % para baixo.
+  const resumoDia = (d) => {
+    if (!d) return null;
+    const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const pres = historico[iso] || {};
+    const marcados = trabObra.map(t => pres[t.id]).filter(Boolean);
+    if (!marcados.length) return null;
+    const validos = marcados.filter(s => s !== "Feriado");
+    if (!validos.length) return { feriado: true };
+    const pontos = validos.reduce((s, x) => s + (x === "Presente" ? 1 : x === "Meia" ? 0.5 : 0), 0);
+    return { pontos, total: validos.length, pct: pontos / validos.length };
+  };
   const corDoDia = (d) => {
     if (!d) return "transparent";
-    const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const pres = historico[iso];
-    if (!pres) return "#f0f0f0";
-    const total = trabObra.length;
-    const presentes = trabObra.filter(t => pres[t.id] === "Presente").length;
-    if (total === 0) return "#f0f0f0";
-    const pct = presentes / total;
-    if (pct >= 0.8) return GREEN;
-    if (pct >= 0.5) return ORANGE;
+    const r = resumoDia(d);
+    if (!r) return "#f0f0f0";
+    if (r.feriado) return STATUS_COLOR.Feriado;
+    if (r.pct >= 0.8) return GREEN;
+    if (r.pct >= 0.5) return ORANGE;
     return RED;
   };
 
@@ -515,10 +524,12 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Calendário" sub="Histórico de presenças" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12, maxWidth: 440 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
+        {/* No PC o calendário tem largura limitada e o detalhe do dia fica ao lado; no celular empilha. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ flex: "1 1 300px", maxWidth: 440, background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <button onClick={() => navMes(-1)} style={{ background: LIGHT, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 16 }}>‹</button>
             <div style={{ fontWeight: 800, color: NAVY, fontSize: 14 }}>{meses[mes]} {ano}</div>
@@ -533,29 +544,39 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
                 aspectRatio: "1", border: diaSel === d ? `2px solid ${NAVY}` : "none", borderRadius: 8,
                 background: corDoDia(d), color: !d || corDoDia(d) === "#f0f0f0" ? "#888" : "#fff",
                 fontWeight: 700, fontSize: 13, cursor: d ? "pointer" : "default", opacity: d ? 1 : 0,
-              }}>{d || ""}</button>
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+              }}>
+                <span>{d || ""}</span>
+                {(() => {
+                  const r = resumoDia(d);
+                  if (!r) return null;
+                  return <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.9 }}>{r.feriado ? "Feriado" : `${String(r.pontos).replace(".", ",")}/${r.total}`}</span>;
+                })()}
+              </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 12, marginTop: 12, fontSize: 10, color: "#666", justifyContent: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 12px", marginTop: 12, fontSize: 10, color: "#666", justifyContent: "center" }}>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: GREEN, borderRadius: 2, marginRight: 4 }}></span>≥80%</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: ORANGE, borderRadius: 2, marginRight: 4 }}></span>50-79%</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: RED, borderRadius: 2, marginRight: 4 }}></span>&lt;50%</span>
+            <span><span style={{ display: "inline-block", width: 10, height: 10, background: STATUS_COLOR.Feriado, borderRadius: 2, marginRight: 4 }}></span>Feriado</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#f0f0f0", borderRadius: 2, marginRight: 4 }}></span>Sem dados</span>
           </div>
         </div>
 
         {diaSel && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ flex: "1 1 280px", maxWidth: 440, background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📅 Dia {diaSel}/{mes + 1}/{ano}</div>
             {trabObra.length === 0 && <div style={{ color: "#aaa", fontSize: 13 }}>Sem trabalhadores nesta obra.</div>}
             {trabObra.map(t => (
               <div key={t.id} style={{ display: "flex", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: "1px solid #f0f0f0" }}>
                 <span style={{ flex: 1, fontSize: 13, color: NAVY }}>{t.nome}</span>
-                <Badge label={presenDia[t.id] || "—"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small />
+                <Badge label={presenDia[t.id] || "Sem ponto"} color={STATUS_COLOR[presenDia[t.id]] || "#888"} small />
               </div>
             ))}
           </div>
         )}
+        </div>
       </div>
       <KMFooter />
     </div>
@@ -969,7 +990,16 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const ancora = new Date(t.ultimoPagamento + "T12:00:00");
     let presentes = 0, faltas = 0, atestados = 0, feriados = 0, contados = 0;
     let cursor = new Date(ancora), primeiroDiaUtil = null, ultimoDiaUtil = null, guard = 0;
-    while (contados < nUteis && guard < 120) {
+    // Mensal: o ciclo vai do dia seguinte ao último pagamento até o próximo "dia X" do mês
+    // (ficha: diaPagamentoMes). Semanal/quinzenal: 5 ou 10 dias úteis, como antes.
+    let fimMensal = null;
+    if (tipo === "mensal") {
+      const diaPg = Math.min(31, Math.max(1, parseInt(t.diaPagamentoMes, 10) || 5));
+      const noMes = (ano, mes) => new Date(ano, mes, Math.min(diaPg, new Date(ano, mes + 1, 0).getDate()), 12);
+      fimMensal = noMes(ancora.getFullYear(), ancora.getMonth());
+      if (fimMensal <= ancora) fimMensal = noMes(ancora.getFullYear(), ancora.getMonth() + 1);
+    }
+    while ((fimMensal ? cursor < fimMensal : contados < nUteis) && guard < 400) {
       guard++;
       cursor.setDate(cursor.getDate() + 1);
       if (cursor.getDay() === 0 || cursor.getDay() === 6) continue;
@@ -995,7 +1025,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       adiantIds = vales.map(a => a.id);
     }
     const liquido = Math.max(0, bruto - adiantDesconto);
-    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: ultimoDiaUtil };
+    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: fimMensal ? `${fimMensal.getFullYear()}-${String(fimMensal.getMonth() + 1).padStart(2, "0")}-${String(fimMensal.getDate()).padStart(2, "0")}` : ultimoDiaUtil };
   };
 
   const calcular = (t) => {
