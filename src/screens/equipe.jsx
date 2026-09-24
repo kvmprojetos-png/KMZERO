@@ -1760,6 +1760,7 @@ export const LINKS_PADRAO = [
   { id: 6, nome: "WhatsApp Web",            url: "https://web.whatsapp.com", icon: "💬", cat: "Comunicação" },
   { id: 7, nome: "Google Maps",             url: "https://maps.google.com", icon: "🗺️", cat: "Comunicação" },
   { id: 8, nome: "Receita Federal CNPJ",    url: "https://servicos.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp", icon: "🏛️", cat: "Documentos" },
+  { id: 9, nome: "Buscador SINAPI (preços de referência)", url: "https://buscadorsinapi.com.br", icon: "📊", cat: "Materiais" },
 ];
 
 

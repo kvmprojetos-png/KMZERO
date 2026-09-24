@@ -81,7 +81,7 @@ export const GRUPOS_MENU = [
   { id: "sistema", titulo: "Sistema", itens: [
     { nav: "acessos", label: "Usuários e acessos", icone: "key-round",  busca: "convites permissões encarregado" },
     { nav: "empresa", label: "Empresa",            icone: "building-2", busca: "cadastro cnpj logo" },
-    { nav: "links",   label: "Links úteis",        icone: "link",       busca: "sites" },
+    { nav: "links",   label: "Links úteis",        icone: "link",       busca: "sites sinapi preços referência" },
     { nav: "backup",  label: "Exportar dados",     icone: "database",   busca: "backup restaurar" },
     { nav: "ajuda",   label: "Ajuda",              icone: "life-buoy",  busca: "suporte termos privacidade" },
   ] },

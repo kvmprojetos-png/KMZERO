@@ -338,10 +338,34 @@ export function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, 
    CALENDÁRIO DE PRESENÇAS
 ════════════════════════════════════ */
 
-export function TelaLinks({ links, onBack, onAdd, onRemover }) {
+const UFS_SINAPI = ["BR", "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"];
+/* UF no fim do endereço da empresa ("… Alegre - ES"); sem UF reconhecida, a busca é nacional (BR). */
+export function ufDoEndereco(endereco) {
+  const m = String(endereco || "").trim().match(/[\s\-\/,]([A-Za-z]{2})\.?$/);
+  const uf = m ? m[1].toUpperCase() : "";
+  return uf && uf !== "BR" && UFS_SINAPI.includes(uf) ? uf : "BR";
+}
+
+export function TelaLinks({ links, empresa = {}, onBack, onAdd, onRemover }) {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ nome: "", url: "", icon: "🔗", cat: "Geral" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Consulta SINAPI (preços de referência da Caixa): o site não aceita ser aberto dentro do app (X-Frame-Options),
+  // então a busca abre numa aba nova, já com o termo e o estado. O estado escolhido fica guardado neste aparelho.
+  const [termoSinapi, setTermoSinapi] = useState("");
+  const [ufSinapi, setUfSinapi] = useState(() => {
+    try { const salvo = localStorage.getItem("kmzero_sinapi_uf"); if (salvo && UFS_SINAPI.includes(salvo)) return salvo; } catch {}
+    return ufDoEndereco(empresa.endereco);
+  });
+  const buscarSinapi = () => {
+    const q = termoSinapi.trim();
+    const url = q
+      ? `https://buscadorsinapi.com.br/busca?q=${encodeURIComponent(q)}&uf=${ufSinapi}`
+      : (ufSinapi === "BR" ? "https://buscadorsinapi.com.br" : `https://buscadorsinapi.com.br/${ufSinapi.toLowerCase()}`);
+    try { localStorage.setItem("kmzero_sinapi_uf", ufSinapi); } catch {}
+    window.open(url, "_blank", "noopener");
+  };
 
   // Agrupar por categoria
   const grupos = {};
@@ -363,6 +387,17 @@ export function TelaLinks({ links, onBack, onAdd, onRemover }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Links Úteis" sub="Atalhos para ferramentas externas" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 11, color: T.texto2, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 700 }}>Consulta SINAPI</div>
+          <div style={{ fontSize: 12, color: T.texto2, marginBottom: 10 }}>Preços de referência da Caixa por composição ou insumo. Abre o buscador numa aba nova, no estado escolhido.</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "stretch" }}>
+            <input value={termoSinapi} onChange={e => setTermoSinapi(e.target.value)} onKeyDown={e => { if (e.key === "Enter") buscarSinapi(); }} placeholder="Código ou descrição — ex: 92759, alvenaria, concreto" aria-label="Termo da busca SINAPI" style={{ ...inputS, flex: "1 1 220px", marginBottom: 0 }} />
+            <select value={ufSinapi} onChange={e => setUfSinapi(e.target.value)} aria-label="Estado da tabela SINAPI" style={{ ...selS, flex: "0 0 96px", marginBottom: 0 }}>
+              {UFS_SINAPI.map(uf => <option key={uf} value={uf}>{uf === "BR" ? "Brasil" : uf}</option>)}
+            </select>
+            <Btn label="🔎 Buscar no SINAPI ↗" color={NAVY} onClick={buscarSinapi} style={{ flex: "1 1 200px", marginTop: 0 }} />
+          </div>
+        </div>
         {Object.keys(grupos).length === 0 && (
           <div style={{ background: T.superficie, borderRadius: 12, padding: 30, textAlign: "center", color: T.texto3 }}>
             🔗 Nenhum link cadastrado.<br /><span style={{ fontSize: 11 }}>Toque em "Adicionar" para começar.</span>
