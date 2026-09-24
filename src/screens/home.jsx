@@ -3,7 +3,7 @@ import { gerarSolicitacaoPedidoPDF } from "./suprimentos.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
-import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
+import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
@@ -14,6 +14,34 @@ import { useTema } from "../lib/useTema.js";
 import { SinoAvisos } from "./avisos.jsx";
 // Nomes das telas iguais aos do menu lateral ("Indicadores", "Alertas", "Avisos"…) e e-mail do desenvolvedor
 import { EMAIL_DEV, labelDaTela } from "../components/menuGrupos.js";
+
+/* ── Documentos de saída (PDF/impressão) desta tela: padrão do núcleo (src/lib/pdf.js) ──
+   Regras: só dados da EMPRESA CLIENTE (Sistema → Empresa), cores só em hex fixo, classes
+   compartilhadas (.sec, .quadro, .kpis, .selo…), cabeçalho/rodapé via gerarHeaderHTML/gerarFooterHTML. */
+const escHTML = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// "YYYY-MM-DD" → "DD/MM/YYYY" sem passar por Date (evita o deslocamento de fuso em UTC)
+const fmtDiaMesAno = iso => { const [a, m, d] = String(iso || "").slice(0, 10).split("-"); return a && m && d ? `${d}/${m}/${a}` : String(iso || ""); };
+// Dia (AAAA-MM-DD, hora local) em que a solicitação de material foi aberta: aceita "DD/MM/AAAA" e "DD/MM/AAAA, HH:MM:SS"
+// (pedido.data dos pedidos reais), "AAAA-MM-DD" ou "DD/MM/AAAA" em dataSolicitacao (demonstração) ou o carimbo em
+// milissegundos (ts / id numérico). Sem data conhecida devolve "" e o pedido fica fora da contagem por período.
+const diaDoPedido = p => {
+  const bruta = String(p?.data || p?.dataSolicitacao || "").trim();
+  const br = bruta.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = bruta.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ms = Number(p?.ts ?? p?.id);
+  return Number.isFinite(ms) && ms > 1e12 ? dataLocalIso(new Date(ms)) : "";
+};
+// Empresa cliente do documento: a prop (quando a tela recebe) ou o cadastro salvo em Sistema → Empresa
+async function empresaDoDocumento(empresa) {
+  if (empresa && typeof empresa === "object" && Object.keys(empresa).length) return empresa;
+  try { return (await store.get("empresa")) || {}; } catch { return {}; }
+}
+const seloHTML = (texto, tom) => `<span class="selo${tom ? " " + tom : ""}">${escHTML(texto || "—")}</span>`;
+const TOM_PRESENCA = { Presente: "ok", Falta: "erro", Atestado: "alerta" };
+const TOM_PEDIDO = { Aprovado: "ok", Negado: "erro", Aguardando: "alerta" };
+const TOM_EQUIP = { "Disponível": "ok", "Quebrada": "erro" };
 
 export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoje, avisosNaoLidos = 0, onNav, onLogout }) {
   const presentes = Object.values(presencasHoje).filter(v => v === "Presente").length;
@@ -848,7 +876,7 @@ export function CategoriaCard({ categoria, onNav }) {
    OBRAS (GESTOR)
 ════════════════════════════════════ */
 
-export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, onBack }) {
+export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, empresa, onBack }) {
   const [obraId, setObraId] = useState(obras[0]?.id);
   const obra = obras.find(o => o.id === obraId) || obras[0];
   const equips = DEFAULT_EQUIPS.filter(e => e.obraId === obraId);
@@ -916,40 +944,40 @@ export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, on
           </div>
         </div>
 
-        <Btn label="📤 Exportar Relatório PDF" color={NAVY} onClick={() => {
-          const html = `
-            <html><head><title>Relatório ${obra?.nome} - ${hoje}</title>
+        <Btn label="📤 Exportar Relatório PDF" color={NAVY} onClick={async () => {
+          // Modelo migrado para o padrão do núcleo (esta tela não está no menu; mantido sem captura).
+          const emp = await empresaDoDocumento(empresa);
+          const linhasTrab = trab.length
+            ? trab.map(t => `<tr><td>${escHTML(t.nome)}</td><td>${escHTML(t.cargo)}</td><td>${seloHTML(presencasHoje[t.id], TOM_PRESENCA[presencasHoje[t.id]])}</td></tr>`).join("")
+            : `<tr><td class="vazio" colspan="3">Sem registros</td></tr>`;
+          const linhasEquip = equips.length
+            ? equips.map(eq => `<tr><td>${escHTML(eq.nome)}</td><td>${escHTML(eq.codigo)}</td><td>${seloHTML(eq.status, TOM_EQUIP[eq.status])}</td></tr>`).join("")
+            : `<tr><td class="vazio" colspan="3">Sem registros</td></tr>`;
+          const html = `<html><head><meta charset="UTF-8"><title>Relatório ${escHTML(obra?.nome || "")} - ${hoje}</title>
             <style>
-              body{font-family:Arial,sans-serif;padding:30px;color:#222;}
-              h1{color:${NAVY};border-bottom:3px solid ${GOLD};padding-bottom:8px;}
-              h2{color:${NAVY};margin-top:24px;}
-              table{width:100%;border-collapse:collapse;margin:10px 0;}
-              th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:13px;}
-              th{background:${NAVY};color:#fff;}
-              .badge{display:inline-block;padding:3px 8px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}
-              .footer{margin-top:40px;text-align:center;color:#888;font-size:11px;border-top:1px solid #ddd;padding-top:10px;}
+              ${KM_PDF_PAGE_CSS}
+              ${KM_PDF_CSS}
             </style></head><body>
-              <h1>📋 Relatório Diário — ${obra?.nome || ""}</h1>
-              <p><b>Data:</b> ${hoje} &nbsp;|&nbsp; <b>Local:</b> ${obra?.local || ""}</p>
-              <h2>👷 Mão de Obra</h2>
-              <table><tr><th>Trabalhador</th><th>Cargo</th><th>Status</th></tr>
-              ${trab.map(t => `<tr><td>${t.nome}</td><td>${t.cargo}</td><td><span class="badge" style="background:${STATUS_COLOR[presencasHoje[t.id]] || "#888"}">${presencasHoje[t.id] || "—"}</span></td></tr>`).join("")}
-              </table>
-              <p><b>Resumo:</b> ${presentes} Presentes • ${faltas} Faltas • ${trab.length - presentes - faltas} Atestados/Sem registro</p>
-              <h2>⚙️ Equipamentos</h2>
-              <table><tr><th>Equipamento</th><th>Código</th><th>Status</th></tr>
-              ${equips.map(eq => `<tr><td>${eq.nome}</td><td>${eq.codigo}</td><td><span class="badge" style="background:${EQUIP_COLOR[eq.status]}">${eq.status}</span></td></tr>`).join("")}
-              </table>
+              ${gerarHeaderHTML({ tipo: "Relatório Diário", periodo: hoje, info_extra: [obra?.nome, obra?.local].filter(Boolean).join(" · "), empresa: emp })}
+              <div class="kpis">
+                <div class="kpi ok"><b>${presentes}</b><span>Presentes</span></div>
+                <div class="kpi erro"><b>${faltas}</b><span>Faltas</span></div>
+                <div class="kpi alerta"><b>${trab.length - presentes - faltas}</b><span>Atestados / sem registro</span></div>
+              </div>
+              <div class="sec">1. Mão de obra <small>chamada do dia</small></div>
+              <table class="quadro"><thead><tr><th style="width:45%">Trabalhador</th><th style="width:35%">Cargo</th><th style="width:20%">Situação</th></tr></thead>
+              <tbody>${linhasTrab}</tbody></table>
+              <div class="sec">2. Equipamentos</div>
+              <table class="quadro"><thead><tr><th style="width:45%">Equipamento</th><th style="width:30%">Código</th><th style="width:25%">Situação</th></tr></thead>
+              <tbody>${linhasEquip}</tbody></table>
               ${pedidosObra.length > 0 ? `
-                <h2>📦 Pedidos de Material</h2>
-                <table><tr><th>Pedido Nº</th><th>Material</th><th>Quantidade</th><th>Status</th></tr>
-                ${pedidosObra.map(p => `<tr><td><b>${String(p.id).slice(-6)}</b></td><td>${p.material}</td><td>${fmtQtd(p.qtd)}</td><td><span class="badge" style="background:${p.status === "Aprovado" ? GREEN : p.status === "Negado" ? RED : ORANGE}">${p.status}</span></td></tr>`).join("")}
-                </table>
+                <div class="sec">3. Pedidos de material</div>
+                <table class="quadro"><thead><tr><th style="width:14%" class="num">Pedido Nº</th><th style="width:46%">Material</th><th style="width:20%" class="num">Quantidade</th><th style="width:20%">Situação</th></tr></thead>
+                <tbody>${pedidosObra.map(p => `<tr><td class="num"><b>${escHTML(String(p.id).slice(-6))}</b></td><td>${escHTML(p.material)}</td><td class="num">${escHTML(fmtQtd(p.qtd))}</td><td>${seloHTML(p.status, TOM_PEDIDO[p.status])}</td></tr>`).join("")}</tbody></table>
               ` : ""}
-              <div class="footer">Relatório emitido pelo <b>KMZERO</b> — Gestão de Obras &nbsp;|&nbsp; Gerado em ${new Date().toLocaleString("pt-BR")}</div>
-              <script>window.onload=()=>{setTimeout(()=>window.print(),300);}</script>
+              ${gerarFooterHTML({ empresa: emp, documento: "Relatório Diário" })}
             </body></html>`;
-          abrirOuBaixarHTML(html, `Relatorio-${(obra?.nome || "obra").replace(/[^a-z0-9]/gi, "_").substring(0, 25)}-${hoje.replace(/\//g, "-")}.html`);
+          abrirOuBaixarHTML(html, `Relatorio-${(obra?.nome || "obra").replace(/[^a-z0-9]/gi, "_").substring(0, 25)}-${hoje.replace(/\//g, "-")}.html`, { empresa: emp });
         }} style={{ marginBottom: 4 }} />
       </div>
       <KMFooter />
@@ -1288,13 +1316,17 @@ export function TelaAlertas({ obras, trabalhadores, equips, pedidos, historico, 
    RELATÓRIO CONSOLIDADO (semana/mês)
 ════════════════════════════════════ */
 
-export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, onBack }) {
+export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, historico, empresa, onBack }) {
   const [periodo, setPeriodo] = useState("semana");
   const [obraId, setObraId] = useState("todas");
 
   const dias = ultimosDias(periodo === "semana" ? 7 : 30);
   const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
-  const pedidosFiltro = obraId === "todas" ? pedidos : pedidos.filter(p => String(p.obraId) === String(obraId));
+  // Pedidos do período: só as solicitações ABERTAS dentro dos mesmos dias da frequência (pela data do pedido),
+  // para tela e PDF contarem a mesma coisa. A situação (aprovado / aguardando / negado) é a atual de cada uma.
+  const diasSet = new Set(dias);
+  const pedidosObra = obraId === "todas" ? pedidos : pedidos.filter(p => String(p.obraId) === String(obraId));
+  const pedidosFiltro = pedidosObra.filter(p => diasSet.has(diaDoPedido(p)));
 
   let totalP = 0, totalF = 0, totalA = 0;
   dias.forEach(d => {
@@ -1308,48 +1340,85 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
   });
 
   const ranking = trabFiltro.map(t => {
-    let p = 0, f = 0;
+    let p = 0, f = 0, a = 0;
     dias.forEach(d => {
       const s = (historico[d] || {})[t.id];
       if (s === "Presente") p++;
       else if (s === "Falta") f++;
+      else if (s === "Atestado") a++;
     });
-    return { ...t, presentes: p, faltas: f, taxa: dias.length > 0 ? Math.round((p / dias.length) * 100) : 0 };
-  }).sort((a, b) => b.taxa - a.taxa);
+    // Taxa = presenças ÷ dias com chamada registrada para o colaborador (presenças + faltas + atestados).
+    // Fins de semana, feriados e dias não lançados não entram no divisor; sem nenhuma chamada a taxa fica indefinida (null).
+    const registros = p + f + a;
+    return { ...t, presentes: p, faltas: f, atestados: a, registros, taxa: registros > 0 ? Math.round((p / registros) * 100) : null };
+  }).sort((a, b) => (b.taxa ?? -1) - (a.taxa ?? -1) || b.presentes - a.presentes || String(a.nome || "").localeCompare(String(b.nome || "")));
+  const semChamada = ranking.filter(t => t.taxa == null).length;
 
   const tituloPeriodo = periodo === "semana" ? "Últimos 7 dias" : "Últimos 30 dias";
+  const nomeObra = obraId === "todas" ? "Todas as obras" : (obras.find(o => String(o.id) === String(obraId))?.nome || "");
+  // Frequência média do período: presenças ÷ chamadas registradas (presenças + faltas + atestados);
+  // quem não teve nenhuma chamada no período não entra na conta.
+  const totalRegistros = totalP + totalF + totalA;
+  const taxaGeral = totalRegistros > 0 ? Math.round((totalP / totalRegistros) * 100) : 0;
 
-  const exportar = () => {
-    const html = `<html><head><title>Relatório Consolidado - ${tituloPeriodo}</title>
+  const exportar = async () => {
+    const emp = await empresaDoDocumento(empresa);
+    const periodoTxt = dias.length ? `${tituloPeriodo} · ${fmtDiaMesAno(dias[0])} a ${fmtDiaMesAno(dias[dias.length - 1])}` : tituloPeriodo;
+    const nomeDaObra = id => obras.find(o => String(o.id) === String(id))?.nome || "";
+    // Cor da taxa: verde a partir de 80%, âmbar a partir de 50%, vermelho abaixo; cinza quando não houve chamada.
+    const tomTaxa = taxa => (taxa == null ? "txt-cinza" : taxa >= 80 ? "txt-ok" : taxa >= 50 ? "txt-alerta" : "txt-erro");
+    const txtTaxa = taxa => (taxa == null ? "—" : `${taxa}%`);
+    const linhasRanking = ranking.length
+      ? ranking.map((t, i) => `<tr>
+          <td class="num">${i + 1}</td>
+          <td><b>${escHTML(t.nome)}</b>${obraId === "todas" && nomeDaObra(t.obraId) ? `<span class="sub">${escHTML(nomeDaObra(t.obraId))}</span>` : ""}</td>
+          <td>${escHTML(t.cargo || "—")}</td>
+          <td class="num">${t.presentes}</td>
+          <td class="num">${t.faltas}</td>
+          <td class="num">${t.atestados}</td>
+          <td class="num ${tomTaxa(t.taxa)}"><b>${txtTaxa(t.taxa)}</b></td>
+        </tr>`).join("") + `<tr class="total"><td colspan="3">Total · ${trabFiltro.length} colaborador${trabFiltro.length === 1 ? "" : "es"}${semChamada ? ` (${semChamada} sem chamada no período)` : ""}</td><td class="num">${totalP}</td><td class="num">${totalF}</td><td class="num">${totalA}</td><td class="num">${totalRegistros > 0 ? `${taxaGeral}%` : "—"}</td></tr>`
+      : `<tr><td class="vazio" colspan="7">Sem registros no período</td></tr>`;
+    // Situação dos pedidos abertos no período (mesma lista da tela: pedidosFiltro)
+    const contagem = {};
+    pedidosFiltro.forEach(p => { const s = p.status || "Sem situação"; contagem[s] = (contagem[s] || 0) + 1; });
+    const ordem = ["Aprovado", "Aguardando", "Negado"];
+    const situacoes = [...ordem, ...Object.keys(contagem).filter(s => !ordem.includes(s)).sort((a, b) => a.localeCompare(b))];
+    const pct = n => (pedidosFiltro.length ? Math.round((n / pedidosFiltro.length) * 100) : 0);
+    const linhasPedidos = pedidosFiltro.length
+      ? situacoes.map(s => `<tr><td>${seloHTML(s, TOM_PEDIDO[s])}</td><td class="num">${contagem[s] || 0}</td><td class="num">${pct(contagem[s] || 0)}%</td></tr>`).join("")
+        + `<tr class="total"><td>Total</td><td class="num">${pedidosFiltro.length}</td><td class="num">100%</td></tr>`
+      : `<tr><td class="vazio" colspan="3">Sem solicitações abertas no período</td></tr>`;
+    const html = `<html><head><meta charset="UTF-8"><title>Relatório Consolidado - ${escHTML(tituloPeriodo)}</title>
       <style>
         ${KM_PDF_PAGE_CSS}
-        body{font-family:Arial;padding:30px;color:#222;}
-        h1{color:${NAVY};border-bottom:3px solid ${GOLD};padding-bottom:8px;}
-        h2{color:${NAVY};margin-top:24px;}
-        table{width:100%;border-collapse:collapse;margin:10px 0;}
-        th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:13px;}
-        th{background:${NAVY};color:#fff;}
-        .stat{display:inline-block;padding:12px 20px;margin:5px;border-radius:8px;color:#fff;font-weight:bold;}
-        .footer{margin-top:40px;text-align:center;color:#888;font-size:11px;border-top:1px solid #ddd;padding-top:10px;}
+        ${KM_PDF_CSS}
+        .sub { display: block; font-size: 7pt; font-weight: 400; color: #5c6b73; margin-top: 1px; }
       </style></head><body>
-      <h1>📊 Relatório Consolidado — ${tituloPeriodo}</h1>
-      <p><b>Obra:</b> ${obraId === "todas" ? "Todas" : obras.find(o => String(o.id) === String(obraId))?.nome} &nbsp;|&nbsp; <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
-      <h2>Resumo</h2>
-      <div>
-        <span class="stat" style="background:${GREEN}">${totalP} Presenças</span>
-        <span class="stat" style="background:${RED}">${totalF} Faltas</span>
-        <span class="stat" style="background:${ORANGE}">${totalA} Atestados</span>
+      ${gerarHeaderHTML({ tipo: "Relatório Consolidado", periodo: periodoTxt, subtitulo: "Frequência e pedidos de material", info_extra: nomeObra, empresa: emp })}
+      <div class="sec">1. Resumo do período <small>${dias.length} dias corridos · ${trabFiltro.length} colaborador${trabFiltro.length === 1 ? "" : "es"}${semChamada ? ` (${semChamada} sem chamada)` : ""} · ${totalRegistros} chamada${totalRegistros === 1 ? "" : "s"} registrada${totalRegistros === 1 ? "" : "s"} · ${escHTML(nomeObra)}</small></div>
+      <div class="kpis">
+        <div class="kpi ok"><b>${totalP}</b><span>Presenças</span></div>
+        <div class="kpi erro"><b>${totalF}</b><span>Faltas</span></div>
+        <div class="kpi alerta"><b>${totalA}</b><span>Atestados</span></div>
+        <div class="kpi"><b>${totalRegistros > 0 ? `${taxaGeral}%` : "—"}</b><span>Frequência média</span></div>
       </div>
-      <h2>👥 Ranking de Frequência</h2>
-      <table><tr><th>#</th><th>Nome</th><th>Cargo</th><th>Presenças</th><th>Faltas</th><th>Taxa</th></tr>
-      ${ranking.map((t, i) => `<tr><td>${i + 1}</td><td>${t.nome}</td><td>${t.cargo}</td><td>${t.presentes}</td><td>${t.faltas}</td><td><b>${t.taxa}%</b></td></tr>`).join("")}
-      </table>
-      <h2>📦 Pedidos no Período</h2>
-      <p>Total: ${pedidosFiltro.length} • Aprovados: ${pedidosFiltro.filter(p => p.status === "Aprovado").length} • Negados: ${pedidosFiltro.filter(p => p.status === "Negado").length} • Aguardando: ${pedidosFiltro.filter(p => p.status === "Aguardando").length}</p>
-      <div class="footer">Relatório emitido pelo <b>KMZERO</b> — Gestão de Obras</div>
-      <script>window.onload=()=>{setTimeout(()=>window.print(),300);}</script>
+      <div class="sec">2. Ranking de frequência <small>por colaborador, da maior taxa para a menor</small></div>
+      <table class="quadro"><thead><tr>
+        <th style="width:5%" class="num">Nº</th><th style="width:32%">Nome</th><th style="width:27%">Cargo</th>
+        <th style="width:10%" class="num">Presenças</th><th style="width:9%" class="num">Faltas</th><th style="width:10%" class="num">Atestados</th><th style="width:7%" class="num">Taxa</th>
+      </tr></thead>
+      <tbody>${linhasRanking}</tbody></table>
+      <div class="nota">Taxa = presenças ÷ dias com chamada registrada para o colaborador (presenças + faltas + atestados); fins de semana, feriados e dias sem chamada não entram na conta. Verde a partir de 80%, âmbar a partir de 50%, vermelho abaixo. Colaborador sem nenhuma chamada no período aparece com "—" e não entra na frequência média. Presença, falta e atestado conforme a chamada diária registrada no sistema.</div>
+      <div class="junto"><!-- quadro curto: vai inteiro para a página seguinte em vez de ser dividido -->
+      <div class="sec">3. Pedidos de material <small>solicitações abertas de ${dias.length ? `${fmtDiaMesAno(dias[0])} a ${fmtDiaMesAno(dias[dias.length - 1])}` : escHTML(tituloPeriodo.toLowerCase())} · ${escHTML(nomeObra)}</small></div>
+      <table class="quadro"><thead><tr><th style="width:50%">Situação</th><th style="width:25%" class="num">Pedidos</th><th style="width:25%" class="num">% do total</th></tr></thead>
+      <tbody>${linhasPedidos}</tbody></table>
+      <div class="nota">Conta cada solicitação de material pela data em que foi aberta no sistema, dentro do mesmo período da frequência; a situação (aprovado, aguardando, negado) é a atual de cada pedido. Solicitações de outros períodos não entram.</div>
+      </div>
+      ${gerarFooterHTML({ empresa: emp, documento: "Relatório Consolidado" })}
       </body></html>`;
-    abrirOuBaixarHTML(html, `Consolidado-${tituloPeriodo.replace(/\s/g, "_")}.html`);
+    abrirOuBaixarHTML(html, `Consolidado-${tituloPeriodo.replace(/\s/g, "_")}.html`, { empresa: emp });
   };
 
   return (
@@ -1393,15 +1462,16 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
                 <div style={{ fontSize: 10, color: T.texto2 }}>{t.cargo}</div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 16, fontWeight: 900, color: t.taxa >= 80 ? GREEN : t.taxa >= 50 ? ORANGE : RED }}>{t.taxa}%</div>
-                <div style={{ fontSize: 9, color: T.texto2 }}>{t.presentes}P / {t.faltas}F</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: t.taxa == null ? T.texto3 : t.taxa >= 80 ? GREEN : t.taxa >= 50 ? ORANGE : RED }}>{t.taxa == null ? "—" : `${t.taxa}%`}</div>
+                <div style={{ fontSize: 9, color: T.texto2 }}>{t.taxa == null ? "sem chamada" : `${t.presentes}P / ${t.faltas}F`}</div>
               </div>
             </div>
           ))}
         </div>
 
         <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
-          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📦 Pedidos no Período</div>
+          <div style={{ fontWeight: 800, color: T.titulo, fontSize: 14 }}>📦 Pedidos no Período</div>
+          <div style={{ fontSize: 11, color: T.texto2, marginBottom: 10 }}>Solicitações abertas nos {tituloPeriodo.toLowerCase()} · situação atual de cada uma</div>
           <div style={{ display: "flex", gap: 6, fontSize: 12, color: T.texto2 }}>
             <span style={{ background: T.infoFundo, padding: "4px 10px", borderRadius: 8, fontWeight: 700, color: T.titulo }}>Total: {pedidosFiltro.length}</span>
             <span style={{ background: T.sucessoFundo, padding: "4px 10px", borderRadius: 8, fontWeight: 700, color: GREEN }}>✓ {pedidosFiltro.filter(p => p.status === "Aprovado").length}</span>
