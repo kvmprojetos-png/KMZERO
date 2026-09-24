@@ -1011,7 +1011,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const ehCLT = formaCalculo === "mensal_fixo";
     const pagaFeriado = t.pagaFeriado !== undefined ? t.pagaFeriado === true : ehCLT;
     const pagaAtestado = t.pagaAtestado !== undefined ? t.pagaAtestado === true : ehCLT;
-    const base = { presentes: 0, faltas: 0, atestados: 0, feriados: 0, diaria, salarioFixo, diasPagos: 0, diasTotaisPeriodo: 0, bruto: 0, adiantDesconto: 0, liquido: 0, tipoFolha: tipo, descricaoPeriodo: "Ciclo", formaCalculo, semAncora: false, periodoIni: null, periodoFim: null, proxPagamento: null };
+    const base = { presentes: 0, faltas: 0, atestados: 0, feriados: 0, diaria, salarioFixo, diasPagos: 0, diasTotaisPeriodo: 0, diasBase: 0, bruto: 0, adiantDesconto: 0, liquido: 0, tipoFolha: tipo, descricaoPeriodo: "Ciclo", formaCalculo, pagaFeriado, pagaAtestado, semAncora: false, periodoIni: null, periodoFim: null, proxPagamento: null };
     if (!t.ultimoPagamento) return { ...base, semAncora: true };
     const ancora = new Date(t.ultimoPagamento + "T12:00:00");
     let presentes = 0, faltas = 0, atestados = 0, feriados = 0, contados = 0;
@@ -1042,8 +1042,19 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       else if (sdia === "Atestado") atestados++;
       else if (sdia === "Feriado") feriados++;
     }
-    const diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
-    const bruto = diaria * diasPagos;
+    let diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
+    let diasBase = 0, bruto = 0;
+    if (ehCLT && salarioFixo > 0) {
+      // Salário fixo (CLT) no ciclo: mesma regra dos outros regimes, em 30 avos — ciclo mensal = 30 dias;
+      // semanal/quinzenal = dias corridos do ciclo. Só as faltas descontam; a presença não altera o valor.
+      // (Antes o ciclo usava diária × dias pagos e o colaborador de salário fixo saía com R$ 0,00.)
+      const diasCorridos = primeiroDiaUtil && ultimoDiaUtil ? Math.round((new Date(ultimoDiaUtil + "T12:00:00") - new Date(primeiroDiaUtil + "T12:00:00")) / 86400000) + 1 : 0;
+      diasBase = tipo === "mensal" ? 30 : diasCorridos;
+      diasPagos = Math.max(0, diasBase - faltas);
+      bruto = (salarioFixo / 30) * diasPagos;
+    } else {
+      bruto = diaria * diasPagos;
+    }
     let adiantDesconto = 0, adiantIds = [];
     if (adiantamentos && primeiroDiaUtil && ultimoDiaUtil) {
       const vales = valesDoPeriodo(t.id, primeiroDiaUtil, ultimoDiaUtil);
@@ -1051,7 +1062,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       adiantIds = vales.map(a => a.id);
     }
     const liquido = Math.max(0, bruto - adiantDesconto);
-    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: fimMensal ? `${fimMensal.getFullYear()}-${String(fimMensal.getMonth() + 1).padStart(2, "0")}-${String(fimMensal.getDate()).padStart(2, "0")}` : ultimoDiaUtil };
+    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, diasBase, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: fimMensal ? `${fimMensal.getFullYear()}-${String(fimMensal.getMonth() + 1).padStart(2, "0")}-${String(fimMensal.getDate()).padStart(2, "0")}` : ultimoDiaUtil };
   };
 
   const calcular = (t) => {
@@ -1096,21 +1107,17 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const ehCLT = formaCalculo === "mensal_fixo";
     const pagaFeriado = t.pagaFeriado !== undefined ? t.pagaFeriado === true : ehCLT;
     const pagaAtestado = t.pagaAtestado !== undefined ? t.pagaAtestado === true : ehCLT;
-    const diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
-    let bruto = 0;
+    let diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
+    let diasBase = 0, bruto = 0;
 
     if (formaCalculo === "mensal_fixo" && salarioFixo > 0) {
-      if (tipoRegime === "mensal") {
-        const diaUtilMes = 30; // CLT: divisão por 30 avos, independente dos dias do mês
-        if (faltas === 0) bruto = salarioFixo;
-        else bruto = salarioFixo - (salarioFixo / diaUtilMes) * faltas;
-      } else {
-        const proporcao = diasTotaisPeriodo / 30;
-        const salarioPeriodo = salarioFixo * proporcao;
-        if (faltas === 0) bruto = salarioPeriodo;
-        else bruto = salarioPeriodo - (salarioPeriodo / diasTotaisPeriodo) * faltas;
-      }
-      if (bruto < 0) bruto = 0;
+      // CLT: salário em 30 avos, independente dos dias do mês. Mensal = 30 dias; outros regimes = dias corridos
+      // do período. Só as faltas descontam (a presença não altera o valor): bruto = salário/30 × (dias − faltas),
+      // que é a mesma conta de antes (salário − salário/30 × faltas; proporcional nos regimes curtos), agora com
+      // "dias pagos" = base do cálculo, para a linha da folha fechar (diária × dias pagos = bruto).
+      diasBase = tipoRegime === "mensal" ? 30 : diasTotaisPeriodo;
+      diasPagos = Math.max(0, diasBase - faltas);
+      bruto = (salarioFixo / 30) * diasPagos;
     } else {
       // CÁLCULO POR DIÁRIA (padrão)
       bruto = diaria * diasPagos;
@@ -1128,9 +1135,9 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const liquido = Math.max(0, bruto - adiantDesconto); // nunca paga negativo
     return {
       presentes, faltas, atestados, feriados, diaria, salarioFixo,
-      diasPagos, diasTotaisPeriodo, bruto, adiantDesconto, adiantIds, liquido,
+      diasPagos, diasTotaisPeriodo, diasBase, bruto, adiantDesconto, adiantIds, liquido,
       periodoIni: periodoIniIso, periodoFim: periodoFimIso,
-      tipoFolha: tipoRegime, descricaoPeriodo: periodo.descricao, formaCalculo,
+      tipoFolha: tipoRegime, descricaoPeriodo: periodo.descricao, formaCalculo, pagaFeriado, pagaAtestado,
       diaInicio: periodo.diaInicio, diaFim: periodo.diaFim,
       mesInicio: periodo.mesInicio, mesFim: periodo.mesFim,
       anoInicio: periodo.anoInicio, anoFim: periodo.anoFim,
@@ -1139,86 +1146,130 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
 
   const totalFolha = trabFiltro.reduce((s, t) => s + calcular(t).liquido, 0);
   const totalAdiantQuinzena = trabFiltro.reduce((s, t) => s + calcular(t).adiantDesconto, 0);
-  // Filtra: só mostra quem tem dias trabalhados ou adiantamento (evita lista cheia de zeros)
-  const trabComMov = trabFiltro.filter(t => { const c = calcular(t); return c.diasPagos > 0 || c.adiantDesconto > 0; });
+  // Filtra: só mostra quem tem dias pagos, valor a receber (salário fixo) ou adiantamento (evita lista cheia de zeros).
+  // "bruto > 0" garante que o colaborador de salário fixo entra na lista e no PDF: o total da tela (soma de todos) e o do PDF batem.
+  const trabComMov = trabFiltro.filter(t => { const c = calcular(t); return c.diasPagos > 0 || c.bruto > 0 || c.adiantDesconto > 0; });
 
   const exportarPDF = () => {
+    // Folha de pagamento (modelo KMZ-PL-001) no padrão dos documentos de saída (src/lib/pdf.js):
+    // A4 paisagem, cabeçalho/rodapé do núcleo com os dados da EMPRESA CLIENTE, tabela .quadro paginada por linha.
+    // O mesmo modelo atende os 6 regimes (diária, semanal, quinzenal, mensal, personalizado, por ciclo) e o filtro de equipe.
     const ehCiclo = tipoRegime === "ciclo";
-    const fmt = (v) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const fbr = (iso) => { if (!iso) return "—"; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a}`; };
-    const lista = trabComMov;
-    const periodoTxt = ehCiclo ? "Por ciclo do colaborador (seg–sex)"
-      : `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
+    const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const fmt = v => (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtDias = v => { const n = Number(v) || 0; return Number.isInteger(n) ? String(n) : n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
+    const fmtSalario = v => { const n = Number(v) || 0; return Number.isInteger(n) ? n.toLocaleString("pt-BR") : fmt(n); }; // "9.500" (sem centavos quando inteiro: cabe na célula estreita)
+    const dd = n => String(n).padStart(2, "0");
+    const fbr = iso => { if (!iso) return "—"; const [a, m, d] = String(iso).split("-"); return `${d}/${m}/${a}`; };
+    const fbrCurta = iso => { const [, m, d] = String(iso).split("-"); return `${d}/${m}`; };
+    // "14/09 a 25/09/2026" (mesmo ano) — cabe numa linha da coluna Período
+    const fPeriodo = (ini, fim) => (!ini || !fim) ? "—" : (String(ini).slice(0, 4) === String(fim).slice(0, 4) ? `${fbrCurta(ini)} a ${fbr(fim)}` : `${fbr(ini)} a ${fbr(fim)}`);
     const obraNome = obraId === "todas" ? "Todas as obras" : (obras.find(o => String(o.id) === String(obraId))?.nome || "—");
-    const totBruto = lista.reduce((s, t) => s + calcular(t).bruto, 0);
-    const totAdiant = lista.reduce((s, t) => s + calcular(t).adiantDesconto, 0);
-    const totLiq = lista.reduce((s, t) => s + calcular(t).liquido, 0);
-    const colPeriodo = ehCiclo ? `<th>Período</th>` : "";
-    const colspanTotal = ehCiclo ? 9 : 8;
-    const rows = lista.map((t, i) => {
-      const c = calcular(t);
-      const obra = obras.find(o => String(o.id) === String(t.obraId));
-      const periodoCell = ehCiclo ? `<td style="white-space:nowrap">${fbr(c.periodoIni)} a ${fbr(c.periodoFim)}</td>` : "";
+    // Obra do colaborador; sem obra (obraId vazio/0) = funcionário indireto do escritório, como na ficha cadastral
+    const itens = trabComMov.map(t => ({ t, c: calcular(t), obra: obras.find(o => String(o.id) === String(t.obraId))?.nome || (!t.obraId ? "Escritório (indireto)" : "—") }));
+    const ehFixo = c => c.formaCalculo === "mensal_fixo" && c.salarioFixo > 0;
+    const temFixo = itens.some(({ c }) => ehFixo(c));
+    // Feriado nacional pago entra em "dias pagos" sem coluna própria: mostra "+N feriado" sob as presenças para a linha fechar
+    const feriadosPagosDe = c => (!ehFixo(c) && c.pagaFeriado && c.feriados > 0 ? c.feriados : 0);
+    const temFeriadoPago = itens.some(({ c }) => feriadosPagosDe(c) > 0);
+
+    // Período, regime e data de pagamento conforme o regime escolhido (antes o PDF imprimia sempre
+    // dia1–dia2 da quinzena, mesmo em diária/semanal/mensal/personalizado, e nunca a data de pagamento).
+    let periodoTxt, regimeTxt, pagamentoTxt;
+    if (ehCiclo) {
+      const inis = itens.map(x => x.c.periodoIni).filter(Boolean).sort();
+      const fins = itens.map(x => x.c.periodoFim).filter(Boolean).sort();
+      periodoTxt = inis.length ? `${fbr(inis[0])} a ${fbr(fins[fins.length - 1])}` : "Ciclo de cada colaborador";
+      regimeTxt = "Por ciclo de cada colaborador (seg–sex)";
+      const datas = [...new Set(itens.map(x => x.c.proxPagamento).filter(Boolean))].sort();
+      pagamentoTxt = datas.length === 0 ? "—" : datas.length <= 3 ? datas.map(fbr).join(" · ") : "Conforme o ciclo de cada colaborador";
+    } else {
+      const p = calcularPeriodo();
+      const ini = `${dd(p.diaInicio)}/${dd(p.mesInicio + 1)}/${p.anoInicio}`;
+      const fim = `${dd(p.diaFim)}/${dd(p.mesFim + 1)}/${p.anoFim}`;
+      periodoTxt = ini === fim ? ini : `${ini} a ${fim}`;
+      regimeTxt = tipoRegime === "diaria" ? "Diária (1 dia)"
+        : tipoRegime === "semanal" ? "Semanal (7 dias)"
+        : tipoRegime === "quinzenal" ? `${quinzena}ª quinzena de ${meses[mes]}/${ano}`
+        : tipoRegime === "mensal" ? `Mensal · ${meses[mes]}/${ano}`
+        : p.descricao;
+      const pagIso = tipoRegime === "diaria" ? diaPagDiario
+        : tipoRegime === "semanal" ? diaPagSemanal
+        : tipoRegime === "quinzenal" ? (quinzena === 1 ? diaPagQuinzenal1 : diaPagQuinzenal2)
+        : tipoRegime === "mensal" ? diaPagMensal
+        : persPagamento;
+      pagamentoTxt = /^\d{4}-\d{2}-\d{2}$/.test(pagIso || "") ? fbr(pagIso) : "—";
+    }
+
+    // Totais da folha (somatório real das linhas listadas)
+    const tot = itens.reduce((s, { c }) => ({
+      presentes: s.presentes + (Number(c.presentes) || 0), atestados: s.atestados + (Number(c.atestados) || 0), faltas: s.faltas + (Number(c.faltas) || 0),
+      diasPagos: s.diasPagos + (Number(c.diasPagos) || 0), bruto: s.bruto + (Number(c.bruto) || 0), adiant: s.adiant + (Number(c.adiantDesconto) || 0), liquido: s.liquido + (Number(c.liquido) || 0),
+    }), { presentes: 0, atestados: 0, faltas: 0, diasPagos: 0, bruto: 0, adiant: 0, liquido: 0 });
+
+    const nCols = ehCiclo ? 13 : 12;
+    // Larguras em % (somam 100). Cabeçalhos podem quebrar em duas linhas; nenhum nowrap em coluna de texto.
+    const cabecalhoTabela = ehCiclo
+      ? `<tr><th style="width:3.5%" class="num">Nº</th><th style="width:12%">Nome</th><th style="width:10.5%">Cargo</th><th style="width:13.5%">Obra</th><th style="width:11%">Período</th><th style="width:6%" class="num">Diária (R$)</th><th style="width:7%" class="num">Presenças</th><th style="width:7%" class="num">Atestados</th><th style="width:5%" class="num">Faltas</th><th style="width:6%" class="num">Dias pagos</th><th style="width:6.5%" class="num">Bruto (R$)</th><th style="width:5.5%" class="num">Vales (R$)</th><th style="width:6.5%" class="num">Líquido (R$)</th></tr>`
+      : `<tr><th style="width:3.5%" class="num">Nº</th><th style="width:15%">Nome</th><th style="width:12.5%">Cargo</th><th style="width:16%">Obra</th><th style="width:6.5%" class="num">Diária (R$)</th><th style="width:7%" class="num">Presenças</th><th style="width:7%" class="num">Atestados</th><th style="width:5.5%" class="num">Faltas</th><th style="width:6%" class="num">Dias pagos</th><th style="width:7%" class="num">Bruto (R$)</th><th style="width:6.5%" class="num">Vales (R$)</th><th style="width:7.5%" class="num">Líquido (R$)</th></tr>`;
+
+    const linhas = itens.map(({ t, c, obra }, i) => {
+      const fixo = ehFixo(c);
+      // Salário fixo: diária = salário ÷ 30 e dias pagos = dias do período em 30 avos − faltas (calcular/calcularCiclo),
+      // então diária × dias pagos = bruto em qualquer regime, inclusive por ciclo.
+      const diariaTxt = fmt(fixo ? c.salarioFixo / 30 : c.diaria);
+      const feriadosPagos = feriadosPagosDe(c);
+      const periodoCel = !ehCiclo ? "" : `<td>${c.semAncora
+        ? `<span class="txt-alerta">Sem último pagamento</span>`
+        : `${fPeriodo(c.periodoIni, c.periodoFim)}${c.proxPagamento && c.proxPagamento !== c.periodoFim ? ` <span class="sub">· paga ${fbrCurta(c.proxPagamento)}</span>` : ""}`}</td>`;
       return `<tr>
         <td class="num">${i + 1}</td>
-        <td><b>${t.nome}</b></td>
-        <td>${t.cargo || "—"}</td>
-        <td>${obra?.nome?.substring(0, 22) || "—"}</td>
-        ${periodoCell}
-        <td class="num">${fmt(c.diaria)}</td>
-        <td class="num ok">${c.presentes}</td>
-        <td class="num warn">${c.atestados || "—"}</td>
-        <td class="num crit">${c.faltas || "—"}</td>
-        <td class="num"><b>${c.diasPagos}</b></td>
+        <td><b>${esc(t.nome)}</b></td>
+        <td>${esc(t.cargo || "—")}${fixo ? ` <span class="sub">· salário fixo</span>` : ""}</td>
+        <td>${esc(obra)}</td>
+        ${periodoCel}
+        <td class="num">${diariaTxt}${fixo ? `<span class="sub linha">${fmtSalario(c.salarioFixo)} ÷ 30</span>` : ""}</td>
+        <td class="num ${c.presentes > 0 ? "txt-ok" : "txt-cinza"}">${fmtDias(c.presentes)}${feriadosPagos ? `<span class="sub linha">+${fmtDias(feriadosPagos)} feriado${feriadosPagos > 1 ? "s" : ""}</span>` : ""}</td>
+        <td class="num ${c.atestados ? "txt-alerta" : "txt-cinza"}">${c.atestados ? fmtDias(c.atestados) : "—"}</td>
+        <td class="num ${c.faltas ? "txt-erro" : "txt-cinza"}">${c.faltas ? fmtDias(c.faltas) : "—"}</td>
+        <td class="num"><b>${fmtDias(c.diasPagos)}</b>${fixo ? `<span class="sub linha">${c.faltas ? `${fmtDias(c.diasBase)} − ${fmtDias(c.faltas)} falta${c.faltas > 1 ? "s" : ""}` : (c.diasBase === 30 ? "30 avos" : "do período")}</span>` : ""}</td>
         <td class="num">${fmt(c.bruto)}</td>
-        <td class="num">${c.adiantDesconto > 0 ? "−" + fmt(c.adiantDesconto) : "—"}</td>
-        <td class="num liq">${fmt(c.liquido)}</td>
+        <td class="num${c.adiantDesconto > 0 ? "" : " txt-cinza"}">${c.adiantDesconto > 0 ? "−" + fmt(c.adiantDesconto) : "—"}</td>
+        <td class="num ${c.liquido > 0 ? "txt-ok" : "txt-cinza"}"><b>${fmt(c.liquido)}</b></td>
       </tr>`;
     }).join("");
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Folha de Pagamento — KMZERO</title>
+    const corpoTabela = itens.length === 0
+      ? `<tr><td class="vazio" colspan="${nCols}">Sem registros no período: nenhum colaborador com dias pagos ou vale${obraId !== "todas" || equipeFiltro !== "todas" ? " nesta obra/equipe" : ""}.</td></tr>`
+      : `${linhas}
+        <tr class="total"><td colspan="${ehCiclo ? 6 : 5}">Total da folha · ${itens.length} colaborador${itens.length === 1 ? "" : "es"}</td><td class="num">${fmtDias(tot.presentes)}</td><td class="num">${tot.atestados ? fmtDias(tot.atestados) : "—"}</td><td class="num">${tot.faltas ? fmtDias(tot.faltas) : "—"}</td><td class="num">${fmtDias(tot.diasPagos)}</td><td class="num">${fmt(tot.bruto)}</td><td class="num">${tot.adiant > 0 ? "−" + fmt(tot.adiant) : "—"}</td><td class="num">${fmt(tot.liquido)}</td></tr>`;
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Folha de Pagamento</title>
     <style>
-      @page{size:A4 landscape;margin:0;}
-      *{box-sizing:border-box;} body{margin:0;font-family:Arial,"Segoe UI",sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      .page{width:297mm;min-height:210mm;padding:14mm 18mm 16mm 20mm;position:relative;}
-      .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #C9A227;padding-bottom:6px;}
-      .logo{font-size:20pt;font-weight:900;color:#14253F;letter-spacing:-.5px;line-height:1;}
-      .logo span{color:#C9A227;} .logo small{display:block;font-size:6pt;letter-spacing:2px;font-weight:700;}
-      .hd-doc{text-align:right;font-size:8.5pt;color:#14253F;line-height:1.5;} .hd-doc b{font-size:11pt;}
-      h1{color:#14253F;font-size:13pt;margin:10px 0 2px;}
-      .ident{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #c9ced6;font-size:8.5pt;margin:6px 0 10px;}
-      .ident div{padding:5px 8px;border-right:1px solid #c9ced6;} .ident div:last-child{border-right:none;}
-      .ident k{display:block;color:#777;font-size:7pt;text-transform:uppercase;letter-spacing:.5px;} .ident b{font-size:9pt;}
-      table{width:100%;border-collapse:collapse;font-size:8.5pt;}
-      th{background:#14253F;color:#fff;text-align:left;padding:5px 7px;border:1px solid #14253F;white-space:nowrap;}
-      td{padding:4px 7px;border:1px solid #c9ced6;} .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
-      .ok{color:#2E7D32;font-weight:700;} .warn{color:#E08A00;font-weight:700;} .crit{color:#C0392B;font-weight:700;} .liq{color:#2E7D32;font-weight:800;}
-      tr:nth-child(even) td{background:#f8fafc;}
-      tr.total td{font-weight:800;color:#14253F;background:#eef2f8;border-top:2px solid #14253F;}
-      .cap{font-size:8pt;color:#666;margin:5px 0;}
-      .ft{position:absolute;left:20mm;right:18mm;bottom:9mm;border-top:1px solid #C9A227;padding-top:4px;display:flex;justify-content:space-between;font-size:7.5pt;color:#14253F;}
-      @media print{tr{page-break-inside:avoid;} thead{display:table-header-group;}}
-    </style></head><body><div class="page">
-      <div class="hd"><div class="logo">KM<span>ZERO</span><small>ENGENHARIA &amp; ARQUITETURA</small></div>
-      <div class="hd-doc"><b>FOLHA DE PAGAMENTO</b><br>KMZ-PL-001<br>${ehCiclo ? "Por Ciclo" : "Regime " + tipoRegime}</div></div>
-      <h1>Folha de Pagamento${ehCiclo ? " — Por Ciclo" : ""}${equipeFiltro !== "todas" ? " — " + nomeEquipe(equipeFiltro) : ""}</h1>
-      <div class="ident">
-        <div><k>Empresa</k><b>${empresa.razaoSocial || empresa.nomeFantasia || "KM"}</b></div>
-        <div><k>CNPJ</k><b>${empresa.cnpj || "—"}</b></div>
-        <div><k>Obra</k><b>${obraNome}</b></div>
-        <div><k>Equipe</k><b>${nomeEquipe(equipeFiltro)}</b></div>
-        <div><k>Período</k><b>${periodoTxt}</b></div>
+      ${KM_PDF_PAGE_CSS}
+      ${KM_PDF_CSS}
+      @page { size: A4 landscape; margin: 10mm 12mm; }
+      /* Específico da folha. Sem prefixo de body: o visualizador só aproveita o conteúdo interno do body, não a classe dele. (Nunca escrever tags entre sinais de menor/maior aqui: o visualizador localiza o body por expressão regular.) */
+      .sub { font-size: 6.5pt; color: #5c6b73; font-weight: 400; } /* complemento pequeno na célula: salário fixo, data de pagamento do ciclo */
+      .sub.linha { display: block; white-space: normal; line-height: 1.2; margin-top: 1px; } /* sob o número (célula .num é nowrap): "salário ÷ 30", "+1 feriado", "30 dias" */
+      .quadro th.num { white-space: normal; } /* cabeçalho de coluna numérica à direita, mas pode quebrar em duas linhas (o .num do núcleo é nowrap, só para números) */
+      .quadro.compacto td { padding: 2px 4px; } /* 12-13 colunas: linhas mais densas */
+      .km-assinaturas { margin-top: 4px; }
+      .km-assinaturas .ass { margin-top: 24px; }
+    </style></head><body class="folha">
+      ${gerarHeaderHTML({ tipo: "Folha de Pagamento", periodo: periodoTxt, empresa, subtitulo: regimeTxt, info_extra: "Modelo KMZ-PL-001" })}
+      <div class="grade-dados g4">
+        <div><span class="rotulo">Data de pagamento</span><b>${esc(pagamentoTxt)}</b></div>
+        <div><span class="rotulo">Obra</span><b>${esc(obraNome)}</b></div>
+        <div><span class="rotulo">Equipe de pagamento</span><b>${esc(nomeEquipe(equipeFiltro))}</b></div>
+        <div><span class="rotulo">Colaboradores na folha</span><b>${itens.length}</b></div>
       </div>
-      <table>
-        <tr><th class="num">Nº</th><th>Nome</th><th>Cargo</th><th>Obra</th>${colPeriodo}<th class="num">Diária</th><th class="num">Pres.</th><th class="num">Atest.</th><th class="num">Falta</th><th class="num">Dias pagos</th><th class="num">Bruto (R$)</th><th class="num">Adiant.</th><th class="num">Líquido (R$)</th></tr>
-        ${rows}
-        <tr class="total"><td colspan="${colspanTotal}">TOTAL DA FOLHA</td><td class="num">${fmt(totBruto)}</td><td class="num">${totAdiant > 0 ? "−" + fmt(totAdiant) : "—"}</td><td class="num">${fmt(totLiq)}</td></tr>
-      </table>
-      <div class="cap">Pres. = dias presentes · Atest. = atestados (pagos conforme cadastro) · Falta não paga · cor semântica nos dados, marca só na moldura.${ehCiclo ? " Período por ciclo de cada colaborador (seg–sex), a partir do último pagamento." : ""}</div>
-      <div class="ft"><span>${empresa.razaoSocial || "KM"}</span><span>KMZ-PL-001 · Validado pelo KMZERO</span><span>Emitido em ${new Date().toLocaleDateString("pt-BR")}</span></div>
-    </div>
-    <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
+      <div class="sec">Apuração por colaborador <small>${ehCiclo ? "ciclo de cada colaborador a partir do último pagamento" : "presenças do período · líquido = bruto − vales"}</small></div>
+      <table class="quadro compacto"><thead>${cabecalhoTabela}</thead><tbody>${corpoTabela}</tbody></table>
+      <div class="nota">Presenças = dias presentes (meia diária = 0,5) · Atestados e feriados nacionais pagos conforme o cadastro de cada colaborador${temFeriadoPago ? " (\"+N feriado\" = feriados pagos, somados aos dias pagos)" : ""} · Faltas não pagas · Vales = adiantamentos do período, descontados do líquido.${temFixo ? " · Salário fixo (CLT): diária = salário ÷ 30 e dias pagos = dias do período (mês = 30 avos) menos as faltas; a presença não altera o valor." : ""}${ehCiclo ? " · Por ciclo: período de cada colaborador a partir do último pagamento, só seg–sex (semanal = 5 dias úteis, quinzenal = 10, mensal = até o dia de pagamento)." : ""}</div>
+      ${gerarAssinaturasHTML({ empresa, assinantes: [{ nome: empresa?.responsavel || "", cargo: "Responsável pela folha" }, { nome: "", cargo: "Conferência / aprovação" }] })}
+      ${gerarFooterHTML({ empresa, documento: "Folha de Pagamento · KMZ-PL-001" })}
     </body></html>`;
-    abrirOuBaixarHTML(html, `Folha-KMZERO-${ehCiclo ? "ciclo" : tipoRegime}${equipeFiltro !== "todas" ? "-" + nomeEquipe(equipeFiltro).replace(/s+/g, "") : ""}-${dataLocalIso()}.html`);
+    abrirOuBaixarHTML(html, `Folha-Pagamento-${ehCiclo ? "ciclo" : tipoRegime}${equipeFiltro !== "todas" ? "-" + nomeEquipe(equipeFiltro).replace(/\s+/g, "") : ""}-${dataLocalIso()}.html`);
   };
 
   return (

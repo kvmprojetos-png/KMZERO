@@ -1141,201 +1141,136 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
 ════════════════════════════════════ */
 
 export function gerarSolicitacaoPedidoPDF(pedido, obra, empresa) {
-  const itens = pedido.itens && pedido.itens.length > 0
+  const itens = Array.isArray(pedido.itens)
     ? pedido.itens
-    : [{ material: pedido.material, qtd: pedido.qtd, obs: pedido.obs }]; // compat com pedidos antigos
+    : [{ material: pedido.material, qtd: pedido.qtd, obs: pedido.obs, marca: pedido.marca }]; // compat com pedidos antigos (1 item na raiz)
 
   const linkMaps = (obra?.lat && obra?.lng)
     ? `https://maps.google.com/?q=${obra.lat},${obra.lng}`
     : (obra?.endereco ? `https://maps.google.com/?q=${encodeURIComponent(obra.endereco + ", " + (obra.local || ""))}` : "");
 
   const numeroPedido = String(pedido.id).slice(-6); // últimos 6 dígitos do ID
+  const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // Data do pedido: aceita "DD/MM/AAAA", "DD/MM/AAAA, HH:MM:SS" (pedido.data) ou "AAAA-MM-DD" (sem deslocamento de fuso);
+  // pedidos da demonstração usam dataSolicitacao. Sem data registrada: hoje (hora local).
+  const dataPedido = (() => {
+    const bruta = String(pedido.data || pedido.dataSolicitacao || "").trim();
+    const br = bruta.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (br) return `${br[1]}/${br[2]}/${br[3]}`;
+    const iso = bruta.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+    if (bruta) return bruta;
+    const h = new Date();
+    return `${String(h.getDate()).padStart(2, "0")}/${String(h.getMonth() + 1).padStart(2, "0")}/${h.getFullYear()}`;
+  })();
+  const solicitante = pedido.enc || pedido.encarregado || pedido.criadoPor || "—";
+  const obsGeral = String(pedido.obsGeral || pedido.observacaoGeral || "").trim();
+  const nomeObra = obra?.nome || pedido.obra || pedido.obraNome || "—";
+  const marcaValida = m => { const t = String(m || "").trim(); return t && t !== "—" && t !== "-" ? t : ""; };
+  // Quantidade: número (padrão BR, 2 casas) numa coluna e unidade noutra
+  const qtdPartes = qtd => {
+    const txt = fmtQtd(qtd);
+    const m = txt.match(/^([\d.,]+)\s*(.*)$/);
+    return m ? { num: m[1], un: m[2] || "" } : { num: txt, un: "" };
+  };
+
+  const linhasItens = itens.length ? itens.map((item, i) => {
+    const q = qtdPartes(item.qtd);
+    const marca = marcaValida(item.marca);
+    const obs = String(item.obs || "").trim();
+    return `<tr>
+      <td class="num">${i + 1}</td>
+      <td><b>${esc(item.materialBase || item.material || "—")}</b>${marca ? ` <span class="marca">${esc(marca)}</span>` : ""}${obs ? `<div class="obs-item">${esc(obs)}</div>` : ""}</td>
+      <td class="num">${esc(q.num)}</td>
+      <td>${esc(q.un)}</td>
+    </tr>`;
+  }).join("") : `<tr><td class="vazio" colspan="4">Sem itens</td></tr>`;
 
   const html = `<html>
     <head>
-      <title>Pedido Nº ${numeroPedido}</title>
+      <meta charset="UTF-8">
+      <title>Pedido Nº ${esc(numeroPedido)}</title>
       <style>
         ${KM_PDF_PAGE_CSS}
-        @page { size: A6; margin: 4mm; }
-        * { box-sizing: border-box; }
-        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; font-size: 7.5pt; line-height: 1.25; margin: 0; padding: 0; width: 97mm; }
-
-        .topo { border: 2px solid #0f2151; border-radius: 4px; padding: 0; margin-bottom: 4px; }
-        .topo-header { background: #0f2151; color: #fff; padding: 4px 6px; }
-        .topo-header .razao { font-size: 8pt; font-weight: 800; line-height: 1.1; }
-        .topo-header .sub { font-size: 6pt; opacity: 0.85; line-height: 1.2; }
-        .topo-titulo { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; background: #f5f8fc; border-top: 1px solid #d0dae8; }
-        .topo-titulo h1 { margin: 0; font-size: 9pt; color: #0f2151; letter-spacing: 0.5px; font-weight: 900; }
-        .topo-titulo .num { font-size: 9pt; color: #C0A040; font-weight: 800; }
-
-        .selo {
-          background: #fef9e7; border: 1px dashed #f5a623;
-          padding: 2px 5px; text-align: center; margin: 3px 0;
-          font-size: 6pt; color: #8b6f00; font-weight: 700; letter-spacing: 0.3px;
-        }
-
-        .info-row { display: flex; gap: 4px; margin-bottom: 3px; }
-        .info-cell {
-          flex: 1; border: 1px solid #ccc; border-radius: 3px;
-          padding: 3px 5px; font-size: 7pt;
-        }
-        .info-cell .label { font-size: 5.5pt; color: #888; text-transform: uppercase; letter-spacing: 0.2px; font-weight: 700; }
-        .info-cell .val { font-size: 7.5pt; font-weight: 700; color: #1a1a1a; }
-
-        .bloco-entrega {
-          background: #eff6ff; border-left: 3px solid #1e6bbf;
-          padding: 4px 6px; margin-bottom: 3px; border-radius: 0 3px 3px 0;
-        }
-        .bloco-entrega .h { font-size: 6pt; color: #0c4a6e; text-transform: uppercase; font-weight: 800; letter-spacing: 0.3px; margin-bottom: 1px; }
-        .bloco-entrega .linha { font-size: 7pt; color: #1a1a1a; line-height: 1.3; }
-        .bloco-entrega b { color: #0c4a6e; }
-        .bloco-entrega a { color: #1e6bbf; text-decoration: none; word-break: break-all; }
-
-        .h-secao {
-          background: #0f2151; color: #fff;
-          padding: 2px 6px; margin: 3px 0 2px;
-          font-size: 6.5pt; letter-spacing: 0.3px; font-weight: 800;
-          text-transform: uppercase;
-        }
-        table { width: 100%; max-width: 100%; border-collapse: collapse; font-size: 7pt; table-layout: fixed; }
-        th { background: #e8eef6; color: #003060; padding: 2px 4px; border: 1px solid #c5d0e0; text-align: left; font-size: 6pt; text-transform: uppercase; font-weight: 800; white-space: nowrap; }
-        td { padding: 2px 4px; border: 1px solid #d5dce6; vertical-align: top; white-space: nowrap; }
-        td.td-wrap { white-space: normal; overflow-wrap: break-word; word-break: normal; }
-        td.num { width: 12px; text-align: center; color: #888; font-weight: 700; }
-        td.qtd { text-align: right; font-weight: 700; color: #2aa84f; white-space: nowrap; width: 50px; }
-        .marca { font-size: 6pt; color: #1e6bbf; font-weight: 600; }
-        .obs-item { font-size: 6pt; color: #888; font-style: italic; }
-
-        .pagamento {
-          background: #f0fdf4; border-left: 3px solid #2aa84f;
-          padding: 4px 6px; margin: 3px 0; border-radius: 0 3px 3px 0;
-        }
-        .pagamento .h { font-size: 6pt; color: #14532d; text-transform: uppercase; font-weight: 800; letter-spacing: 0.3px; }
-        .pagamento .row { display: flex; gap: 6px; margin-top: 2px; }
-        .pagamento .field { flex: 1; }
-        .pagamento .field b { font-size: 6pt; color: #14532d; }
-        .pagamento .preencher {
-          border-bottom: 1px solid #888; min-height: 12px;
-          padding: 1px 0; font-size: 8pt; font-weight: 600;
-        }
-
-        .obs-geral {
-          background: #fef9e7; border-left: 3px solid #f5a623;
-          padding: 3px 6px; margin: 3px 0; border-radius: 0 3px 3px 0;
-          font-size: 7pt;
-        }
-
-        .ass {
-          margin-top: 8px; text-align: center;
-        }
-        .ass-linha {
-          border-top: 1px solid #000; padding-top: 2px;
-          font-size: 6pt; color: #555; line-height: 1.3;
-        }
-        .ass-linha b { color: #0f2151; font-size: 7pt; }
-
-        .footer-doc {
-          margin-top: 4px; padding-top: 2px; border-top: 1px solid #ddd;
-          font-size: 5pt; color: #888; text-align: center; line-height: 1.2;
-        }
-
-        /* Multi-página */
-        h3, .h-secao { page-break-after: avoid; break-after: avoid; }
-        tr, .bloco-entrega, .pagamento, .ass { page-break-inside: avoid; break-inside: avoid; }
+        ${KM_PDF_CSS}
+        @page { size: A6; margin: 5mm; }
+        /* Ajustes para o papel A6 (105x148mm): tudo um pouco menor e mais junto que o padrão A4 */
+        body { font-size: 7.5pt; line-height: 1.3; }
+        .km-header.compacto { padding-bottom: 3px; margin-bottom: 4px; }
+        .km-header.compacto .km-empresa-linhas { font-size: 6pt; line-height: 1.3; margin: 1px 0 2px; }
+        /* Continuação (páginas 2+): no A6 a linha "tipo · Nº · empresa · continuação" não cabe ao lado do lockup em 6.5pt;
+           um pouco menor e com quebra de linha permitida — nunca cortada nem com reticências (o Nº é o identificador) */
+        .km-continua > span:first-child { font-size: 6pt; white-space: normal; overflow: visible; text-overflow: clip; }
+        .km-continua > span:last-child { flex: 0 0 auto; }
+        /* Rodapé A6 em duas linhas: empresa + Nº na 1ª (largura toda, com quebra de linha em vez de reticências),
+           "Página N de M" e data · Sistema KMZERO na 2ª — em 95mm as três partes não cabem numa linha só */
+        .km-footer { flex-wrap: wrap; row-gap: 1px; }
+        .km-footer .km-footer-esq { flex: 1 1 100%; white-space: normal; overflow: visible; text-overflow: clip; font-variant-numeric: tabular-nums; }
+        .km-footer .km-footer-pag { flex: 0 0 auto; }
+        .km-footer .km-footer-dir { flex: 1 1 auto; min-width: 0; text-align: right; }
+        .aviso { text-align: center; font-size: 6.5pt; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #b7791f; background: #fff7df; border: 1px dashed #ffb830; border-radius: 3px; padding: 1px 4px; margin: 0 0 4px; }
+        .sec { font-size: 8pt; margin: 5px 0 2px; padding-bottom: 2px; }
+        .rotulo { font-size: 6pt; }
+        .grade-dados { margin: 0 0 4px; }
+        .grade-dados > div { padding: 2px 5px; }
+        .grade-dados b { font-size: 7.5pt; }
+        .bloco { padding: 3px 6px; margin: 0 0 4px; font-size: 7.5pt; }
+        .bloco .titulo-obra { font-size: 8pt; font-weight: 700; color: #052f3d; }
+        .bloco .mapa { font-size: 6.5pt; color: #0b7285; overflow-wrap: anywhere; }
+        .quadro { font-size: 7.5pt; margin: 0 0 4px; }
+        .quadro thead th { font-size: 6.5pt; padding: 2px 4px; }
+        .quadro td { padding: 2px 4px; }
+        .marca { color: #5c6b73; font-weight: 400; }
+        .obs-item { font-size: 6.5pt; color: #5c6b73; font-style: italic; }
+        .km-assinaturas { margin-top: 6px; gap: 12px; }
+        .km-assinaturas .ass { margin: 18px auto 0; max-width: 64mm; }
+        .km-assinaturas .ass b { font-size: 7.5pt; }
+        .km-assinaturas .ass span { font-size: 6.5pt; }
       </style>
     </head>
     <body>
-      <div class="topo">
-        <div class="topo-header">
-          <div class="razao">${empresa?.razaoSocial || empresa?.nomeFantasia || ""}</div>
-          <div class="sub">${[empresa?.cnpj ? "CNPJ: " + empresa.cnpj : "", empresa?.responsavel].filter(Boolean).join(" • ")}</div>
-          <div class="sub">${[empresa?.telefone ? "📱 " + empresa.telefone : "", empresa?.email ? "📧 " + empresa.email : ""].filter(Boolean).join(" • ")}</div>
-        </div>
-        <div class="topo-titulo">
-          <h1>SOLICITAÇÃO DE PEDIDO</h1>
-          <div class="num">Nº ${numeroPedido}</div>
-        </div>
+      ${gerarHeaderHTML({ tipo: "Solicitação de Pedido", numero: numeroPedido, empresa, compacto: true })}
+
+      <div class="aviso">Documento interno — não substitui nota fiscal</div>
+
+      <div class="grade-dados">
+        <div><span class="rotulo">Data</span><b>${esc(dataPedido)}</b></div>
+        <div><span class="rotulo">Solicitante</span><b>${esc(solicitante)}</b></div>
+        ${pedido.fornecedorNome ? `<div class="cheio"><span class="rotulo">Fornecedor</span><b>${esc(pedido.fornecedorNome)}</b></div>` : ""}
       </div>
 
-      <div class="selo">⚠️ DOCUMENTO INTERNO — NÃO É NOTA FISCAL ⚠️</div>
-
-      <div class="info-row">
-        <div class="info-cell">
-          <div class="label">📅 Data</div>
-          <div class="val">${pedido.data || new Date().toLocaleDateString("pt-BR")}</div>
-        </div>
-        <div class="info-cell">
-          <div class="label">👷 Solicitante</div>
-          <div class="val">${pedido.enc || "—"}</div>
-        </div>
+      <div class="bloco">
+        <span class="rotulo">Entregar em</span>
+        <div class="titulo-obra">${esc(nomeObra)}</div>
+        ${obra?.endereco ? `<div>${esc(obra.endereco)}</div>` : ""}
+        ${[obra?.refLocal ? "Ref.: " + obra.refLocal : "", obra?.local].filter(Boolean).length ? `<div>${[obra?.refLocal ? "Ref.: " + obra.refLocal : "", obra?.local].filter(Boolean).map(esc).join(" · ")}</div>` : ""}
+        ${linkMaps ? `<div class="mapa">Mapa: <a href="${esc(linkMaps)}">${esc(linkMaps.replace(/^https?:\/\//, ""))}</a></div>` : ""}
       </div>
 
-      <div class="bloco-entrega">
-        <div class="h">📍 Entregar em</div>
-        <div class="linha"><b>${obra?.nome || pedido.obra || "—"}</b></div>
-        ${obra?.endereco ? `<div class="linha">${obra.endereco}</div>` : ""}
-        ${obra?.refLocal ? `<div class="linha">📌 Ref: ${obra.refLocal}</div>` : ""}
-        ${obra?.local ? `<div class="linha">${obra.local}</div>` : ""}
-        ${linkMaps ? `<div class="linha"><a href="${linkMaps}">📡 Ver no mapa</a></div>` : ""}
-      </div>
-
-      <div class="h-secao">📦 Itens (${itens.length})</div>
-      <table>
+      <div class="sec">Itens do pedido <small>${itens.length} ${itens.length === 1 ? "item" : "itens"}</small></div>
+      <table class="quadro">
         <thead>
           <tr>
-            <th class="num" style="width:16px;">#</th>
-            <th>Material</th>
-            <th style="text-align:right;width:50px;">Qtd</th>
+            <th style="width:8%" class="num">Nº</th>
+            <th style="width:56%">Material</th>
+            <th style="width:17%" class="num">Qtd</th>
+            <th style="width:19%">Un.</th>
           </tr>
         </thead>
-        <tbody>
-          ${itens.map((item, i) => `
-            <tr>
-              <td class="num">${i + 1}</td>
-              <td class="td-wrap">
-                <b>${item.materialBase || item.material}</b>
-                ${item.marca ? `<br/><span class="marca">🏷️ ${item.marca}</span>` : ""}
-                ${item.obs ? `<div class="obs-item">📝 ${item.obs}</div>` : ""}
-              </td>
-              <td class="qtd">${fmtQtd(item.qtd)}</td>
-            </tr>
-          `).join("")}
-        </tbody>
+        <tbody>${linhasItens}</tbody>
       </table>
 
-      ${pedido.obsGeral ? `
-        <div class="obs-geral">
-          <b style="font-size:6pt;color:#8b6f00;">📝 OBSERVAÇÃO GERAL:</b><br/>
-          ${pedido.obsGeral}
-        </div>
-      ` : ""}
+      ${obsGeral ? `<div class="bloco alerta"><span class="rotulo">Observação geral</span>${esc(obsGeral)}</div>` : ""}
 
-      <div class="pagamento">
-        <div class="h">💰 Pagamento e Prazo</div>
-        <div class="row">
-          <div class="field">
-            <b>Forma de pagto:</b>
-            <div class="preencher">${pedido.formaPagamento || "&nbsp;"}</div>
-          </div>
-          <div class="field">
-            <b>Prazo entrega:</b>
-            <div class="preencher">${pedido.prazoEntrega || "&nbsp;"}</div>
-          </div>
-        </div>
+      <div class="grade-dados junto">
+        <div><span class="rotulo">Forma de pagamento</span><b>${esc(pedido.formaPagamento) || "&nbsp;"}</b></div>
+        <div><span class="rotulo">Prazo de entrega</span><b>${esc(pedido.prazoEntrega) || "&nbsp;"}</b></div>
       </div>
 
-      <div class="ass">
-        <div style="height:18px;"></div>
-        <div class="ass-linha">
-          <b>${empresa?.responsavel || "&nbsp;"}</b><br/>
-          ${[(empresa?.nomeFantasia || empresa?.razaoSocial || "").split(",")[0], empresa?.telefone].filter(Boolean).join(" • ")}
-        </div>
-      </div>
+      ${gerarAssinaturasHTML({ empresa, assinantes: [{ nome: empresa?.responsavel || "", cargo: [(empresa?.nomeFantasia || empresa?.razaoSocial || "").split(",")[0], empresa?.telefone].filter(Boolean).join(" · ") }] })}
 
-      <div class="footer-doc">
-        Sistema KMZERO • Pedido Nº ${numeroPedido} • ${new Date().toLocaleString("pt-BR")}<br/>
-        Esta solicitação não substitui nota fiscal
-      </div>
+      ${gerarFooterHTML({ empresa, documento: "Pedido Nº " + numeroPedido })}
     </body>
   </html>`;
 

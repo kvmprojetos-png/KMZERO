@@ -1,5 +1,5 @@
 import { BLUE, GREEN, RED, ORANGE } from "../theme.js";
-import { dataLocalIso } from "../utils.js";
+import { dataLocalIso, somaAlim } from "../utils.js";
 
 export const DEFAULT_FORNECEDORES = [
   // LOJAS DE MATERIAL DE CONSTRUÇÃO — ALEGRE/ES
@@ -202,8 +202,10 @@ export const DEFAULT_TRABALHADORES = [
    fotosPorDia   fotos por obra por dia útil (5; a demo usa 2 para caber no localStorage)
    obras         lista de obras (DEFAULT_OBRAS; a demo passa DEMO_OBRAS com nomes neutros)
    trabalhadores lista de trabalhadores (DEFAULT_TRABALHADORES; quem tem obraId > 0 entra na simulação)
-   fotosNoRdo    copia as fotos do dia para dentro do RDO (true; a demo desliga para não dobrar o espaço) */
-export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, trabalhadores: listaTrab = DEFAULT_TRABALHADORES, fotosNoRdo = true } = {}) {
+   fotosNoRdo    copia as fotos do dia para dentro do RDO (true; a demo desliga para não dobrar o espaço)
+   empresa       preços das refeições (valorCafeManha, valorMarmita…): o totalAlimentacao de cada RDO sai das marcações
+                 com esses preços, como na emissão real; sem empresa, mantém o valor antigo de 23 por presente */
+export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, trabalhadores: listaTrab = DEFAULT_TRABALHADORES, fotosNoRdo = true, empresa = null } = {}) {
   const hoje = new Date();
   const nomeTrab = {};
   listaTrab.forEach(t => { nomeTrab[t.id] = t.nome; });
@@ -324,9 +326,10 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
         fotosPorObra[obra.id]++;
         const numero = fotosPorObra[obra.id];
         const horaFoto = HORAS_FOTO[f % HORAS_FOTO.length];
-        // Placeholder em texto (sem canvas, leve)
+        // Placeholder em texto (sem canvas, leve). width/height explícitos: sem eles o html2canvas do PDF
+        // recorta só o canto (tamanho natural 200×150 de um SVG só com viewBox) e a foto sai como retângulo liso.
         const placeholderUrl = `data:image/svg+xml;utf8,${encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><linearGradient id="g${numero}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${["#0f2151","#0891b2","#16a34a","#7c3aed"][idxObra % 4]}"/><stop offset="1" stop-color="#000"/></linearGradient></defs><rect width="800" height="600" fill="url(#g${numero})"/><text x="400" y="240" font-size="120" text-anchor="middle" fill="rgba(255,255,255,0.2)" font-family="Arial">${["🏗️","🏛️","🏟️","🛣️"][idxObra % 4]}</text><text x="400" y="350" font-size="34" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-weight="bold">${obra.nome.substring(0, 28)}</text><text x="400" y="395" font-size="22" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="Arial">Foto #${String(numero).padStart(3, "0")} — ${dataStr}</text><rect x="40" y="490" width="720" height="80" rx="10" fill="rgba(0,0,0,0.6)" stroke="#f5a623" stroke-width="3"/><text x="60" y="525" font-size="22" fill="#f5a623" font-family="Arial,sans-serif" font-weight="bold">KMZERO</text><text x="60" y="555" font-size="16" fill="#fff" font-family="Arial">Foto #${String(numero).padStart(3, "0")} — ${horaFoto}</text><text x="740" y="525" font-size="14" fill="#fff" text-anchor="end" font-family="Arial">📅 ${dataStr}</text><text x="740" y="555" font-size="14" fill="#fff" text-anchor="end" font-family="Arial">👷 ${obra.encarregado}</text></svg>`
+          `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"><defs><linearGradient id="g${numero}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${["#0f2151","#0891b2","#16a34a","#7c3aed"][idxObra % 4]}"/><stop offset="1" stop-color="#000"/></linearGradient></defs><rect width="800" height="600" fill="url(#g${numero})"/><text x="400" y="240" font-size="120" text-anchor="middle" fill="rgba(255,255,255,0.2)" font-family="Arial">${["🏗️","🏛️","🏟️","🛣️"][idxObra % 4]}</text><text x="400" y="350" font-size="34" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-weight="bold">${obra.nome.substring(0, 28)}</text><text x="400" y="395" font-size="22" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="Arial">Foto #${String(numero).padStart(3, "0")} — ${dataStr}</text><rect x="40" y="490" width="720" height="80" rx="10" fill="rgba(0,0,0,0.6)" stroke="#f5a623" stroke-width="3"/><text x="60" y="525" font-size="22" fill="#f5a623" font-family="Arial,sans-serif" font-weight="bold">KMZERO</text><text x="60" y="555" font-size="16" fill="#fff" font-family="Arial">Foto #${String(numero).padStart(3, "0")} — ${horaFoto}</text><text x="740" y="525" font-size="14" fill="#fff" text-anchor="end" font-family="Arial">📅 ${dataStr}</text><text x="740" y="555" font-size="14" fill="#fff" text-anchor="end" font-family="Arial">👷 ${obra.encarregado}</text></svg>`
         )}`;
         fotosObras.push({
           id: fotoId++,
@@ -375,7 +378,8 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
         qtdFotosNaGaleria: fotosDia.length,
         presencas,
         alimentacao,
-        totalAlimentacao: presentes * 23,
+        // Igual à emissão real (presenca.jsx): soma das refeições marcadas × preço da empresa, para bater com o RDO Semanal
+        totalAlimentacao: empresa ? trabsObra.reduce((s, t) => s + (presencas[t.id] === "Presente" ? somaAlim(empresa, alimentacao[t.id]) : 0), 0) : presentes * 23,
       });
     });
 
@@ -454,7 +458,7 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
         autor: obraEsc.encarregado,
         texto: ocorrencias[Math.floor(Math.random() * ocorrencias.length)],
         foto: null,
-        ts,
+        ts: new Date(ts).setHours(14, 30, 0, 0), // hora fixa da tarde: o instante do carregamento coincidia com o "emitido em" do RDO
       });
     }
 
@@ -1993,7 +1997,7 @@ function gerarCronogramasDemo() {
    fotosObras, movEquip, despesasAvulsas...). `links` vem de fora (LINKS_PADRAO
    mora em screens/equipe.jsx e este arquivo não importa telas). */
 export function gerarDadosDemo({ links = [] } = {}) {
-  const base = gerarDadosMes30Dias({ fotosPorDia: 2, obras: DEMO_OBRAS, trabalhadores: DEMO_TRABALHADORES, fotosNoRdo: false });
+  const base = gerarDadosMes30Dias({ fotosPorDia: 2, obras: DEMO_OBRAS, trabalhadores: DEMO_TRABALHADORES, fotosNoRdo: false, empresa: DEMO_EMPRESA });
   return {
     ...base,
     equips: DEFAULT_EQUIPS.map(e => ({ ...e })),

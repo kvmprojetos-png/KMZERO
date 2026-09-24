@@ -10,8 +10,17 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 
-export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
+export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: empresaProp }) {
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
+  // Empresa cliente para o documento: vem por prop; sem prop, lê a mesma chave que o app grava (Sistema → Empresa)
+  const [empresaStore, setEmpresaStore] = useState(null);
+  useEffect(() => {
+    if (empresaProp) return;
+    let vivo = true;
+    Promise.resolve(store.get("empresa")).then(e => { if (vivo && e && typeof e === "object") setEmpresaStore(e); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [empresaProp]);
+  const empresa = empresaProp || empresaStore || {};
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
 
@@ -81,49 +90,46 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
 
   const exportarPDF = () => {
     if (etapas.length === 0) { alert("Nenhuma etapa cadastrada."); return; }
-    const html = `<html><head><title>Cronograma - ${obra.nome}</title></head><body>
-      <h1 style="color:#0f2151;border-bottom:3px solid #C0A040;padding-bottom:8px;">📅 Cronograma da Obra</h1>
-      <p><b>Obra:</b> ${obra.nome}<br/>
-      <b>Local:</b> ${obra.local}<br/>
-      <b>Status:</b> ${obra.status}<br/>
-      <b>Progresso geral:</b> ${progressoGeral}%<br/>
-      <b>Total de etapas:</b> ${etapas.length}<br/>
-      <b>Gerado em:</b> ${new Date().toLocaleString("pt-BR")}</p>
+    const fmt = d => d ? d.toLocaleDateString("pt-BR") : "—";
+    const concluidas = etapas.filter(e => (e.progresso || 0) === 100).length;
+    const andamento = etapas.filter(e => (e.progresso || 0) > 0 && (e.progresso || 0) < 100).length;
+    const naoIniciadas = etapas.length - concluidas - andamento;
+    const inicios = etapas.map(e => _dataLocalDoc(e.inicio)).filter(Boolean).map(d => d.getTime());
+    const fins = etapas.map(e => _dataLocalDoc(e.fim)).filter(Boolean).map(d => d.getTime());
+    const periodo = inicios.length && fins.length ? `${fmt(new Date(Math.min(...inicios)))} a ${fmt(new Date(Math.max(...fins)))}` : "";
+    const html = `<html><head><meta charset="UTF-8"><title>Cronograma - ${_escDoc(obra.nome)}</title>
+      <style>
+        ${KM_PDF_PAGE_CSS}
+        ${KM_PDF_CSS}
+        .quadro tbody tr.total td { background: #fff7df; }
+        .quadro td .obs { display: block; font-size: 7.5pt; color: #5c6b73; margin-top: 1px; }
+      </style></head><body>
+      ${gerarHeaderHTML({ tipo: "Cronograma da Obra", periodo, info_extra: `${obra.nome}${obra.local ? " · " + obra.local : ""}${obra.status ? " · " + obra.status : ""}`, empresa })}
 
-      <h2>📋 Etapas do Projeto</h2>
-      <table>
-        <tr>
-          <th style="width:5%">Nº</th>
-          <th>Etapa</th>
-          <th style="width:10%">Início</th>
-          <th style="width:10%">Fim</th>
-          <th style="width:8%">Dias</th>
-          <th style="width:10%">Progresso</th>
-          <th style="width:14%">Responsável</th>
-        </tr>
+      <div class="kpis">
+        <div class="kpi"><b>${progressoGeral}%</b><span>Progresso geral</span></div>
+        <div class="kpi"><b>${etapas.length}</b><span>Etapas</span></div>
+        <div class="kpi ok"><b>${concluidas}</b><span>Concluídas</span></div>
+        <div class="kpi alerta"><b>${andamento}</b><span>Em andamento</span></div>
+      </div>
+
+      <div class="sec">Etapas do projeto <small>${naoIniciadas} não iniciada${naoIniciadas === 1 ? "" : "s"}</small></div>
+      <table class="quadro">
+        <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:34%">Etapa</th><th style="width:13%" class="centro">Início</th><th style="width:13%" class="centro">Fim</th><th style="width:7%" class="num">Dias</th><th style="width:12%" class="num">Progresso</th><th style="width:16%">Responsável</th></tr></thead>
+        <tbody>
         ${etapas.map((e, i) => {
-          const ini = e.inicio ? new Date(e.inicio).toLocaleDateString("pt-BR") : "—";
-          const fim = e.fim ? new Date(e.fim).toLocaleDateString("pt-BR") : "—";
-          let dias = "—";
-          if (e.inicio && e.fim) {
-            const d = Math.round((new Date(e.fim) - new Date(e.inicio)) / (1000 * 60 * 60 * 24));
-            dias = d + "d";
-          }
-          const cor = e.progresso === 100 ? "#2aa84f" : e.progresso > 0 ? "#e87722" : "#999";
-          return `<tr>
-            <td style="text-align:center"><b>${i + 1}</b></td>
-            <td><b>${e.nome}</b>${e.obs ? '<br/><span style="font-size:8pt;color:#888">' + e.obs + '</span>' : ''}</td>
-            <td style="text-align:center">${ini}</td>
-            <td style="text-align:center">${fim}</td>
-            <td style="text-align:center">${dias}</td>
-            <td style="text-align:center;color:${cor};font-weight:700">${e.progresso || 0}%</td>
-            <td>${e.responsavel || "—"}</td>
-          </tr>`;
+          const ini = _dataLocalDoc(e.inicio), fim = _dataLocalDoc(e.fim); // local (new Date("YYYY-MM-DD") voltava um dia)
+          const dias = ini && fim ? Math.round((fim - ini) / 86400000) : null;
+          const p = e.progresso || 0;
+          const cls = p === 100 ? "txt-ok" : p > 0 ? "txt-alerta" : "txt-cinza";
+          return `<tr><td class="num">${i + 1}</td><td><b>${_escDoc(e.nome)}</b>${e.obs ? `<span class="obs">${_escDoc(e.obs)}</span>` : ""}</td><td class="centro">${fmt(ini)}</td><td class="centro">${fmt(fim)}</td><td class="num">${dias === null ? "—" : dias + "d"}</td><td class="num ${cls}"><b>${p}%</b></td><td>${_escDoc(e.responsavel) || "—"}</td></tr>`;
         }).join("")}
+        <tr class="total"><td colspan="5">Progresso geral (média das etapas)</td><td class="num">${progressoGeral}%</td><td></td></tr>
+        </tbody>
       </table>
-      <div class="footer">Sistema KMZERO • Cronograma gerado automaticamente</div>
+      ${gerarFooterHTML({ empresa })}
     </body></html>`;
-    abrirOuBaixarHTML(html, `Cronograma-${obra.nome.replace(/[^a-z0-9]/gi, "_").substring(0, 25)}`);
+    abrirOuBaixarHTML(html, `Cronograma-${String(obra.nome || "obra").replace(/[^a-z0-9]/gi, "_").substring(0, 25)}`);
   };
 
   return (
@@ -605,289 +611,231 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
    PAINEL GESTOR
 ════════════════════════════════════ */
 
+/* ── Utilidades dos documentos de saída (papel branco; cores só em hex do padrão do núcleo) ── */
+const _escDoc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const _quebrasDoc = s => _escDoc(s).replace(/\r?\n/g, "<br/>");
+const _brl = v => "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const _numDoc = (v, casas = 1) => (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+const _horasDoc = v => { const n = Number(v) || 0; return (Number.isInteger(n) ? String(n) : n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })) + "h"; };
+const _dataHoraDoc = ts => { const d = new Date(ts); return isNaN(d) ? "" : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); };
+/* "YYYY-MM-DD" → Date local. new Date("YYYY-MM-DD") lê em UTC e, no Brasil, volta um dia. */
+const _dataLocalDoc = s => { if (!s) return null; const d = new Date(String(s).slice(0, 10) + "T00:00:00"); return isNaN(d) ? null : d; };
+const _isoDeBR = br => { const [d, m, a] = String(br || "").split("/"); return d && m && a ? `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}` : ""; };
+const _clsStatusPedido = st => st === "Aprovado" ? "txt-ok" : st === "Negado" ? "txt-erro" : "txt-alerta";
+const _clsSituacao = st => st === "Presente" ? "txt-ok" : st === "Falta" ? "txt-erro" : st === "Atestado" ? "txt-alerta" : "txt-cinza";
+/* Anotações do diário do MESMO dia do RDO. O diário grava só ts (Date.now()); se algum registro trouxer "data" DD/MM/AAAA, vale ela. */
+const _diarioDoDia = (diario, obraId, dataBR) => {
+  const iso = _isoDeBR(dataBR);
+  if (!iso) return [];
+  return (diario || []).filter(d => d.obraId === obraId && (d.data ? _isoDeBR(d.data) === iso : d.ts ? dataLocalIso(new Date(d.ts)) === iso : false));
+};
+/* Foto guardada como SVG em data-URI SEM width/height (ex.: placeholders da demonstração): o html2canvas do PDF usa como
+   recorte da origem o tamanho natural que o navegador dá a um SVG só com viewBox (200×150) e a foto sai como um retângulo
+   liso. Injeta width/height a partir do viewBox; JPEG/PNG e SVG já dimensionados passam intactos. */
+const _srcImgDoc = src => {
+  src = String(src || "");
+  const m = /^data:image\/svg\+xml(;[^,]*)?,/i.exec(src);
+  if (!m) return src;
+  const cab = m[0], corpo = src.slice(cab.length), b64 = /;base64/i.test(cab);
+  let svg;
+  try { svg = b64 ? new TextDecoder().decode(Uint8Array.from(atob(corpo), c => c.charCodeAt(0))) : decodeURIComponent(corpo); } catch { return src; }
+  const raiz = /<svg\b[^>]*>/i.exec(svg);
+  if (!raiz) return src;
+  const semW = !/\swidth\s*=/i.test(raiz[0]), semH = !/\sheight\s*=/i.test(raiz[0]);
+  if (!semW && !semH) return src;
+  const vb = /viewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(raiz[0]);
+  const w = vb ? vb[1] : "800", h = vb ? vb[2] : "600";
+  const novaRaiz = raiz[0].replace(/<svg\b/i, `<svg${semW ? ` width="${w}"` : ""}${semH ? ` height="${h}"` : ""}`);
+  const novo = svg.replace(raiz[0], () => novaRaiz);
+  try {
+    if (!b64) return cab + encodeURIComponent(novo);
+    let bin = ""; new TextEncoder().encode(novo).forEach(b => { bin += String.fromCharCode(b); });
+    return cab + btoa(bin);
+  } catch { return src; }
+};
+
 export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias, encarregado, empresa, horasTrabalhadas, horimetros, fotos, alimentacao, totalAlimentacao, recebimentos }) {
-  const trabObra = trabalhadores.filter(t => t.obraId === obra.id);
-  const ativosObra = ativos.filter(a => a.obraId === obra.id);
-  const abastDia = abastecimentos.filter(a => a.obraId === obra.id && a.data === data);
-  const pedidosDia = pedidos.filter(p => p.obraId === obra.id && p.data === data);
+  presencas = presencas || {};
+  empresa = empresa || {};
+  const trabObra = (trabalhadores || []).filter(t => t.obraId === obra.id);
+  const ativosObra = (ativos || []).filter(a => a.obraId === obra.id);
+  const abastDia = (abastecimentos || []).filter(a => a.obraId === obra.id && a.data === data);
+  const pedidosDia = (pedidos || []).filter(p => p.obraId === obra.id && p.data === data);
 
   const presentes = trabObra.filter(t => presencas[t.id] === "Presente").length;
   const faltas    = trabObra.filter(t => presencas[t.id] === "Falta").length;
   const atestados = trabObra.filter(t => presencas[t.id] === "Atestado").length;
-  // Calcula total de horas com horas trabalhadas reais (se passadas)
+  // Total de horas com as horas trabalhadas reais (se passadas); padrão 9h por presente
   let totalHoras = 0;
   let totalHE = 0;
   trabObra.forEach(t => {
     if (presencas[t.id] === "Presente") {
-      const h = horasTrabalhadas?.[t.id] || 9;
+      const h = Number(horasTrabalhadas?.[t.id]) || 9;
       totalHoras += h;
       if (h > 9) totalHE += (h - 9);
     }
   });
 
-  const html = `<html><head><title>RDO ${String(numero).padStart(3, "0")} — ${obra.nome}</title>
+  const numeroTxt = String(numero ?? "").padStart(3, "0");
+  const temAlim = !!(alimentacao && Object.keys(alimentacao).length > 0);
+  const trabAlim = (trabalhadores || []).filter(t => presencas[t.id] === "Presente");
+  const totalAlimDia = trabAlim.reduce((s, t) => s + somaAlim(empresa, alimentacao?.[t.id]), 0);
+
+  // Registro fotográfico: fotos do encarregado + cupons de combustível + recebimentos + ocorrências do dia
+  const todasFotos = [];
+  (fotos || []).forEach((f, i) => todasFotos.push({ src: f, tipo: "Obra", legenda: `Foto da obra ${i + 1}` }));
+  abastDia.forEach(a => {
+    if (!a.fotoCupom) return;
+    const ativo = (ativos || []).find(x => x.id === a.ativoId);
+    todasFotos.push({ src: a.fotoCupom, tipo: "Combustível", legenda: `${ativo?.nome || "Veículo"} — ${_brl(a.valor)} (${a.posto || "posto"})` });
+  });
+  if (Array.isArray(recebimentos)) {
+    recebimentos.filter(r => r.obraId === obra.id && r.data === data && r.foto).forEach(r => {
+      todasFotos.push({ src: r.foto, tipo: "Recebimento", legenda: `${r.material} — ${r.qtd} (${r.conformidade || "Conforme"})` });
+    });
+  }
+  (ocorrencias || []).forEach(o => {
+    if (o.foto) todasFotos.push({ src: o.foto, tipo: "Ocorrência", legenda: `${(o.texto || "").substring(0, 50)}${o.texto && o.texto.length > 50 ? "…" : ""}` });
+  });
+
+  // Numeração das seções (as condicionais só contam quando aparecem)
+  let nSec = 4;
+  const secAlim = temAlim ? ++nSec : 0;
+  const secOcor = ++nSec;
+  const secFotos = todasFotos.length ? ++nSec : 0;
+
+  const assinantes = [
+    encarregado ? { nome: encarregado, cargo: "Encarregado responsável" } : null,
+    empresa.responsavel && empresa.responsavel !== encarregado ? { nome: empresa.responsavel, cargo: "Responsável técnico" + (empresa.registro ? " · " + empresa.registro : "") } : null,
+  ].filter(Boolean);
+  if (!assinantes.length) assinantes.push({ nome: "", cargo: "Encarregado responsável" });
+  assinantes.push({ nome: "Fiscalização", cargo: "Visto / Carimbo" });
+
+  // As assinaturas nunca ficam órfãs numa folha em branco: o ÚLTIMO bloco de conteúdo do
+  // documento leva a classe .junto ("nunca fica por último na página"); quando as assinaturas
+  // não cabem, o paginador leva esse bloco (e o título da seção) junto para a página seguinte.
+  // Sem fotos, o último bloco é o da seção Ocorrências; com fotos, é a última linha da grade.
+  const ocorrenciasHTML = ocorrencias && ocorrencias.length > 0
+    ? ocorrencias.map((o, i) => `<div class="bloco alerta${!todasFotos.length && i === ocorrencias.length - 1 ? " junto" : ""}"><span class="rotulo">${_escDoc(o.autor) || "—"}${o.ts ? " · " + _dataHoraDoc(o.ts) : ""}</span>${_quebrasDoc(o.texto || "")}</div>`).join("")
+    : `<div class="vazio${todasFotos.length ? "" : " junto"}">Nenhuma ocorrência registrada.</div>`;
+  // Fotos em linhas de 3 (uma grade por linha): a linha inteira muda de página junta e a última
+  // linha fica com as assinaturas, sem tornar a grade toda indivisível.
+  const linhasFotos = [];
+  for (let i = 0; i < todasFotos.length; i += 3) linhasFotos.push(todasFotos.slice(i, i + 3));
+  const fotosHTML = linhasFotos.map((linha, li) => `<div class="fotos linha${li === linhasFotos.length - 1 ? " junto" : ""}">${linha.map((f, k) => {
+    const n = li * 3 + k + 1;
+    return `<figure><img src="${_escDoc(_srcImgDoc(f.src))}" alt="Foto ${n}"/><figcaption><b>${f.tipo}</b> · ${_escDoc(f.legenda)}</figcaption></figure>`;
+  }).join("")}</div>`).join("");
+
+  const html = `<html><head><meta charset="UTF-8"><title>RDO ${numeroTxt} — ${_escDoc(obra.nome)}</title>
     <style>
       ${KM_PDF_PAGE_CSS}
-      * { box-sizing: border-box; }
-      body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; font-size: 9.5pt; line-height: 1.35; }
-      .cabecalho { border: 2px solid #004080; padding: 0; margin-bottom: 12px; }
-      .cabecalho-top { background: #004080; color: #fff; padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; }
-      .logo { font-weight: 900; font-size: 22pt; letter-spacing: -1px; line-height: 1; }
-      .logo-zero { color: #C0A040; }
-      .logo-sub { font-size: 8pt; letter-spacing: 2.5px; opacity: 0.8; margin-top: 2px; }
-      .titulo-rdo { font-size: 14pt; font-weight: 800; letter-spacing: 1px; }
-      .num-rdo { font-size: 10pt; font-weight: 700; color: #C0A040; margin-top: 2px; text-align: right; }
-      .empresa-info { padding: 8px 14px; background: #f5f8fc; font-size: 8.5pt; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; border-top: 1px solid #d0dae8; }
-      .empresa-info b { color: #004080; }
-      .info-obra { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid #ccc; margin-bottom: 12px; }
-      .info-cell { padding: 6px 10px; border-right: 1px solid #ccc; }
-      .info-cell:last-child { border-right: none; }
-      .info-cell .lbl { font-size: 7.5pt; color: #777; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
-      .info-cell .val { font-size: 11pt; color: #1a1a1a; font-weight: 700; margin-top: 1px; }
-      h2 { color: #fff; background: #004080; font-size: 9.5pt; margin: 14px 0 0; padding: 5px 10px; letter-spacing: 0.5px; font-weight: 700; text-transform: uppercase; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 8.5pt; table-layout: auto; }
-      th { background: #e8eef6; color: #003060; padding: 5px 6px; border: 1px solid #c5d0e0; text-align: left; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
-      td { padding: 4px 6px; border: 1px solid #d5dce6; vertical-align: top; overflow-wrap: break-word; word-break: normal; }
-      /* Apenas em colunas de observação/texto longo permitimos quebra: usar classe .td-wrap */
-      td.td-wrap, th.td-wrap { white-space: normal; overflow-wrap: break-word; word-break: normal; max-width: 280px; }
-      /* Tabelas envolvidas em wrapper com scroll horizontal se passar */
-      .table-scroll { overflow-x: auto; max-width: 100%; }
-      /* Coluna 1 (numero): compacta */
-      th:first-child, td:first-child { min-width: 28px; }
-      /* Coluna 2 (nome): quebra em 2 linhas se for longo (não invade a coluna Cargo) */
-      th:nth-child(2), td:nth-child(2) { white-space: normal; overflow-wrap: break-word; word-break: normal; min-width: 100px; }
-      td.num { text-align: right; white-space: nowrap; }
-      tr:nth-child(even) td { background: #fafbfd; }
-      .num { text-align: center; font-variant-numeric: tabular-nums; }
-      .badge-p { color: #2aa84f; font-weight: 700; }
-      .badge-f { color: #d63b3b; font-weight: 700; }
-      .badge-a { color: #e87722; font-weight: 700; }
-      .resumo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 12px; }
-      .resumo-card { padding: 6px; border: 1px solid #d5dce6; text-align: center; background: #fafbfd; }
-      .resumo-card .v { font-size: 14pt; font-weight: 800; color: #004080; }
-      .resumo-card .l { font-size: 7.5pt; color: #666; text-transform: uppercase; letter-spacing: 0.4px; }
-      .obs-bloco { border: 1px solid #ccc; padding: 8px 10px; min-height: 50px; font-size: 9pt; background: #fafbfd; margin-bottom: 12px; line-height: 1.5; }
-      .ocorrencia { padding: 5px 10px; border-left: 3px solid #C0A040; background: #fffbf0; margin-bottom: 4px; font-size: 9pt; }
-      .ocorrencia .ts { font-size: 7.5pt; color: #888; margin-bottom: 2px; }
-      .vazio { color: #aaa; font-style: italic; font-size: 9pt; padding: 8px; text-align: center; }
-      .footer { margin-top: 16px; border-top: 2px solid #004080; padding-top: 8px; text-align: center; font-size: 7.5pt; color: #666; }
-      .footer b { color: #004080; }
-
-      /* MULTI-PÁGINA: regras de quebra para A4 */
-      h2 { page-break-after: avoid; break-after: avoid; }
-      table { page-break-inside: auto; }
-      tr { page-break-inside: avoid; break-inside: avoid; }
-      thead { display: table-header-group; }
-      .ocorrencia, .obs-bloco { page-break-inside: avoid; break-inside: avoid; }
-      img { page-break-inside: avoid; break-inside: avoid; max-width: 100%; }
-
-      @media print {
-        h2 + table thead { display: table-header-group; }
-        .footer { page-break-before: avoid; }
-      }
       ${KM_PDF_CSS}
+      .quadro tbody tr.total td { background: #fff7df; }
+      .fotos.linha { margin-bottom: 6px; }
+      .fotos.linha.junto { margin-bottom: 8px; }
     </style></head><body>
 
-    ${gerarHeaderHTML({ tipo: "Relatório Diário de Obra", numero, info_extra: `${obra.nome} · ${obra.local || ""} · ${data} · Clima: ${clima || "—"}`, empresa })}
+    ${gerarHeaderHTML({ tipo: "Relatório Diário de Obra", numero, periodo: data, info_extra: `${obra.nome}${obra.local ? " · " + obra.local : ""} · Clima: ${clima || "—"}${encarregado ? " · Encarregado: " + encarregado : ""}`, empresa })}
 
-    <div class="resumo">
-      <div class="resumo-card"><div class="v">${trabObra.length}</div><div class="l">Efetivo</div></div>
-      <div class="resumo-card"><div class="v" style="color:#2aa84f">${presentes}</div><div class="l">Presentes</div></div>
-      <div class="resumo-card"><div class="v" style="color:#d63b3b">${faltas}</div><div class="l">Faltas</div></div>
-      <div class="resumo-card"><div class="v" style="color:#004080">${totalHoras}h</div><div class="l">Total Horas</div></div>
+    <div class="kpis">
+      <div class="kpi"><b>${trabObra.length}</b><span>Efetivo</span></div>
+      <div class="kpi ok"><b>${presentes}</b><span>Presentes</span></div>
+      <div class="kpi erro"><b>${faltas}</b><span>Faltas${atestados ? " · " + atestados + " atestado" + (atestados > 1 ? "s" : "") : ""}</span></div>
+      <div class="kpi"><b>${_horasDoc(totalHoras)}</b><span>Total de horas</span></div>
     </div>
 
-    <h2>1. Mão de Obra — Apropriação de Custo Direto</h2>
-    <table>
-      <tr><th style="width:5%" class="num">Nº</th><th>Nome</th><th style="width:22%">Cargo</th><th style="width:9%" class="num">Entrada</th><th style="width:9%" class="num">Saída</th><th style="width:9%" class="num">Total h</th><th style="width:9%" class="num">H.E. (50%)</th><th style="width:11%" class="num">Status</th></tr>
+    <div class="sec">1. Mão de obra <small>apropriação de custo direto</small></div>
+    <table class="quadro compacto">
+      <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:27%">Nome</th><th style="width:20%">Cargo</th><th style="width:9%" class="centro">Entrada</th><th style="width:9%" class="centro">Saída</th><th style="width:8%" class="num">Horas</th><th style="width:10%" class="num">Extra 50%</th><th style="width:12%" class="centro">Situação</th></tr></thead>
+      <tbody>
       ${trabObra.length === 0 ? '<tr><td colspan="8" class="vazio">Sem mão de obra registrada</td></tr>' : trabObra.map((t, i) => {
         const status = presencas[t.id] || "Sem registro";
         const presente = status === "Presente";
-        const horas = horasTrabalhadas?.[t.id] ?? (presente ? 9 : 0);
+        const horas = presente ? (Number(horasTrabalhadas?.[t.id]) || 9) : (Number(horasTrabalhadas?.[t.id]) || 0);
         const he = horas > 9 ? (horas - 9) : 0;
-        // Calcula entrada e saída com base nas horas trabalhadas (padrão 7-11 + 12-17)
+        // Entrada e saída a partir das horas trabalhadas (7h de início + horas + 1h de almoço)
         const entrada = presente ? "07:00" : "—";
-        // saída: se 9h normal = 17:00, mais HE depois
         let saida = "—";
         if (presente) {
-          const totalH = horas + 1; // +1h almoço
-          // calcula saída com base em 7h início e horas trabalhadas + 1h almoço (12-13)
-          const saidaH = 7 + totalH; // ex: 9h trabalhadas + 1h almoço = 17h
+          const saidaH = 7 + horas + 1;
           saida = String(Math.floor(saidaH)).padStart(2, "0") + ":" + String(Math.round((saidaH - Math.floor(saidaH)) * 60)).padStart(2, "0");
         }
-        const cls = status === "Presente" ? "badge-p" : status === "Falta" ? "badge-f" : status === "Atestado" ? "badge-a" : "";
-        return `<tr><td class="num">${i + 1}</td><td>${t.nome}</td><td>${t.cargo}</td><td class="num">${entrada}</td><td class="num">${saida}</td><td class="num"><b>${horas}h</b></td><td class="num" style="color:${he > 0 ? '#dc2626' : '#999'};font-weight:${he > 0 ? '700' : '400'}">${he > 0 ? "+" + he + "h" : "—"}</td><td class="num ${cls}">${status}</td></tr>`;
-      }).join("")}
+        return `<tr><td class="num">${i + 1}</td><td>${_escDoc(t.nome)}</td><td>${_escDoc(t.cargo)}</td><td class="centro">${entrada}</td><td class="centro">${saida}</td><td class="num"><b>${_horasDoc(horas)}</b></td><td class="num ${he > 0 ? "txt-erro" : "txt-cinza"}">${he > 0 ? "<b>+" + _horasDoc(he) + "</b>" : "—"}</td><td class="centro ${_clsSituacao(status)}"><b>${_escDoc(status)}</b></td></tr>`;
+      }).join("") + `<tr class="total"><td colspan="5">Total do dia</td><td class="num">${_horasDoc(totalHoras)}</td><td class="num">${totalHE > 0 ? "+" + _horasDoc(totalHE) : "—"}</td><td class="centro">${presentes} de ${trabObra.length}</td></tr>`}
+      </tbody>
     </table>
 
-    <h2>2. Ativos e Logística — Maquinário e Frota</h2>
-    <table>
-      <tr><th style="width:5%" class="num">Nº</th><th>Identificação</th><th style="width:14%">Placa</th><th style="width:14%">Tipo</th><th style="width:10%" class="num">Início (h)</th><th style="width:10%" class="num">Fim (h)</th><th style="width:9%" class="num">Trabalhadas</th><th style="width:13%" class="num">Combustível</th></tr>
+    <div class="sec">2. Ativos e logística <small>maquinário e frota</small></div>
+    <table class="quadro compacto">
+      <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:24%">Identificação</th><th style="width:12%">Placa</th><th style="width:17%">Tipo</th><th style="width:11%;text-align:right">Horímetro início</th><th style="width:11%;text-align:right">Horímetro fim</th><th style="width:8%" class="num">Horas</th><th style="width:12%" class="num">Combustível</th></tr></thead>
+      <tbody>
       ${ativosObra.length === 0 ? '<tr><td colspan="8" class="vazio">Sem ativos nesta obra</td></tr>' : ativosObra.map((a, i) => {
         const abastA = abastDia.filter(x => x.ativoId === a.id);
-        const totalAbast = abastA.reduce((s, x) => s + x.valor, 0);
+        const totalAbast = abastA.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0);
         const horim = horimetros?.[a.id] || null;
-        const inicioH = horim ? horim.inicio.toFixed(1) : "—";
-        const fimH = horim ? horim.fim.toFixed(1) : "—";
-        const trabH = horim ? `<b>${horim.horas}h</b>` : "—";
-        return `<tr><td class="num">${i + 1}</td><td><b>${a.nome}</b></td><td>${a.placa || "—"}</td><td>${a.tipo}</td><td class="num">${inicioH}</td><td class="num">${fimH}</td><td class="num">${trabH}</td><td class="num">R$ ${totalAbast.toFixed(2)}</td></tr>`;
+        const inicioH = horim ? _numDoc(horim.inicio, 1) : "—";
+        const fimH = horim ? _numDoc(horim.fim, 1) : "—";
+        const trabH = horim ? `<b>${_horasDoc(horim.horas)}</b>` : "—";
+        return `<tr><td class="num">${i + 1}</td><td><b>${_escDoc(a.nome)}</b></td><td>${_escDoc(a.placa) || "—"}</td><td>${_escDoc(a.tipo)}</td><td class="num">${inicioH}</td><td class="num">${fimH}</td><td class="num">${trabH}</td><td class="num">${abastA.length ? _brl(totalAbast) : "—"}</td></tr>`;
       }).join("")}
+      </tbody>
     </table>
 
     ${abastDia.length > 0 ? `
-    <h2>2.1. Abastecimentos do Dia</h2>
-    <table>
-      <tr><th style="width:5%" class="num">Nº</th><th>Veículo</th><th style="width:13%">Posto</th><th style="width:10%" class="num">Litros</th><th style="width:11%" class="num">R$/Litro</th><th style="width:13%" class="num">Valor</th><th style="width:11%" class="num">Km/Horímetro</th></tr>
+    <div class="sec">2.1. Abastecimentos do dia</div>
+    <table class="quadro">
+      <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:25%">Veículo</th><th style="width:20%">Posto</th><th style="width:10%" class="num">Litros</th><th style="width:12%" class="num">R$/litro</th><th style="width:14%" class="num">Valor</th><th style="width:14%;text-align:right">Km ou horímetro</th></tr></thead>
+      <tbody>
       ${abastDia.map((a, i) => {
-        const ativo = ativosObra.find(x => x.id === a.ativoId);
-        const valorLitro = a.litros > 0 ? (a.valor / a.litros).toFixed(2) : "—";
-        return `<tr>
-          <td class="num">${i + 1}</td>
-          <td><b>${ativo?.nome || "—"}</b>${ativo?.placa ? `<br/><span style="font-size:8pt;color:#666">${ativo.placa}</span>` : ""}</td>
-          <td>${a.posto || "—"}</td>
-          <td class="num">${(parseFloat(a.litros) || 0).toFixed(1)}</td>
-          <td class="num">R$ ${valorLitro}</td>
-          <td class="num"><b>R$ ${(parseFloat(a.valor) || 0).toFixed(2)}</b></td>
-          <td class="num">${a.km || a.horimetro || "—"}</td>
-        </tr>`;
+        const ativo = (ativos || []).find(x => x.id === a.ativoId);
+        const litros = parseFloat(a.litros) || 0, valor = parseFloat(a.valor) || 0;
+        return `<tr><td class="num">${i + 1}</td><td><b>${_escDoc(ativo?.nome) || "—"}</b>${ativo?.placa ? `<br/><span class="txt-cinza">${_escDoc(ativo.placa)}</span>` : ""}</td><td>${_escDoc(a.posto) || "—"}</td><td class="num">${_numDoc(litros, 1)}</td><td class="num">${litros > 0 ? _brl(valor / litros) : "—"}</td><td class="num"><b>${_brl(valor)}</b></td><td class="num">${_escDoc(a.km || a.horimetro) || "—"}</td></tr>`;
       }).join("")}
-      <tr style="background:#fef9e7;font-weight:800">
-        <td colspan="3" style="text-align:right">TOTAL DO DIA</td>
-        <td class="num">${abastDia.reduce((s, a) => s + (parseFloat(a.litros) || 0), 0).toFixed(1)}L</td>
-        <td></td>
-        <td class="num" style="color:#dc7e00">R$ ${abastDia.reduce((s, a) => s + (parseFloat(a.valor) || 0), 0).toFixed(2)}</td>
-        <td></td>
-      </tr>
+      <tr class="total"><td colspan="3">Total do dia</td><td class="num">${_numDoc(abastDia.reduce((s, a) => s + (parseFloat(a.litros) || 0), 0), 1)} L</td><td></td><td class="num">${_brl(abastDia.reduce((s, a) => s + (parseFloat(a.valor) || 0), 0))}</td><td></td></tr>
+      </tbody>
     </table>
     ` : ""}
 
-    <h2>3. Materiais e Insumos</h2>
-    <table>
-      <tr><th style="width:11%" class="num">Pedido Nº</th><th>Material</th><th style="width:18%">Quantidade</th><th style="width:20%">Solicitante</th><th style="width:14%" class="num">Status</th></tr>
-      ${pedidosDia.length === 0 ? '<tr><td colspan="5" class="vazio">Sem materiais/insumos registrados neste dia</td></tr>' : pedidosDia.map((p, i) => {
-        const cls = p.status === "Aprovado" ? "badge-p" : p.status === "Negado" ? "badge-f" : "badge-a";
-        const numPed = String(p.id).slice(-6);
-        return `<tr><td class="num"><b>${numPed}</b></td><td>${p.material}</td><td>${fmtQtd(p.qtd)}</td><td>${p.enc}</td><td class="num ${cls}">${p.status}</td></tr>`;
-      }).join("")}
+    <div class="sec">3. Materiais e insumos</div>
+    <table class="quadro">
+      <thead><tr><th style="width:12%" class="num">Pedido Nº</th><th style="width:36%">Material</th><th style="width:16%" class="num">Quantidade</th><th style="width:22%">Solicitante</th><th style="width:14%" class="centro">Situação</th></tr></thead>
+      <tbody>
+      ${pedidosDia.length === 0 ? '<tr><td colspan="5" class="vazio">Sem materiais ou insumos registrados neste dia</td></tr>' : pedidosDia.map(p => `<tr><td class="num"><b>${String(p.id).slice(-6)}</b></td><td>${_escDoc(p.material)}</td><td class="num">${_escDoc(fmtQtd(p.qtd))}</td><td>${_escDoc(p.enc) || "—"}</td><td class="centro ${_clsStatusPedido(p.status)}"><b>${_escDoc(p.status) || "—"}</b></td></tr>`).join("")}
+      </tbody>
     </table>
 
-    <h2>4. Observações Gerais</h2>
-    <div class="obs-bloco">${observacoes ? observacoes.replace(/\n/g, "<br>") : '<span class="vazio">— Sem observações —</span>'}</div>
+    <div class="sec">4. Observações gerais</div>
+    ${observacoes ? `<div class="bloco">${_quebrasDoc(observacoes)}</div>` : '<div class="vazio">Sem observações</div>'}
 
-    ${alimentacao && Object.keys(alimentacao).length > 0 ? `
-    <h2>5. Alimentação do Dia</h2>
-    <table>
-      <tr>
-        <th style="width:30%">Trabalhador</th>
-        <th style="width:14%" class="num">☕ Manhã</th>
-        <th style="width:14%" class="num">☕ Tarde</th>
-        <th style="width:14%" class="num">🍱 Marmita</th>
-        <th style="width:14%" class="num">🥪 Lanche</th>
-        <th style="width:14%" class="num">Total</th>
-      </tr>
-      ${trabalhadores.filter(t => presencas[t.id] === "Presente").map(t => {
+    ${temAlim ? `
+    <div class="sec">${secAlim}. Alimentação do dia</div>
+    <table class="quadro">
+      <thead><tr><th style="width:30%">Trabalhador</th><th style="width:14%" class="num">Café manhã</th><th style="width:14%" class="num">Café tarde</th><th style="width:14%" class="num">Marmita</th><th style="width:14%" class="num">Lanche</th><th style="width:14%" class="num">Total</th></tr></thead>
+      <tbody>
+      ${trabAlim.length === 0 ? '<tr><td colspan="6" class="vazio">Sem refeições registradas</td></tr>' : trabAlim.map(t => {
         const a = alimentacao[t.id] || {};
-        // Só soma o que tem preço configurado; refeição marcada sem preço sai como "✓ —"
-        const totalDia = somaAlim(empresa, a);
-        const cel = (k) => { if (!a[k]) return "—"; const p = precoAlim(empresa, k); return p === null ? "✓ —" : "✓ R$ " + p.toFixed(2); };
-        return `<tr>
-          <td>${t.nome}</td>
-          <td class="num" style="color:${a.cafeManha ? '#2aa84f' : '#ccc'}">${cel("cafeManha")}</td>
-          <td class="num" style="color:${a.cafeTarde ? '#2aa84f' : '#ccc'}">${cel("cafeTarde")}</td>
-          <td class="num" style="color:${a.marmita ? '#dc2626' : '#ccc'}">${cel("marmita")}</td>
-          <td class="num" style="color:${a.lanche ? '#0891b2' : '#ccc'}">${cel("lanche")}</td>
-          <td class="num"><b>R$ ${totalDia.toFixed(2)}</b></td>
-        </tr>`;
-      }).join("")}
-      <tr style="background:#fef9e7;font-weight:800">
-        <td colspan="5" style="text-align:right">TOTAL DO DIA</td>
-        <td class="num" style="color:#dc7e00">R$ ${trabalhadores.filter(t => presencas[t.id] === "Presente").reduce((s, t) => s + somaAlim(empresa, alimentacao[t.id]), 0).toFixed(2)}</td>
-      </tr>
+        // Só soma o que tem preço configurado; refeição marcada sem preço sai como "sem preço"
+        const cel = k => { if (!a[k]) return '<span class="txt-cinza">—</span>'; const p = precoAlim(empresa, k); return p === null ? '<span class="txt-alerta">sem preço</span>' : _brl(p); };
+        return `<tr><td>${_escDoc(t.nome)}</td><td class="num">${cel("cafeManha")}</td><td class="num">${cel("cafeTarde")}</td><td class="num">${cel("marmita")}</td><td class="num">${cel("lanche")}</td><td class="num"><b>${_brl(somaAlim(empresa, a))}</b></td></tr>`;
+      }).join("") + `<tr class="total"><td colspan="5">Total do dia</td><td class="num">${_brl(totalAlimDia)}</td></tr>`}
+      </tbody>
     </table>
-    ${faltaPrecoAlim(empresa) ? `<div style="font-size:9px;color:#b91c1c;margin-top:4px">Refeição sem preço configurado aparece como "—" e não entra no total. Configure os preços em Sistema → Empresa.</div>` : ""}
+    ${faltaPrecoAlim(empresa) ? '<div class="nota">Refeição sem preço configurado aparece como "sem preço" e não entra no total. Configure os preços em Sistema → Empresa.</div>' : ""}
     ` : ""}
 
-    <h2>${alimentacao && Object.keys(alimentacao).length > 0 ? "6" : "5"}. Ocorrências Técnicas do Dia</h2>
-    ${ocorrencias && ocorrencias.length > 0 ? ocorrencias.map(o => `
-      <div class="ocorrencia">
-        <div class="ts">📌 ${o.autor || "—"} • ${new Date(o.ts).toLocaleString("pt-BR")}</div>
-        ${o.texto.replace(/\n/g, "<br>")}
-      </div>`).join("") : '<div class="vazio">Nenhuma ocorrência registrada.</div>'}
+    <div class="sec">${secOcor}. Ocorrências técnicas do dia</div>
+    ${ocorrenciasHTML}
 
-    ${(() => {
-      // Coletar TODAS as fotos: do encarregado + cupons combustível + recebimentos + ocorrências
-      const todasFotos = [];
+    ${todasFotos.length ? `
+    <div class="sec">${secFotos}. Registro fotográfico <small>${todasFotos.length} foto${todasFotos.length > 1 ? "s" : ""}</small></div>
+    ${fotosHTML}
+    ` : ""}
 
-      // 1) Fotos enviadas pelo encarregado na etapa "Fotos"
-      (fotos || []).forEach((f, i) => {
-        todasFotos.push({ src: f, tipo: "Obra", legenda: `Foto da obra ${i + 1}`, cor: "#0f2151" });
-      });
-
-      // 2) Cupons fiscais de combustível do dia
-      (abastDia || []).forEach(a => {
-        if (a.fotoCupom) {
-          const ativo = ativos.find(x => x.id === a.ativoId);
-          todasFotos.push({
-            src: a.fotoCupom,
-            tipo: "Combustível",
-            legenda: `⛽ ${ativo?.nome || "Veículo"} — R$ ${(parseFloat(a.valor) || 0).toFixed(2)} (${a.posto || "posto"})`,
-            cor: "#dc7e00"
-          });
-        }
-      });
-
-      // 3) Fotos de recebimentos do dia (se a função recebeu o array)
-      if (typeof recebimentos !== "undefined" && Array.isArray(recebimentos)) {
-        recebimentos.filter(r => r.obraId === obra.id && r.data === data).forEach(r => {
-          if (r.foto) {
-            todasFotos.push({
-              src: r.foto,
-              tipo: "Recebimento",
-              legenda: `📦 ${r.material} — ${r.qtd} (${r.conformidade || "Conforme"})`,
-              cor: "#0891b2"
-            });
-          }
-        });
-      }
-
-      // 4) Fotos das ocorrências do diário do dia
-      (ocorrencias || []).forEach(o => {
-        if (o.foto) {
-          todasFotos.push({
-            src: o.foto,
-            tipo: "Ocorrência",
-            legenda: `📝 ${(o.texto || "").substring(0, 50)}${o.texto && o.texto.length > 50 ? "..." : ""}`,
-            cor: "#7c3aed"
-          });
-        }
-      });
-
-      if (todasFotos.length === 0) return "";
-
-      const numSecao = alimentacao && Object.keys(alimentacao).length > 0 ? "7" : "6";
-
-      return `
-        <h2>${numSecao}. Registro Fotográfico (${todasFotos.length} foto${todasFotos.length > 1 ? "s" : ""})</h2>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px;">
-          ${todasFotos.map((f, i) => `
-            <div style="break-inside: avoid; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; page-break-inside: avoid;">
-              <div style="background:${f.cor};color:#fff;padding:2px 5px;font-size:7pt;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">${f.tipo}</div>
-              <img src="${f.src}" alt="Foto ${i + 1}" style="width: 100%; height: 110px; object-fit: cover; display: block;" />
-              <div style="padding: 3px 5px; font-size: 7pt; color: #444; background: #f5f8fc; line-height: 1.2;">${f.legenda}</div>
-            </div>
-          `).join("")}
-        </div>
-      `;
-    })()}
-
-    <div class="footer">
-      <b>${empresa.razaoSocial}</b> — Documento gerado eletronicamente pelo Sistema KMZERO em ${new Date().toLocaleString("pt-BR")}<br>
-      RDO Nº ${String(numero).padStart(3, "0")} • Encarregado responsável: ${encarregado || "—"} • Padrão ABNT
-    </div>
-
-    <script>window.onload=()=>{setTimeout(()=>window.print(),300);}</script>
+    ${gerarAssinaturasHTML({ empresa, assinantes })}
+    ${gerarFooterHTML({ empresa, autor: encarregado })}
     </body></html>`;
-  abrirOuBaixarHTML(html, `RDO-${String(numero).padStart(3, "0")}-${obra.nome.replace(/[^a-z0-9]/gi, "_").substring(0, 30)}.html`);
+  abrirOuBaixarHTML(html, `RDO-${numeroTxt}-${String(obra.nome || "obra").replace(/[^a-z0-9]/gi, "_").substring(0, 30)}.html`);
 }
 
 
@@ -902,7 +850,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
   const obra = obras.find(o => o.id === obraId);
   const isoData = (() => { const [d, m, a] = data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; })();
   const presencasDia = historico[isoData] || {};
-  const ocorrenciasDia = diario.filter(d => d.obraId === obraId);
+  const ocorrenciasDia = _diarioDoDia(diario, obraId, data); // só o dia do RDO (antes entrava o diário inteiro da obra)
 
   const proxNumero = rdosEmitidos.length + 1;
 
@@ -925,10 +873,10 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       const seg = new Date(hoje); seg.setDate(hoje.getDate() - (dia === 0 ? 6 : dia - 1)); seg.setHours(0, 0, 0, 0);
       const sex = new Date(seg); sex.setDate(seg.getDate() + 6); sex.setHours(23, 59, 59, 999);
 
+      const isoDe = r => r.dataIso || _isoDeBR(r.data); // "YYYY-MM-DD" do RDO (dataIso ou a data DD/MM/AAAA)
       let rdosSem = (rdosEmitidos || []).filter(r => {
-        const isoR = r.dataIso || (() => { try { const [d, m, a] = r.data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; } catch { return ""; } })();
-        const dt = new Date(isoR);
-        return r.obraId === oId && dt >= seg && dt <= sex;
+        const dt = _dataLocalDoc(isoDe(r)); // local: new Date("YYYY-MM-DD") lia em UTC e jogava a segunda-feira no domingo
+        return r.obraId === oId && dt && dt >= seg && dt <= sex;
       });
 
       let modoFallback = false;
@@ -938,20 +886,16 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
           alert("⚠️ Sem RDOs para esta obra ainda.\n\nObra: " + obraSel.nome + "\n\nFinalize pelo menos 1 dia de obra (RDO) para gerar o relatório semanal.");
           return;
         }
-      // Pega últimos 7 RDOs por data (descendente)
+      // Pega os últimos 7 RDOs por data (descendente) e devolve em ordem crescente pra exibição
       rdosSem = todosObra
-        .sort((a, b) => {
-          const dA = a.dataIso || a.data || "";
-          const dB = b.dataIso || b.data || "";
-          return dB.localeCompare(dA);
-        })
+        .sort((a, b) => isoDe(b).localeCompare(isoDe(a)))
         .slice(0, 7)
-        .reverse(); // ordena ascendente pra exibição
+        .reverse();
       modoFallback = true;
     }
 
     // Calcula totais
-    let totalPres = 0, totalFalt = 0, totalAtest = 0, totalHE = 0, totalAlimentacao = 0;
+    let totalPres = 0, totalFalt = 0, totalAtest = 0, totalHE = 0;
     const trabPres = {}; // { trabId: { presentes, faltas, atestados, horas, alimentacao } }
     rdosSem.forEach(r => {
       const pres = r.presencas || {};
@@ -969,33 +913,16 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         else if (st === "Atestado") { trabPres[tid].a++; totalAtest++; }
       });
       totalHE += (r.totalHE || 0);
-      totalAlimentacao += (r.totalAlimentacao || 0);
+      // Alimentação da semana: NÃO soma r.totalAlimentacao (campo gravado na emissão); sai de somaFreq, calculada das marcações (abaixo)
     });
 
     // Em modo fallback, ajusta seg/sex pras datas dos RDOs encontrados
     let segReal = seg, sexReal = sex;
     if (modoFallback && rdosSem.length > 0) {
-      const datasRdos = [];
-      for (let i = 0; i < rdosSem.length; i++) {
-        const r = rdosSem[i];
-        let iso = r.dataIso;
-        if (!iso && r.data) {
-          try {
-            const partes = r.data.split("/");
-            iso = partes[2] + "-" + partes[1].padStart(2, "0") + "-" + partes[0].padStart(2, "0");
-          } catch (e) { iso = ""; }
-        }
-        const dt = new Date(iso);
-        if (!isNaN(dt.getTime())) datasRdos.push(dt.getTime());
-      }
+      const datasRdos = rdosSem.map(r => _dataLocalDoc(isoDe(r))).filter(Boolean).map(d => d.getTime());
       if (datasRdos.length > 0) {
-        let minTs = datasRdos[0], maxTs = datasRdos[0];
-        for (let i = 1; i < datasRdos.length; i++) {
-          if (datasRdos[i] < minTs) minTs = datasRdos[i];
-          if (datasRdos[i] > maxTs) maxTs = datasRdos[i];
-        }
-        segReal = new Date(minTs); segReal.setHours(0, 0, 0, 0);
-        sexReal = new Date(maxTs); sexReal.setHours(23, 59, 59, 999);
+        segReal = new Date(Math.min(...datasRdos)); segReal.setHours(0, 0, 0, 0);
+        sexReal = new Date(Math.max(...datasRdos)); sexReal.setHours(23, 59, 59, 999);
       }
     }
 
@@ -1023,8 +950,9 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       };
     }).filter(v => v.gasto > 0);
 
-    const datas = rdosSem.map(r => r.data).sort();
-    const periodo = `${datas[0]} a ${datas[datas.length - 1]}`;
+    // Período pelo calendário (ordenar "DD/MM/AAAA" como texto errava a virada de mês)
+    const rdosOrdenados = [...rdosSem].sort((a, b) => isoDe(a).localeCompare(isoDe(b)));
+    const periodo = rdosOrdenados.length ? `${rdosOrdenados[0].data} a ${rdosOrdenados[rdosOrdenados.length - 1].data}` : "";
 
     // 📷 FOTOS do período
     const fotosSem = (fotosObras || []).filter(f => {
@@ -1091,15 +1019,6 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       prodTotal[k] = (prodTotal[k] || 0) + (parseFloat(p.qtd) || 0);
     });
 
-    // 💰 CUSTO consolidado da semana
-    const custoMaoObra = Object.entries(trabPres).reduce((s, [tid, st]) => {
-      const t = trabalhadores.find(x => String(x.id) === String(tid));
-      const diaria = (t && parseFloat(t.diaria)) || 0;
-      return s + (st.p + st.a) * diaria; // presença + atestado pagam
-    }, 0);
-
-    const custoTotalSem = custoMaoObra + totalAlimentacao + totalCombustivel + totalDespesas;
-
     // TESTE 1: contadores acumulados simples
     var totalRdosObra = 0;
     var totalPedidosObra = 0;
@@ -1110,305 +1029,139 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       if (pedidos[i].obraId === oId) totalPedidosObra++;
     }
 
-    const html = `<html><head><title>RDO Semanal - ${obraSel.nome}</title>
+    // Linhas da tabela de frequência (só trabalhadores ainda cadastrados) e os totais que fecham com elas
+    const linhasFreq = Object.entries(trabPres).map(([tid, st]) => {
+      const t = trabalhadores.find(x => String(x.id) === String(tid));
+      if (!t) return null;
+      const diaria = parseFloat(t.diaria) || 0;
+      return { t, st, aPagar: (st.p + st.a) * diaria };
+    }).filter(Boolean);
+    const somaFreq = linhasFreq.reduce((s, l) => ({ p: s.p + l.st.p, f: s.f + l.st.f, a: s.a + l.st.a, horas: s.horas + l.st.horas, alimentacao: s.alimentacao + l.st.alimentacao, aPagar: s.aPagar + l.aPagar }), { p: 0, f: 0, a: 0, horas: 0, alimentacao: 0, aPagar: 0 });
+
+    // 💰 CUSTO consolidado da semana — mesma fonte da tabela de frequência, para o "Resumo financeiro" bater com o quadro:
+    // mão de obra = (presenças + atestados) × diária; alimentação = refeições marcadas nos RDOs × preço configurado
+    // (não o campo gravado r.totalAlimentacao, que na demonstração era um valor fixo por presente e divergia da tabela).
+    const custoMaoObra = somaFreq.aPagar;
+    const totalAlimentacao = somaFreq.alimentacao;
+    const custoTotalSem = custoMaoObra + totalAlimentacao + totalCombustivel + totalDespesas;
+
+    const html = `<html><head><meta charset="UTF-8"><title>RDO Semanal - ${_escDoc(obraSel.nome)}</title>
       <style>
-        body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
-        h1 { color: #0f2151; border-bottom: 4px solid #C0A040; padding-bottom: 10px; margin: 0 0 6px 0; font-size: 22pt; }
-        h2 { color: #0f2151; border-bottom: 2px solid #e5e5e5; padding-bottom: 6px; margin-top: 24px; font-size: 14pt; }
-        h3 { color: #0f2151; margin-top: 16px; font-size: 11pt; }
-        .header-info { background: linear-gradient(135deg,#0f2151,#1e3a8a); color: #fff; padding: 14px 18px; border-radius: 8px; margin-bottom: 16px; }
-        .header-info p { margin: 4px 0; }
-        .header-info b { color: #f5a623; }
-        /* WRAPPER de tabela com scroll lateral no mobile */
-        .table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 16px; border: 1px solid #e5e7eb; border-radius: 6px; }
-        .table-wrap::-webkit-scrollbar { height: 8px; }
-        .table-wrap::-webkit-scrollbar-thumb { background: #C0A040; border-radius: 4px; }
-        .table-wrap::-webkit-scrollbar-track { background: #f3f4f6; }
-        .table-wrap table { margin-bottom: 0; }
-
-        /* TABELA: cresce no tamanho do conteúdo (NÃO força width:100%) */
-        table { border-collapse: collapse; font-size: 9pt; width: auto; }
-        /* Quando explicitamente width:100%, permite quebra natural nas células */
-        table[style*="width:100%"] { width: 100% !important; table-layout: fixed; }
-        table[style*="width:100%"] td, table[style*="width:100%"] th { white-space: normal; overflow-wrap: break-word; word-break: keep-all; }
-        table[style*="width:100%"] td[style*="text-align:right"], table[style*="width:100%"] td[style*="text-align:center"],
-        table[style*="width:100%"] th[style*="text-align:right"], table[style*="width:100%"] th[style*="text-align:center"] { white-space: nowrap; }
-
-        th { background: #0f2151; color: #fff; padding: 8px 12px; text-align: left; font-size: 9pt; white-space: nowrap; }
-        td { padding: 6px 12px; border-bottom: 1px solid #eee; vertical-align: top; white-space: nowrap; }
-
-        /* Classes específicas pras colunas */
-        td.col-nome, th.col-nome { white-space: nowrap; }
-        td.col-cargo, th.col-cargo { white-space: nowrap; }
-        td.col-data, th.col-data { white-space: nowrap; }
-        td.col-num, th.col-num { white-space: nowrap; text-align: right; }
-        td.col-status, th.col-status { white-space: nowrap; text-align: center; }
-        td.td-wrap, th.td-wrap { white-space: normal; overflow-wrap: break-word; word-break: normal; min-width: 180px; max-width: 280px; }
-
-        th[style*="text-align:right"], td[style*="text-align:right"] { white-space: nowrap; }
-        th[style*="text-align:center"], td[style*="text-align:center"] { white-space: nowrap; }
-        tr:nth-child(even) td { background: #fafbfc; }
-        .footer { margin-top: 30px; padding-top: 14px; border-top: 2px solid #C0A040; text-align: center; font-size: 9pt; color: #888; }
-        .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
-        .kpi { background: #f5f7fa; padding: 12px; border-radius: 8px; border-left: 4px solid #C0A040; }
-        .kpi-label { font-size: 8pt; color: #888; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
-        .kpi-value { font-size: 18pt; color: #0f2151; font-weight: 900; margin-top: 4px; }
-        .kpi-sub { font-size: 8pt; color: #666; margin-top: 2px; }
-        .fotos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
-        .foto-item img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; }
-        .foto-item-info { font-size: 7.5pt; color: #666; margin-top: 3px; }
-        .resumo-final { background: linear-gradient(135deg,#fef3c7,#fde68a); padding: 16px; border-radius: 10px; margin-top: 24px; border: 2px solid #C0A040; }
-        .resumo-final h3 { color: #0f2151; margin-top: 0; }
-        .badge-ok { background: #2aa84f; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700; }
-        .badge-pend { background: #e87722; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700; }
-        .badge-neg { background: #d63b3b; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700; }
-
-        /* ═══ PADRÃO A4 ═══ */
-        @page { size: A4 portrait; margin: 12mm 10mm; }
-        @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-        body { max-width: 190mm; margin: 0 auto; padding: 8mm 0; box-sizing: border-box; }
-
-        /* Quebra de página inteligente */
-        h2 { page-break-after: avoid; break-after: avoid; }
-        h3 { page-break-after: avoid; break-after: avoid; }
-        table { page-break-inside: auto; break-inside: auto; }
-        tr { page-break-inside: avoid; break-inside: avoid; }
-        thead { display: table-header-group; }
-        tfoot { display: table-footer-group; }
-        .km-header, .km-footer, .km-assinaturas { page-break-inside: avoid; break-inside: avoid; }
-        .resumo-final, .kpis { page-break-inside: avoid; break-inside: avoid; }
-        .fotos-grid { page-break-inside: auto; break-inside: auto; }
-        .foto-item { page-break-inside: avoid; break-inside: avoid; }
-
+        ${KM_PDF_PAGE_CSS}
         ${KM_PDF_CSS}
-      </style>
-      </head><body>
+        .quadro tbody tr.total td { background: #fff7df; }
+        .selos { margin: 0 0 6px; }
+        .selos .selo { margin-right: 6px; }
+      </style></head><body>
 
-      ${gerarHeaderHTML({ tipo: "RDO Semanal Consolidado", periodo, info_extra: "Obra: " + obraSel.nome + " · " + rdosSem.length + " dia(s)", empresa })}
+      ${gerarHeaderHTML({ tipo: "RDO Semanal Consolidado", periodo, info_extra: `${obraSel.nome}${obraSel.local ? " · " + obraSel.local : ""} · ${rdosSem.length} dia(s)${modoFallback ? " · últimos RDOs emitidos (nenhum na semana atual)" : ""}`, empresa })}
 
-      <h2>📊 Indicadores da Semana</h2>
+      <div class="sec">Indicadores da semana</div>
       <div class="kpis">
-        <div class="kpi">
-          <div class="kpi-label">👷 Presenças</div>
-          <div class="kpi-value" style="color:#2aa84f">${totalPres}</div>
-          <div class="kpi-sub">homens-dia</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">⚠️ Faltas</div>
-          <div class="kpi-value" style="color:#d63b3b">${totalFalt}</div>
-          <div class="kpi-sub">${totalAtest} atestado${totalAtest > 1 ? "s" : ""}</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">⏱️ Horas Extras</div>
-          <div class="kpi-value" style="color:#dc2626">${totalHE.toFixed(1)}h</div>
-          <div class="kpi-sub">acréscimo 50%</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">📷 Fotos</div>
-          <div class="kpi-value" style="color:#0891b2">${fotosSem.length}</div>
-          <div class="kpi-sub">registros</div>
-        </div>
+        <div class="kpi ok"><b>${totalPres}</b><span>Presenças (homens-dia)</span></div>
+        <div class="kpi erro"><b>${totalFalt}</b><span>Faltas · ${totalAtest} atestado${totalAtest === 1 ? "" : "s"}</span></div>
+        <div class="kpi alerta"><b>${_horasDoc(totalHE)}</b><span>Horas extras (50%)</span></div>
+        <div class="kpi"><b>${fotosSem.length}</b><span>Fotos registradas</span></div>
       </div>
 
-      <h2>👷 Frequência e Custos por Trabalhador</h2>
-      <table style="width:100%">
-        <tr>
-          <th style="width:28%">Nome</th>
-          <th style="width:18%">Cargo</th>
-          <th style="width:7%;text-align:center">Pres.</th>
-          <th style="width:7%;text-align:center">Falt.</th>
-          <th style="width:7%;text-align:center">Atest.</th>
-          <th style="width:7%;text-align:right">Horas</th>
-          <th style="width:13%;text-align:right">☕ Alim.</th>
-          <th style="width:13%;text-align:right">💰 A pagar</th>
-        </tr>
-        ${Object.entries(trabPres).map(([tid, st]) => {
-          const t = trabalhadores.find(x => String(x.id) === String(tid));
-          if (!t) return "";
-          const diaria = parseFloat(t.diaria) || 0;
-          const aPagar = (st.p + st.a) * diaria;
-          return `<tr>
-            <td><b>${t.nome}</b></td>
-            <td>${t.cargo}</td>
-            <td style="text-align:center;color:#2aa84f"><b>${st.p}</b></td>
-            <td style="text-align:center;color:#d63b3b">${st.f}</td>
-            <td style="text-align:center;color:#e87722">${st.a}</td>
-            <td style="text-align:right">${st.horas}h</td>
-            <td style="text-align:right;color:#dc7e00">R$ ${st.alimentacao.toFixed(2)}</td>
-            <td style="text-align:right;color:#0f2151"><b>R$ ${aPagar.toFixed(2)}</b></td>
-          </tr>`;
-        }).join("")}
+      <div class="sec">Frequência e custos por trabalhador</div>
+      <table class="quadro compacto">
+        <thead><tr><th style="width:25%">Nome</th><th style="width:18%">Cargo</th><th style="width:9%" class="num">Presente</th><th style="width:7%" class="num">Falta</th><th style="width:9%" class="num">Atestado</th><th style="width:7%" class="num">Horas</th><th style="width:12%" class="num">Alimentação</th><th style="width:13%" class="num">A pagar</th></tr></thead>
+        <tbody>
+        ${linhasFreq.length === 0 ? '<tr><td colspan="8" class="vazio">Sem presenças registradas nos RDOs do período</td></tr>' : linhasFreq.map(({ t, st, aPagar }) => `<tr><td><b>${_escDoc(t.nome)}</b></td><td>${_escDoc(t.cargo)}</td><td class="num txt-ok"><b>${st.p}</b></td><td class="num ${st.f ? "txt-erro" : "txt-cinza"}">${st.f}</td><td class="num ${st.a ? "txt-alerta" : "txt-cinza"}">${st.a}</td><td class="num">${_horasDoc(st.horas)}</td><td class="num">${_brl(st.alimentacao)}</td><td class="num"><b>${_brl(aPagar)}</b></td></tr>`).join("") + `<tr class="total"><td colspan="2">Total da semana</td><td class="num">${somaFreq.p}</td><td class="num">${somaFreq.f}</td><td class="num">${somaFreq.a}</td><td class="num">${_horasDoc(somaFreq.horas)}</td><td class="num">${_brl(somaFreq.alimentacao)}</td><td class="num">${_brl(somaFreq.aPagar)}</td></tr>`}
+        </tbody>
       </table>
+      <div class="nota">Presente, Falta e Atestado = dias no período. A pagar = (presenças + atestados) × diária do trabalhador. Alimentação = refeições marcadas nos RDOs com preço configurado.</div>
 
       ${prodSem.length > 0 ? `
-      <h2>📈 Produtividade Executada</h2>
-      <div class="table-wrap"><table>
-        <tr><th>Serviço</th><th style="text-align:right">Quantidade</th><th>Unidade</th></tr>
-        ${Object.entries(prodTotal).map(([k, total]) => {
-          const [tipo, un] = k.split("|");
-          return `<tr><td><b>${tipo}</b></td><td style="text-align:right;color:#2aa84f"><b>${total.toFixed(1)}</b></td><td>${un}</td></tr>`;
-        }).join("")}
-      </table></div>
+      <div class="sec">Produtividade executada</div>
+      <table class="quadro">
+        <thead><tr><th style="width:60%">Serviço</th><th style="width:20%" class="num">Quantidade</th><th style="width:20%">Unidade</th></tr></thead>
+        <tbody>${Object.entries(prodTotal).map(([k, total]) => { const [tipo, un] = k.split("|"); return `<tr><td><b>${_escDoc(tipo)}</b></td><td class="num txt-ok"><b>${_numDoc(total, 1)}</b></td><td>${_escDoc(un)}</td></tr>`; }).join("")}</tbody>
+      </table>
       ` : ""}
 
-      <h2>📋 Atividades por Dia</h2>
-      <div class="table-wrap"><table>
-        <tr><th class="col-data">Data</th><th class="col-data">RDO Nº</th><th class="col-nome">Encarregado</th><th>Clima</th><th>Observações</th></tr>
-        ${rdosSem.sort((a, b) => (a.data > b.data ? 1 : -1)).map(r => `
-          <tr>
-            <td class="col-data"><b>${r.data}</b></td>
-            <td class="col-data">${String(r.numero).padStart(3, "0")}</td>
-            <td class="col-nome">${r.encarregado || "—"}</td>
-            <td>${r.clima || "—"}</td>
-            <td class="td-wrap" style="font-size:8pt">${r.observacoes || "—"}</td>
-          </tr>
-        `).join("")}
-      </table></div>
+      <div class="sec">Atividades por dia</div>
+      <table class="quadro">
+        <thead><tr><th style="width:13%">Data</th><th style="width:9%" class="num">RDO Nº</th><th style="width:20%">Encarregado</th><th style="width:12%">Clima</th><th style="width:46%">Observações</th></tr></thead>
+        <tbody>${rdosOrdenados.length === 0 ? '<tr><td colspan="5" class="vazio">Sem registros</td></tr>' : rdosOrdenados.map(r => `<tr><td><b>${_escDoc(r.data)}</b></td><td class="num">${String(r.numero ?? "").padStart(3, "0")}</td><td>${_escDoc(r.encarregado) || "—"}</td><td>${_escDoc(r.clima) || "—"}</td><td>${r.observacoes ? _quebrasDoc(r.observacoes) : "—"}</td></tr>`).join("")}</tbody>
+      </table>
 
       ${diarioSem.length > 0 ? `
-      <h2>📝 Anotações do Diário</h2>
-      <div class="table-wrap"><table>
-        <tr><th class="col-data">Data</th><th class="col-nome">Autor</th><th>Anotação</th></tr>
-        ${diarioSem.sort((a, b) => a.ts - b.ts).map(d => `
-          <tr>
-            <td class="col-data">${new Date(d.ts).toLocaleDateString("pt-BR")}</td>
-            <td class="col-nome">${d.autor || "—"}</td>
-            <td class="td-wrap" style="font-size:8.5pt">${d.texto || "—"}</td>
-          </tr>
-        `).join("")}
-      </table></div>
+      <div class="sec">Anotações do diário</div>
+      <table class="quadro">
+        <thead><tr><th style="width:13%">Data</th><th style="width:22%">Autor</th><th style="width:65%">Anotação</th></tr></thead>
+        <tbody>${diarioSem.sort((a, b) => a.ts - b.ts).map(d => `<tr><td>${new Date(d.ts).toLocaleDateString("pt-BR")}</td><td>${_escDoc(d.autor) || "—"}</td><td>${d.texto ? _quebrasDoc(d.texto) : "—"}</td></tr>`).join("")}</tbody>
+      </table>
       ` : ""}
 
       ${pedidosSem.length > 0 ? `
-      <h2>📦 Pedidos de Material (${pedidosSem.length})</h2>
-      <p style="font-size:9pt">
-        <span class="badge-ok">${pedAprov.length} APROVADO${pedAprov.length !== 1 ? "S" : ""}</span> &nbsp;
-        <span class="badge-pend">${pedAguard.length} AGUARDANDO</span> &nbsp;
-        <span class="badge-neg">${pedNeg.length} NEGADO${pedNeg.length !== 1 ? "S" : ""}</span>
-      </p>
-      <div class="table-wrap"><table>
-        <tr><th class="col-data">Nº</th><th class="col-data">Data</th><th class="col-nome">Material</th><th>Qtd</th><th>Marca</th><th class="col-status">Status</th></tr>
-        ${pedidosSem.sort((a, b) => a.ts - b.ts).map(p => {
-          const cor = p.status === "Aprovado" ? "#2aa84f" : p.status === "Negado" ? "#d63b3b" : "#e87722";
-          const numPed = String(p.id).slice(-6);
-          return `<tr>
-            <td class="col-data"><b>${numPed}</b></td>
-            <td class="col-data">${p.dataSolicitacao || "—"}</td>
-            <td class="col-nome"><b>${p.material || "—"}</b></td>
-            <td>${p.qtd || "—"}</td>
-            <td>${p.marca || "—"}</td>
-            <td class="col-status" style="color:${cor}"><b>${p.status}</b></td>
-          </tr>`;
-        }).join("")}
-      </table></div>
+      <div class="sec">Pedidos de material <small>${pedidosSem.length} no período</small></div>
+      <div class="selos"><span class="selo ok">${pedAprov.length} aprovado${pedAprov.length !== 1 ? "s" : ""}</span><span class="selo alerta">${pedAguard.length} aguardando</span><span class="selo erro">${pedNeg.length} negado${pedNeg.length !== 1 ? "s" : ""}</span></div>
+      <table class="quadro">
+        <thead><tr><th style="width:10%" class="num">Nº</th><th style="width:13%">Data</th><th style="width:33%">Material</th><th style="width:14%" class="num">Quantidade</th><th style="width:16%">Marca</th><th style="width:14%" class="centro">Situação</th></tr></thead>
+        <tbody>${pedidosSem.sort((a, b) => (a.ts || 0) - (b.ts || 0)).map(p => `<tr><td class="num"><b>${String(p.id).slice(-6)}</b></td><td>${_escDoc(p.dataSolicitacao || p.data) || "—"}</td><td><b>${_escDoc(p.material) || "—"}</b></td><td class="num">${p.qtd ? _escDoc(fmtQtd(p.qtd)) : "—"}</td><td>${_escDoc(p.marca) || "—"}</td><td class="centro ${_clsStatusPedido(p.status)}"><b>${_escDoc(p.status) || "—"}</b></td></tr>`).join("")}</tbody>
+      </table>
       ` : ""}
 
-      ${(movPessSem.length > 0 || movEquipSem.length > 0) ? `
-      <h2>🔄 Movimentações</h2>
       ${movPessSem.length > 0 ? `
-        <h3>👷 Pessoal (${movPessSem.length})</h3>
-        <div class="table-wrap"><table>
-          <tr><th class="col-data">Data</th><th class="col-nome">Trabalhador</th><th>Origem → Destino</th><th>Motivo</th><th class="col-status">Status</th></tr>
-          ${movPessSem.map(m => {
-            const oOrig = obras.find(o => o.id === m.obraOrigem)?.nome || "—";
-            const oDest = obras.find(o => o.id === m.obraDestino)?.nome || "—";
-            return `<tr>
-              <td class="col-data">${m.data || "—"}</td>
-              <td class="col-nome"><b>${m.trabNome || "—"}</b></td>
-              <td class="td-wrap" style="font-size:8pt">${oOrig} → ${oDest}</td>
-              <td class="td-wrap" style="font-size:8pt">${m.motivo || "—"}</td>
-              <td class="col-status">${m.status || "—"}</td>
-            </tr>`;
-          }).join("")}
-        </table></div>
+      <div class="sec">Movimentações de pessoal <small>${movPessSem.length} no período</small></div>
+      <table class="quadro">
+        <thead><tr><th style="width:12%">Data</th><th style="width:22%">Trabalhador</th><th style="width:28%">Origem → Destino</th><th style="width:24%">Motivo</th><th style="width:14%" class="centro">Situação</th></tr></thead>
+        <tbody>${movPessSem.map(m => { const oOrig = obras.find(o => o.id === m.obraOrigem)?.nome || "—"; const oDest = obras.find(o => o.id === m.obraDestino)?.nome || "—"; return `<tr><td>${_escDoc(m.data) || "—"}</td><td><b>${_escDoc(m.trabNome) || "—"}</b></td><td>${_escDoc(oOrig)} → ${_escDoc(oDest)}</td><td>${_escDoc(m.motivo) || "—"}</td><td class="centro">${_escDoc(m.status) || "—"}</td></tr>`; }).join("")}</tbody>
+      </table>
       ` : ""}
       ${movEquipSem.length > 0 ? `
-        <h3>🔧 Equipamentos (${movEquipSem.length})</h3>
-        <div class="table-wrap"><table>
-          <tr><th class="col-data">Data</th><th class="col-nome">Item</th><th>Origem → Destino</th><th>Motivo</th><th class="col-status">Status</th></tr>
-          ${movEquipSem.map(m => `<tr>
-            <td class="col-data">${m.dataSolicitacao || "—"}</td>
-            <td class="col-nome"><b>${m.itemNome || "—"}</b></td>
-            <td class="td-wrap" style="font-size:8pt">${m.obraOrigemNome || "—"} → ${m.obraDestinoNome || "—"}</td>
-            <td class="td-wrap" style="font-size:8pt">${m.motivo || "—"}</td>
-            <td class="col-status">${m.status || "—"}</td>
-          </tr>`).join("")}
-        </table></div>
-      ` : ""}
+      <div class="sec">Movimentações de equipamentos <small>${movEquipSem.length} no período</small></div>
+      <table class="quadro">
+        <thead><tr><th style="width:12%">Data</th><th style="width:22%">Item</th><th style="width:28%">Origem → Destino</th><th style="width:24%">Motivo</th><th style="width:14%" class="centro">Situação</th></tr></thead>
+        <tbody>${movEquipSem.map(m => `<tr><td>${_escDoc(m.dataSolicitacao) || "—"}</td><td><b>${_escDoc(m.itemNome) || "—"}</b></td><td>${_escDoc(m.obraOrigemNome) || "—"} → ${_escDoc(m.obraDestinoNome) || "—"}</td><td>${_escDoc(m.motivo) || "—"}</td><td class="centro">${_escDoc(m.status) || "—"}</td></tr>`).join("")}</tbody>
+      </table>
       ` : ""}
 
       ${despesasSem.length > 0 ? `
-      <h2>💸 Despesas Avulsas</h2>
-      <div class="table-wrap"><table>
-        <tr><th class="col-data">Data</th><th class="col-nome">Categoria</th><th>Descrição</th><th style="text-align:right">Valor</th></tr>
-        ${despesasSem.map(d => `<tr>
-          <td class="col-data">${d.data || "—"}</td>
-          <td class="col-nome">${d.categoria || "—"}</td>
-          <td class="td-wrap" style="font-size:8.5pt">${d.descricao || "—"}</td>
-          <td style="text-align:right;color:#dc7e00"><b>R$ ${(parseFloat(d.valor) || 0).toFixed(2)}</b></td>
-        </tr>`).join("")}
-        <tr style="background:#fef3c7;font-weight:700">
-          <td colspan="3" style="text-align:right">TOTAL DESPESAS AVULSAS</td>
-          <td style="text-align:right;color:#0f2151">R$ ${totalDespesas.toFixed(2)}</td>
-        </tr>
-      </table></div>
+      <div class="sec">Despesas avulsas</div>
+      <table class="quadro">
+        <thead><tr><th style="width:13%">Data</th><th style="width:22%">Categoria</th><th style="width:47%">Descrição</th><th style="width:18%" class="num">Valor</th></tr></thead>
+        <tbody>${despesasSem.map(d => `<tr><td>${_escDoc(d.data) || "—"}</td><td>${_escDoc(d.categoria) || "—"}</td><td>${_escDoc(d.descricao) || "—"}</td><td class="num"><b>${_brl(d.valor)}</b></td></tr>`).join("")}<tr class="total"><td colspan="3">Total das despesas avulsas</td><td class="num">${_brl(totalDespesas)}</td></tr></tbody>
+      </table>
       ` : ""}
 
       ${combPorVeic.length > 0 ? `
-      <h2>⛽ Combustível por Veículo</h2>
-      <div class="table-wrap"><table>
-        <tr><th class="col-nome">Veículo</th><th class="col-data">Placa</th><th style="text-align:center">Abastec.</th><th style="text-align:right">Litros</th><th style="text-align:right">Valor</th></tr>
-        ${combPorVeic.map(v => `<tr>
-          <td class="col-nome"><b>${v.ativo.nome}</b></td>
-          <td class="col-data">${v.ativo.placa || "—"}</td>
-          <td style="text-align:center">${v.qtd}</td>
-          <td style="text-align:right">${v.litros.toFixed(1)}L</td>
-          <td style="text-align:right;color:#dc7e00"><b>R$ ${v.gasto.toFixed(2)}</b></td>
-        </tr>`).join("")}
-      </table></div>
+      <div class="sec">Combustível por veículo</div>
+      <table class="quadro">
+        <thead><tr><th style="width:30%">Veículo</th><th style="width:14%">Placa</th><th style="width:18%" class="num">Abastecimentos</th><th style="width:16%" class="num">Litros</th><th style="width:22%" class="num">Valor</th></tr></thead>
+        <tbody>${combPorVeic.map(v => `<tr><td><b>${_escDoc(v.ativo.nome)}</b></td><td>${_escDoc(v.ativo.placa) || "—"}</td><td class="num">${v.qtd}</td><td class="num">${_numDoc(v.litros, 1)} L</td><td class="num"><b>${_brl(v.gasto)}</b></td></tr>`).join("")}<tr class="total"><td colspan="2">Total do período</td><td class="num">${combPorVeic.reduce((s, v) => s + v.qtd, 0)}</td><td class="num">${_numDoc(combPorVeic.reduce((s, v) => s + v.litros, 0), 1)} L</td><td class="num">${_brl(combPorVeic.reduce((s, v) => s + v.gasto, 0))}</td></tr></tbody>
+      </table>
       ` : ""}
 
       ${fotosSem.length > 0 ? `
-      <h2>📷 Registro Fotográfico (${fotosSem.length} fotos)</h2>
-      <div class="fotos-grid">
-        ${fotosSem.slice(0, 24).map(f => `
-          <div class="foto-item">
-            <img src="${f.foto}" alt="${f.legenda || ''}" />
-            <div class="foto-item-info">
-              <b>#${String(f.numero || 0).padStart(3, "0")}</b> · ${f.data || "—"} ${f.hora || ""}<br/>
-              ${(f.legenda || "").substring(0, 35)}${(f.legenda || "").length > 35 ? "…" : ""}
-            </div>
-          </div>
-        `).join("")}
+      <div class="sec">Registro fotográfico <small>${fotosSem.length} foto${fotosSem.length > 1 ? "s" : ""}</small></div>
+      <div class="fotos f4">
+        ${fotosSem.slice(0, 24).map(f => `<figure><img src="${_escDoc(_srcImgDoc(f.foto))}" alt=""/><figcaption><b>#${String(f.numero || 0).padStart(3, "0")}</b> · ${_escDoc(f.data) || "—"} ${_escDoc(f.hora || "")}<br/>${_escDoc((f.legenda || "").substring(0, 35))}${(f.legenda || "").length > 35 ? "…" : ""}</figcaption></figure>`).join("")}
       </div>
-      ${fotosSem.length > 24 ? `<p style="font-size:9pt;color:#888;text-align:center">+ ${fotosSem.length - 24} foto(s) adicional(is) na galeria do app</p>` : ""}
+      ${fotosSem.length > 24 ? `<div class="nota">+ ${fotosSem.length - 24} foto(s) adicional(is) na galeria do aplicativo.</div>` : ""}
       ` : ""}
 
-      <h2>📊 Acumulado da Obra</h2>
-      <table>
-        <tr><th>Indicador</th><th style="text-align:right">Total</th></tr>
-        <tr><td>📅 Total de RDOs emitidos</td><td style="text-align:right"><b>${totalRdosObra}</b></td></tr>
-        <tr><td>📦 Total de pedidos da obra</td><td style="text-align:right"><b>${totalPedidosObra}</b></td></tr>
+      <div class="sec">Acumulado da obra</div>
+      <table class="quadro">
+        <thead><tr><th style="width:70%">Indicador</th><th style="width:30%" class="num">Total</th></tr></thead>
+        <tbody><tr><td>Total de RDOs emitidos</td><td class="num"><b>${totalRdosObra}</b></td></tr><tr><td>Total de pedidos da obra</td><td class="num"><b>${totalPedidosObra}</b></td></tr></tbody>
       </table>
 
-      <div class="resumo-final">
-        <h3>💰 RESUMO FINANCEIRO DA SEMANA</h3>
-        <table style="margin:0;font-size:10pt">
-          <tr><td><b>👷 Mão de Obra (diárias)</b></td><td style="text-align:right">R$ ${custoMaoObra.toFixed(2)}</td></tr>
-          <tr><td><b>☕ Alimentação</b></td><td style="text-align:right">R$ ${totalAlimentacao.toFixed(2)}</td></tr>
-          <tr><td><b>⛽ Combustível</b></td><td style="text-align:right">R$ ${totalCombustivel.toFixed(2)}</td></tr>
-          <tr><td><b>💸 Despesas Avulsas</b></td><td style="text-align:right">R$ ${totalDespesas.toFixed(2)}</td></tr>
-          <tr style="border-top:2px solid #0f2151;background:#0f2151;color:#f5a623;font-size:13pt;font-weight:900">
-            <td style="padding:10px"><b>TOTAL DA SEMANA</b></td>
-            <td style="text-align:right;padding:10px"><b>R$ ${custoTotalSem.toFixed(2)}</b></td>
-          </tr>
-        </table>
-      </div>
+      <div class="sec">Resumo financeiro da semana</div>
+      <table class="quadro junto">
+        <thead><tr><th style="width:70%">Item</th><th style="width:30%" class="num">Valor</th></tr></thead>
+        <tbody>
+          <tr><td><b>Mão de obra (diárias)</b></td><td class="num">${_brl(custoMaoObra)}</td></tr>
+          <tr><td><b>Alimentação</b></td><td class="num">${_brl(totalAlimentacao)}</td></tr>
+          <tr><td><b>Combustível</b></td><td class="num">${_brl(totalCombustivel)}</td></tr>
+          <tr><td><b>Despesas avulsas</b></td><td class="num">${_brl(totalDespesas)}</td></tr>
+          <tr class="total"><td>Total da semana</td><td class="num">${_brl(custoTotalSem)}</td></tr>
+        </tbody>
+      </table>
 
-      <div style="margin-top:30px">
-        ${gerarAssinaturasHTML({ empresa, autor: empresa.responsavel })}
-      </div>
-
+      ${gerarAssinaturasHTML({ empresa, autor: empresa.responsavel })}
       ${gerarFooterHTML({ empresa, autor: empresa.responsavel })}
     </body></html>`;
 
@@ -1490,7 +1243,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                   observacoes: r.observacoes || "",
                   presencas: r.presencas || historico[isoDt] || {},
                   trabalhadores, ativos, abastecimentos, pedidos,
-                  ocorrencias: diario.filter(d => d.obraId === r.obraId),
+                  ocorrencias: _diarioDoDia(diario, r.obraId, r.data),
                   encarregado: r.encarregado,
                   empresa,
                   horasTrabalhadas: r.horasTrabalhadas,

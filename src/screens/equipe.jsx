@@ -538,18 +538,24 @@ export function TelaFicha({ obras, onBack, onAdd }) {
    RELATÓRIO DIÁRIO
 ════════════════════════════════════ */
 
-export function gerarFichaCadastralPDF(t, obra, empresa) {
-  const fmtCPF = (cpf) => cpf ? cpf.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "—";
-  const fmtTel = (tel) => tel || "—";
+export function gerarFichaCadastralPDF(t, obra, empresa = {}) {
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fmtCPF = (cpf) => cpf ? String(cpf).replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "—";
+  const fmtTel = (tel) => tel ? esc(tel) : "—";
+  // "YYYY-MM-DD" é lido como texto: new Date("YYYY-MM-DD") é UTC e mostraria um dia a menos no Brasil
   const fmtData = (d) => {
     if (!d) return "—";
-    if (d.includes("/")) return d;
-    try { return new Date(d).toLocaleDateString("pt-BR"); } catch { return d; }
+    const s = String(d).trim();
+    if (s.includes("/")) return esc(s);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+    try { const dt = new Date(s); return isNaN(dt) ? esc(s) : dt.toLocaleDateString("pt-BR"); } catch { return esc(s); }
   };
-  const v = (val) => val && String(val).trim() ? val : "—";
-  const vz = (val) => val && String(val).trim() ? String(val).trim() : ""; // vazio de verdade (dados da empresa: campo em branco some)
+  const vz = (val) => val && String(val).trim() ? String(val).trim() : ""; // vazio de verdade (campo em branco some)
+  const v = (val) => vz(val) ? esc(vz(val)) : "—";
+  const cel = (rotulo, valor, cls = "", destaque = false) => `<div${cls ? ` class="${cls}"` : ""}><span class="rotulo">${rotulo}</span><b${destaque ? ' class="destaque"' : ""}>${valor}</b></div>`;
 
-  // Tipo de folha (badge)
+  // Tipo de folha
   const tiposFolha = { semanal: "Semanal (7 dias)", quinzenal: "Quinzenal (15 dias)", mensal: "Mensal (30 dias)", personalizado: "Personalizado" };
   const tipoFolhaLabel = tiposFolha[t.tipoFolha] || "Quinzenal";
 
@@ -567,503 +573,205 @@ export function gerarFichaCadastralPDF(t, obra, empresa) {
     remuneracao = `R$ ${parseFloat(t.salarioMensal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/mês`;
   }
 
-  // Detectar se é direto (obra) ou indireto (escritório)
+  // Direto (obra) ou indireto (escritório)
   const ehIndireto = !t.obraId && !obra;
-  const tipoVinculo = ehIndireto ? "Funcionário Indireto / Escritório" : "Funcionário Direto / Obra";
+  const tipoVinculo = ehIndireto ? "Vínculo: funcionário indireto (escritório)" : "Vínculo: funcionário direto (obra)";
+  const obraAtual = ehIndireto ? "Escritório (indireto)" : (vz(obra?.nome) ? esc(obra.nome) : "—");
+  const idTrab = String(t.id ?? "").padStart(5, "0");
+  const matricula = `Matrícula #${idTrab}`;
 
-  // Data de emissão
-  const dataEmissao = new Date().toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  const idTrab = String(t.id).padStart(5, "0");
+  // Situação do ASO pela validade: vencido / vence em N dias / válido (datas locais, sem UTC)
+  const seloASO = (() => {
+    const s = vz(t.asoValidade);
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!iso && !br) return "";
+    const val = iso ? new Date(+iso[1], +iso[2] - 1, +iso[3]) : new Date(+br[3], +br[2] - 1, +br[1]);
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const dias = Math.round((val - hoje) / 86400000);
+    if (dias < 0) return ` <span class="selo erro">Vencido há ${Math.abs(dias)} dia(s)</span>`;
+    if (dias <= 30) return ` <span class="selo alerta">Vence em ${dias} dia(s)</span>`;
+    return ` <span class="selo ok">Válido</span>`;
+  })();
+
+  // Foto 3x4: a cadastrada (data URL) ou o espaço para colar
+  const fotoSrc = typeof t.foto === "string" && /^data:image\//.test(t.foto) ? t.foto : "";
+  const fotoHTML = (cls) => fotoSrc ? `<div class="${cls}"><img src="${fotoSrc}" alt="Foto 3x4"></div>` : `<div class="${cls} vazia"><span>FOTO</span>3x4</div>`;
+
+  // Dados da empresa cliente no crachá (nunca da KM)
+  const nomeEmpresaCracha = vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "";
+  const logoEmpresa = vz(empresa.logo) || vz(empresa.logoBase64) || "";
+  const baseCracha = [vz(empresa.cnpj) ? "CNPJ " + vz(empresa.cnpj) : "", vz(empresa.telefone)].filter(Boolean).map(esc).join(" · ");
+
+  const cracha = `
+      <div class="cracha">
+        <div class="cracha-topo">
+          <span class="cracha-empresa">${esc(nomeEmpresaCracha) || "&nbsp;"}</span>
+          ${logoEmpresa ? `<img class="cracha-logo" src="${esc(logoEmpresa)}" alt="">` : `<span class="cracha-tag">Identificação</span>`}
+        </div>
+        <div class="cracha-corpo">
+          ${fotoHTML("cracha-foto")}
+          <div class="cracha-info">
+            <div class="cracha-nome">${v(t.nome)}</div>
+            <div class="cracha-cargo">${esc(vz(t.cargo).toUpperCase()) || "&nbsp;"}</div>
+            <div class="cracha-detalhe">
+              <b>CPF</b> ${fmtCPF(t.cpf)}<br>
+              <b>Matrícula</b> #${idTrab}<br>
+              <b>Admissão</b> ${fmtData(t.admissao || t.inicio)}<br>
+              <b>Tipo sanguíneo</b> ${v(t.tipoSanguineo)}<br>
+              <b>Emergência</b> ${fmtTel(t.emergenciaTel)}
+            </div>
+          </div>
+        </div>
+        <div class="cracha-base">${baseCracha || "&nbsp;"}</div>
+      </div>`;
 
   const html = `<html>
     <head>
-      <title>Ficha Cadastral - ${t.nome}</title>
+      <meta charset="UTF-8">
+      <title>Ficha Cadastral - ${esc(t.nome)}</title>
       <style>
         ${KM_PDF_PAGE_CSS}
-        @page { size: A4 portrait; margin: 8mm 10mm; }
-        @media print {
-          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .page-break { page-break-before: always; }
-        }
-        body {
-          font-family: 'Arial', 'Helvetica', sans-serif;
-          color: #1a1a1a;
-          font-size: 9pt;
-          line-height: 1.25;
-          margin: 0;
-          padding: 0;
-        }
-        /* CABEÇALHO INSTITUCIONAL */
-        .cabecalho {
-          display: flex;
-          justify-content: space-between;
-          align-items: stretch;
-          border-bottom: 3px solid #0f2151;
-          padding-bottom: 5px;
-          margin-bottom: 6px;
-        }
-        .cabecalho-empresa { flex: 1; padding-right: 8px; }
-        .cabecalho-logo {
-          font-size: 18pt;
-          font-weight: 900;
-          letter-spacing: -1px;
-          line-height: 1;
-          margin-bottom: 2px;
-        }
-        .cabecalho-logo .km { color: #0f2151; }
-        .cabecalho-logo .zero { color: #F5A623; }
-        .cabecalho-razao { font-size: 8.5pt; color: #1a1a1a; font-weight: 700; line-height: 1.2; }
-        .cabecalho-dados { font-size: 7pt; color: #555; line-height: 1.3; margin-top: 1px; }
-        .cabecalho-tagline { font-size: 6.5pt; color: #888; letter-spacing: 1.5px; font-weight: 600; margin-top: 1px; }
-        .foto-3x4 {
-          width: 72px; height: 92px;
-          border: 1.5px solid #0f2151;
-          display: flex; align-items: center; justify-content: center;
-          flex-direction: column;
-          color: #888; font-size: 7pt; text-align: center;
-          background: repeating-linear-gradient(45deg, #fafafa, #fafafa 4px, #fff 4px, #fff 8px);
-          flex-shrink: 0;
-        }
-        .foto-3x4 .label { font-weight: 700; letter-spacing: 0.5px; }
-
-        /* TÍTULO PRINCIPAL */
-        .titulo-doc {
-          text-align: center;
-          background: #0f2151;
-          color: #fff;
-          padding: 4px 8px;
-          margin: 4px 0;
-          letter-spacing: 1px;
-        }
-        .titulo-doc h1 {
-          font-size: 11pt;
-          font-weight: 900;
-          margin: 0;
-          letter-spacing: 1.5px;
-        }
-        .titulo-doc .sub { font-size: 7pt; color: #F5A623; margin-top: 1px; letter-spacing: 0.8px; }
-        .ribbon-tipo {
-          display: flex; justify-content: space-between;
-          background: #FFF7E6; border: 1px solid #F5A623;
-          padding: 2px 8px; font-size: 7.5pt;
-          margin-bottom: 4px;
-        }
-        .ribbon-tipo b { color: #7c6f3a; }
-
-        /* SEÇÕES */
-        .secao-titulo {
-          background: linear-gradient(90deg, #0f2151 0%, #1a3370 100%);
-          color: #fff;
-          padding: 2px 8px;
-          font-size: 8pt;
-          font-weight: 700;
-          letter-spacing: 0.8px;
-          margin: 4px 0 0 0;
-        }
-        .secao {
-          border: 1px solid #0f2151;
-          border-top: none;
-          padding: 0;
-          margin-bottom: 4px;
-        }
-        /* TABELA DE CAMPOS */
-        table.dados {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 8.5pt;
-        }
-        table.dados td {
-          border: 1px solid #d0d4dc;
-          padding: 2px 5px;
-          vertical-align: top;
-          line-height: 1.2;
-        }
-        table.dados td.label {
-          background: #f4f6fa;
-          font-size: 6.5pt;
-          color: #555;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-          font-weight: 700;
-          width: 1px;
-          white-space: nowrap;
-          padding-right: 8px;
-        }
-        table.dados td.valor {
-          font-size: 9pt;
-          color: #000;
-          font-weight: 500;
-        }
-        table.dados td.valor.destaque {
-          font-weight: 800;
-          color: #0f2151;
-        }
-
-        /* ASSINATURAS */
-        .assinaturas {
-          display: flex; gap: 16px; margin-top: 8px;
-        }
-        .ass-bloco { flex: 1; text-align: center; }
-        .ass-bloco .linha-ass {
-          border-top: 1px solid #000;
-          margin-top: 22px;
-          padding-top: 2px;
-          font-size: 7.5pt;
-          color: #444;
-          font-weight: 600;
-        }
-        .ass-bloco .nome-ass { font-size: 7pt; color: #888; margin-top: 1px; }
-
-        /* LGPD */
-        .lgpd-alerta {
-          background: #fff8e1; border-left: 3px solid #F5A623;
-          padding: 3px 8px; font-size: 7pt; color: #7c6f3a;
-          margin: 4px 0 2px 0;
-          line-height: 1.3;
-        }
-        .lgpd-alerta b { color: #5c5210; }
-
-        /* RODAPÉ */
-        .rodape-doc {
-          margin-top: 6px;
-          border-top: 1px solid #ccc;
-          padding-top: 3px;
-          font-size: 6.5pt;
-          color: #999;
-          display: flex; justify-content: space-between;
-          letter-spacing: 0.2px;
-        }
-
-        /* ═══ CRACHÁ ═══ */
-        .cracha-page { padding-top: 20mm; }
-        .cracha-grid {
-          display: flex;
-          gap: 10mm;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-        .cracha {
-          width: 85mm; height: 54mm;
-          border: 2px solid #0f2151;
-          border-radius: 5px;
-          padding: 0;
-          background: #fff;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-        .cracha-header {
-          background: linear-gradient(135deg, #0f2151 0%, #1a3370 100%);
-          color: #fff;
-          padding: 3px 6px;
-          display: flex; justify-content: space-between; align-items: center;
-        }
-        .cracha-logo {
-          font-size: 11pt; font-weight: 900; letter-spacing: -0.5px;
-        }
-        .cracha-logo .zero { color: #F5A623; }
-        .cracha-tagline { font-size: 5pt; letter-spacing: 1.5px; opacity: 0.85; }
-        .cracha-body {
-          flex: 1;
-          display: flex;
-          padding: 4mm;
-          gap: 3mm;
-          background: #fff;
-        }
-        .cracha-foto {
-          width: 22mm; height: 30mm;
-          border: 1px solid #0f2151;
-          background: repeating-linear-gradient(45deg, #f9f9f9, #f9f9f9 3px, #fff 3px, #fff 6px);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 6pt; color: #aaa; text-align: center;
-          flex-shrink: 0;
-        }
-        .cracha-info { flex: 1; font-size: 7pt; line-height: 1.3; }
-        .cracha-nome { font-size: 9pt; font-weight: 900; color: #0f2151; line-height: 1.1; margin-bottom: 1mm; }
-        .cracha-cargo { font-size: 7pt; color: #F5A623; font-weight: 700; margin-bottom: 1mm; letter-spacing: 0.3px; }
-        .cracha-detalhe { font-size: 6pt; color: #444; line-height: 1.4; }
-        .cracha-detalhe b { color: #0f2151; font-weight: 700; }
-        .cracha-footer {
-          background: #F5A623;
-          color: #0f2151;
-          font-size: 5.5pt;
-          font-weight: 700;
-          padding: 1.5mm 6px;
-          letter-spacing: 0.8px;
-          text-align: center;
-          line-height: 1;
-        }
-        .cracha-titulo-pg {
-          text-align: center;
-          background: #0f2151;
-          color: #fff;
-          padding: 5px;
-          margin-bottom: 10mm;
-          letter-spacing: 1px;
-        }
-        .cracha-titulo-pg h1 { font-size: 13pt; margin: 0; font-weight: 900; }
-        .cracha-titulo-pg .sub { font-size: 8pt; color: #F5A623; margin-top: 2px; letter-spacing: 0.6px; }
-        .cracha-instrucoes {
-          margin-top: 8mm;
-          background: #f4f6fa;
-          border-left: 3px solid #0f2151;
-          padding: 4px 10px;
-          font-size: 8pt;
-          color: #555;
-          line-height: 1.5;
-        }
+        ${KM_PDF_CSS}
+        /* específico da ficha: grade mais densa (cabe em 1 folha) e espaço da foto 3x4 */
+        .sec { margin: 6px 0 4px; }
+        .grade-dados > div { padding: 2px 6px; }
+        .grade-dados b { margin-top: 0; }
+        .grade-dados b.destaque { color: #052f3d; font-weight: 800; }
+        .km-assinaturas { margin-top: 6px; }
+        .km-assinaturas .ass { margin-top: 26px; }
+        .grade-dados .c3 { grid-column: span 3; }
+        .ident { display: flex; gap: 6px; align-items: flex-start; margin: 0 0 8px; }
+        .ident .grade-dados { flex: 1 1 auto; min-width: 0; margin: 0; }
+        .foto { flex: 0 0 24mm; width: 24mm; height: 32mm; border: 1px solid #d5dce6; background: #f7fbfc; overflow: hidden; }
+        .foto.vazia, .cracha-foto.vazia { display: flex; flex-direction: column; align-items: center; justify-content: center; color: #5c6b73; font-size: 6.5pt; text-align: center; }
+        .foto span, .cracha-foto span { font-weight: 700; letter-spacing: 0.6px; }
+        .foto img, .cracha-foto img { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .local-data { text-align: right; font-size: 8pt; color: #5c6b73; margin: 6px 0 0; }
+        /* crachá (85 x 54 mm, dois por folha) */
+        .crachas { display: flex; flex-wrap: nowrap; justify-content: center; gap: 8mm; margin: 4mm 0 6mm; }
+        .cracha { flex: 0 0 85mm; width: 85mm; height: 54mm; border: 1.5px solid #052f3d; border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
+        .cracha-topo { background: #052f3d; color: #fff; padding: 1.5mm 3mm; display: flex; justify-content: space-between; align-items: center; gap: 2mm; min-height: 7mm; }
+        .cracha-empresa { font-size: 7.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.15; min-width: 0; overflow: hidden; }
+        .cracha-tag { font-size: 5.5pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #ffb830; white-space: nowrap; }
+        .cracha-logo { max-height: 6mm; max-width: 22mm; background: #fff; border-radius: 1mm; padding: 0.5mm; }
+        .cracha-corpo { flex: 1 1 auto; min-height: 0; display: flex; gap: 3mm; padding: 3mm; }
+        .cracha-foto { flex: 0 0 24mm; width: 24mm; height: 32mm; border: 1px solid #d5dce6; background: #f7fbfc; overflow: hidden; font-size: 6pt; }
+        .cracha-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+        .cracha-nome { font-size: 9.5pt; font-weight: 800; color: #052f3d; line-height: 1.1; margin-bottom: 1mm; overflow-wrap: anywhere; }
+        .cracha-cargo { font-size: 6.5pt; font-weight: 700; color: #0b7285; letter-spacing: 0.3px; line-height: 1.2; margin-bottom: 1.5mm; overflow-wrap: anywhere; }
+        .cracha-detalhe { font-size: 6pt; color: #1c2a30; line-height: 1.45; }
+        .cracha-detalhe b { color: #5c6b73; font-weight: 700; text-transform: uppercase; font-size: 5.2pt; letter-spacing: 0.3px; }
+        .cracha-base { background: #ffb830; color: #052f3d; font-size: 6pt; font-weight: 700; letter-spacing: 0.4px; text-align: center; padding: 1.3mm 3mm; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .bloco ol { margin: 0; padding-left: 14px; }
+        .bloco li { margin: 1px 0; }
       </style>
     </head>
     <body>
+      ${gerarHeaderHTML({ tipo: "Ficha Cadastral de Colaborador", periodo: matricula, empresa, subtitulo: tipoVinculo, info_extra: "Documento para arquivo interno" })}
 
-      <!-- ════════ PÁGINA 1 — FICHA CADASTRAL A4 ════════ -->
-      <div class="cabecalho">
-        <div class="cabecalho-empresa">
-          <div class="cabecalho-logo"><span class="km">KM</span><span class="zero">ZERO</span></div>
-          <div class="cabecalho-tagline">GESTÃO DE OBRAS</div>
-          <div class="cabecalho-razao">${vz(empresa.razaoSocial) || vz(empresa.nomeFantasia) || ""}</div>
-          <div class="cabecalho-dados">
-            ${[vz(empresa.cnpj) ? "CNPJ: " + vz(empresa.cnpj) : "", vz(empresa.endereco)].filter(Boolean).join(" &nbsp;•&nbsp; ")}<br>
-            ${[[vz(empresa.responsavel), vz(empresa.registro)].filter(Boolean).join(" · "), vz(empresa.telefone), vz(empresa.email)].filter(Boolean).join(" &nbsp;•&nbsp; ")}
-          </div>
+      <div class="sec">1. Identificação pessoal</div>
+      <div class="ident">
+        <div class="grade-dados g4">
+          ${cel("Nome completo", v(t.nome), "cheio", true)}
+          ${cel("CPF", fmtCPF(t.cpf))}
+          ${cel("RG", v(t.rg))}
+          ${cel("Data de nascimento", fmtData(t.nasc))}
+          ${cel("Estado civil", v(t.estadoCivil))}
+          ${cel("Nacionalidade", v(t.nacionalidade))}
+          ${cel("Naturalidade", v(t.naturalidade))}
+          ${cel("Tipo sanguíneo", v(t.tipoSanguineo))}
+          ${cel("Escolaridade", v(t.escolaridade))}
+          ${cel("Nome do pai", v(t.nomePai), "c2")}
+          ${cel("Nome da mãe", v(t.nomeMae), "c2")}
         </div>
-        <div class="foto-3x4">
-          <div class="label">FOTO</div>
-          <div style="font-size:6pt;margin-top:1px;">3x4</div>
-        </div>
+        ${fotoHTML("foto")}
       </div>
 
-      <div class="titulo-doc">
-        <h1>FICHA CADASTRAL DE COLABORADOR</h1>
-        <div class="sub">DOCUMENTO PARA ARQUIVO INTERNO</div>
+      <div class="sec">2. Endereço e contato</div>
+      <div class="grade-dados g4">
+        ${cel("Endereço", v(t.endereco), "c2")}
+        ${cel("Bairro", v(t.bairro))}
+        ${cel("Cidade / UF", v(t.cidade))}
+        ${cel("CEP", v(t.cep))}
+        ${cel("Telefone celular", fmtTel(t.tel))}
+        ${cel("Telefone de recado", fmtTel(t.telRecado))}
+        ${cel("E-mail", v(t.email))}
       </div>
 
-      <div class="ribbon-tipo">
-        <span><b>📁 Vínculo:</b> ${tipoVinculo}</span>
-        <span><b>🆔 Matrícula:</b> #${idTrab}</span>
-        <span><b>📅 Emissão:</b> ${dataEmissao}</span>
+      <div class="sec">3. Dados profissionais e remuneração</div>
+      <div class="grade-dados g4">
+        ${cel("Cargo / função", v(t.cargo), "c2", true)}
+        ${cel("Obra atual", obraAtual, "c2")}
+        ${cel("Data de admissão", fmtData(t.admissao || t.inicio))}
+        ${cel("CTPS / PIS", v(t.ctps || t.pis))}
+        ${cel("Tipo de folha", esc(tipoFolhaLabel))}
+        ${cel("Forma de cálculo", esc(formaCalcLabel))}
+        ${cel("Remuneração", esc(remuneracao), "cheio", true)}
       </div>
 
-      <div class="secao-titulo">1. IDENTIFICAÇÃO PESSOAL</div>
-      <div class="secao">
-        <table class="dados">
-          <tr>
-            <td class="label">Nome Completo</td>
-            <td class="valor destaque" colspan="3">${v(t.nome)}</td>
-          </tr>
-          <tr>
-            <td class="label">CPF</td><td class="valor">${fmtCPF(t.cpf)}</td>
-            <td class="label">RG</td><td class="valor">${v(t.rg)}</td>
-          </tr>
-          <tr>
-            <td class="label">Data Nascimento</td><td class="valor">${fmtData(t.nasc)}</td>
-            <td class="label">Estado Civil</td><td class="valor">${v(t.estadoCivil)}</td>
-          </tr>
-          <tr>
-            <td class="label">Nacionalidade</td><td class="valor">${v(t.nacionalidade) || "Brasileira"}</td>
-            <td class="label">Naturalidade</td><td class="valor">${v(t.naturalidade)}</td>
-          </tr>
-          <tr>
-            <td class="label">Tipo Sanguíneo</td><td class="valor">${v(t.tipoSanguineo)}</td>
-            <td class="label">Escolaridade</td><td class="valor">${v(t.escolaridade)}</td>
-          </tr>
-          <tr>
-            <td class="label">Nome do Pai</td><td class="valor" colspan="3">${v(t.nomePai)}</td>
-          </tr>
-          <tr>
-            <td class="label">Nome da Mãe</td><td class="valor" colspan="3">${v(t.nomeMae)}</td>
-          </tr>
-        </table>
+      <div class="sec">4. Saúde e segurança <small>ASO — Atestado de Saúde Ocupacional</small></div>
+      <div class="grade-dados g4">
+        ${cel("Data do ASO", fmtData(t.asoData))}
+        ${cel("Validade do ASO", fmtData(t.asoValidade), "", true)}
+        ${cel("Situação", v(t.asoStatus) + seloASO)}
+        ${cel("Convênio de saúde", v(t.convenio))}
+        ${cel("Alergias / condições médicas", v(t.condicoesMedicas), "cheio")}
       </div>
 
-      <div class="secao-titulo">2. ENDEREÇO E CONTATO</div>
-      <div class="secao">
-        <table class="dados">
-          <tr>
-            <td class="label">Endereço</td>
-            <td class="valor" colspan="3">${v(t.endereco)}</td>
-          </tr>
-          <tr>
-            <td class="label">Bairro</td><td class="valor">${v(t.bairro)}</td>
-            <td class="label">Cidade / UF</td><td class="valor">${v(t.cidade)}</td>
-          </tr>
-          <tr>
-            <td class="label">CEP</td><td class="valor">${v(t.cep)}</td>
-            <td class="label">Telefone Cel.</td><td class="valor">${fmtTel(t.tel)}</td>
-          </tr>
-          <tr>
-            <td class="label">Tel. Recado</td><td class="valor">${fmtTel(t.telRecado)}</td>
-            <td class="label">E-mail</td><td class="valor">${v(t.email)}</td>
-          </tr>
-        </table>
+      <div class="sec">5. Uniformes e EPI</div>
+      <div class="grade-dados g4">
+        ${cel("Camisa", v(t.tamCamisa))}
+        ${cel("Calça", v(t.tamCalca))}
+        ${cel("Bota", v(t.tamBota))}
+        ${cel("Luva", v(t.tamLuva))}
+        ${cel("Capacete", v(t.tamCapacete))}
+        ${cel("EPI entregue", t.epiEntregue ? "Sim" + (vz(t.epiData) ? " — entregue em " + fmtData(t.epiData) : "") : "Não entregue", "c3")}
       </div>
 
-      <div class="secao-titulo">3. DADOS PROFISSIONAIS E REMUNERAÇÃO</div>
-      <div class="secao">
-        <table class="dados">
-          <tr>
-            <td class="label">Cargo / Função</td><td class="valor destaque">${v(t.cargo)}</td>
-            <td class="label">Obra Atual</td><td class="valor">${ehIndireto ? "Escritório (Indireto)" : (obra?.nome || "—")}</td>
-          </tr>
-          <tr>
-            <td class="label">Data Admissão</td><td class="valor">${fmtData(t.admissao || t.inicio)}</td>
-            <td class="label">CTPS / PIS</td><td class="valor">${v(t.ctps || t.pis)}</td>
-          </tr>
-          <tr>
-            <td class="label">Tipo de Folha</td><td class="valor"><b>${tipoFolhaLabel}</b></td>
-            <td class="label">Forma de Cálculo</td><td class="valor">${formaCalcLabel}</td>
-          </tr>
-          <tr>
-            <td class="label">Remuneração</td><td class="valor destaque" colspan="3">${remuneracao}</td>
-          </tr>
-        </table>
+      <div class="sec">6. Contato de emergência</div>
+      <div class="grade-dados g4">
+        ${cel("Nome", v(t.emergenciaNome), "c2")}
+        ${cel("Parentesco", v(t.emergenciaParentesco))}
+        ${cel("Telefone", fmtTel(t.emergenciaTel))}
       </div>
 
-      <div class="secao-titulo">4. SAÚDE E SEGURANÇA — ASO</div>
-      <div class="secao">
-        <table class="dados">
-          <tr>
-            <td class="label">Data do ASO</td><td class="valor">${fmtData(t.asoData)}</td>
-            <td class="label">Validade ASO</td><td class="valor destaque">${fmtData(t.asoValidade)}</td>
-          </tr>
-          <tr>
-            <td class="label">Status</td><td class="valor"><b>${v(t.asoStatus) || "Apto"}</b></td>
-            <td class="label">Convênio Saúde</td><td class="valor">${v(t.convenio)}</td>
-          </tr>
-          <tr>
-            <td class="label">Alergias / Condições</td>
-            <td class="valor" colspan="3">${v(t.condicoesMedicas)}</td>
-          </tr>
-        </table>
+      <div class="sec">7. Dados bancários</div>
+      <div class="grade-dados g4">
+        ${cel("Banco", v(t.banco), "c2")}
+        ${cel("Agência", v(t.agencia))}
+        ${cel("Conta", v(t.conta) + (vz(t.tipoConta) ? " (" + esc(vz(t.tipoConta)) + ")" : ""))}
+        ${cel("Chave PIX", v(t.pix), "cheio")}
       </div>
 
-      <div class="secao-titulo">5. UNIFORMES E EPI</div>
-      <div class="secao">
-        <table class="dados">
-          <tr>
-            <td class="label">Camisa</td><td class="valor">${v(t.tamCamisa)}</td>
-            <td class="label">Calça</td><td class="valor">${v(t.tamCalca)}</td>
-            <td class="label">Bota</td><td class="valor">${v(t.tamBota)}</td>
-            <td class="label">Capacete</td><td class="valor">${v(t.tamCapacete)}</td>
-          </tr>
-          <tr>
-            <td class="label">EPI Entregue</td>
-            <td class="valor" colspan="7">${t.epiEntregue ? "✓ Sim — em " + fmtData(t.epiData) : "✗ Não entregue"}</td>
-          </tr>
-        </table>
+      <div class="bloco alerta"><span class="rotulo">Confidencialidade · LGPD</span>Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados (Lei 13.709/2018). Uso restrito à empresa emissora. Não pode ser compartilhado sem autorização do titular.</div>
+
+      ${gerarAssinaturasHTML({ empresa, assinantes: [
+        { nome: vz(t.nome), cargo: "Assinatura do colaborador · CPF " + fmtCPF(t.cpf) },
+        { nome: vz(empresa.responsavel), cargo: ["Responsável pela empresa", vz(empresa.registro)].filter(Boolean).join(" · ") },
+      ] })}
+      <p class="local-data">Local e data: _______________________________________ , _____ / _____ / _________</p>
+
+      <div class="sec quebra">Carteira de identificação <small>recorte na linha externa e plastifique para uso em obra</small></div>
+      <div class="crachas">${cracha}${cracha}</div>
+      <div class="bloco">
+        <span class="rotulo">Instruções de uso</span>
+        <ol>
+          <li>Recorte os crachás na linha externa (um para uso, outro para arquivo).</li>
+          <li>Cole uma foto 3x4 atual no espaço indicado, se ainda não houver foto.</li>
+          <li>Plastifique (recomenda-se laminação de 125 microns).</li>
+          <li>Use cordão ou clipe da empresa.</li>
+          <li>Mantenha sempre visível durante as atividades em obra.</li>
+          <li>Em caso de perda, comunique ao responsável imediatamente.</li>
+        </ol>
       </div>
+      <div class="nota">${esc(matricula)} · Carteira emitida com os dados cadastrados na ficha do colaborador.</div>
 
-      <div class="secao-titulo">6. CONTATO DE EMERGÊNCIA</div>
-      <div class="secao">
-        <table class="dados">
-          <tr>
-            <td class="label">Nome</td><td class="valor">${v(t.emergenciaNome)}</td>
-            <td class="label">Parentesco</td><td class="valor">${v(t.emergenciaParentesco)}</td>
-            <td class="label">Telefone</td><td class="valor">${fmtTel(t.emergenciaTel)}</td>
-          </tr>
-        </table>
-      </div>
-
-      <div class="secao-titulo">7. DADOS BANCÁRIOS</div>
-      <div class="secao">
-        <table class="dados">
-          <tr>
-            <td class="label">Banco</td><td class="valor">${v(t.banco)}</td>
-            <td class="label">Agência</td><td class="valor">${v(t.agencia)}</td>
-            <td class="label">Conta</td><td class="valor">${v(t.conta)} ${v(t.tipoConta) !== "—" ? "(" + t.tipoConta + ")" : ""}</td>
-          </tr>
-          <tr>
-            <td class="label">Chave PIX</td>
-            <td class="valor" colspan="5">${v(t.pix)}</td>
-          </tr>
-        </table>
-      </div>
-
-      <div class="lgpd-alerta">
-        <b>⚠️ Confidencialidade — LGPD:</b> Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados (Lei 13.709/2018). Uso restrito à empresa emissora. Não pode ser compartilhado sem autorização do titular.
-      </div>
-
-      <div class="assinaturas">
-        <div class="ass-bloco">
-          <div class="linha-ass">Assinatura do Colaborador</div>
-          <div class="nome-ass">${v(t.nome)}<br>CPF: ${fmtCPF(t.cpf)}</div>
-        </div>
-        <div class="ass-bloco">
-          <div class="linha-ass">Responsável pela Empresa</div>
-          <div class="nome-ass">${vz(empresa.responsavel) || "&nbsp;"}<br>${vz(empresa.registro) || ""}</div>
-        </div>
-      </div>
-
-      <div style="text-align:right;margin-top:6px;font-size:8pt;color:#444;">
-        Local e Data: _______________________________________ , _____ / _____ / _________
-      </div>
-
-      <div class="rodape-doc">
-        <span><b>${(vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "").split(",")[0]}</b> · Matrícula #${idTrab}</span>
-        <span>Documento emitido pelo KMZERO em ${dataEmissao}</span>
-      </div>
-
-      <!-- ════════ PÁGINA 2 — CRACHÁ A4 ════════ -->
-      <div class="page-break cracha-page">
-        <div class="cracha-titulo-pg">
-          <h1>CARTEIRA DE IDENTIFICAÇÃO</h1>
-          <div class="sub">RECORTE E PLASTIFIQUE PARA USO EM OBRA</div>
-        </div>
-
-        <div class="cracha-grid">
-          <!-- 2 crachás iguais para arquivar 1 e usar 1 -->
-          ${[1, 2].map(() => `
-            <div class="cracha">
-              <div class="cracha-header">
-                <div class="cracha-logo">KM<span class="zero">ZERO</span></div>
-                <div class="cracha-tagline">GESTÃO DE OBRAS</div>
-              </div>
-              <div class="cracha-body">
-                <div class="cracha-foto">
-                  <div>FOTO<br>3x4</div>
-                </div>
-                <div class="cracha-info">
-                  <div class="cracha-nome">${v(t.nome).substring(0, 28)}</div>
-                  <div class="cracha-cargo">${v(t.cargo)?.toUpperCase()}</div>
-                  <div class="cracha-detalhe">
-                    <b>CPF:</b> ${fmtCPF(t.cpf)}<br>
-                    <b>Matrícula:</b> #${idTrab}<br>
-                    <b>Admissão:</b> ${fmtData(t.admissao || t.inicio)}<br>
-                    <b>Tipo Sang.:</b> ${v(t.tipoSanguineo)}<br>
-                    <b>Emergência:</b> ${fmtTel(t.emergenciaTel)}
-                  </div>
-                </div>
-              </div>
-              <div class="cracha-footer">
-                ${[(vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "").split(",")[0].toUpperCase(), vz(empresa.cnpj)].filter(Boolean).join(" · ")}
-              </div>
-            </div>
-          `).join("")}
-        </div>
-
-        <div class="cracha-instrucoes">
-          <b>📋 Instruções de uso:</b><br>
-          1. Recorte os crachás na linha externa.<br>
-          2. Cole uma foto 3x4 atual no espaço indicado.<br>
-          3. Plastifique (recomenda-se laminação 125 microns).<br>
-          4. Use cordão / clip da empresa.<br>
-          5. Mantenha sempre visível durante as atividades em obra.<br>
-          6. Em caso de perda, comunique ao responsável imediatamente.
-        </div>
-
-        <div class="rodape-doc" style="margin-top: 8mm;">
-          <span><b>${(vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "").split(",")[0]}</b> · Carteira #${idTrab}</span>
-          <span>Emitida em ${dataEmissao}</span>
-        </div>
-      </div>
-
+      ${gerarFooterHTML({ empresa, documento: matricula })}
     </body>
   </html>`;
 
-  abrirOuBaixarHTML(html, `Ficha-${t.nome.replace(/[^a-z0-9]/gi, "_").substring(0, 30)}`);
+  abrirOuBaixarHTML(html, `Ficha-${String(t.nome || "colaborador").replace(/[^a-z0-9]/gi, "_").substring(0, 30)}`);
 }
 
 /* ════════════════════════════════════
@@ -2254,7 +1962,16 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
    EXAMES MÉDICOS (ASO) — controle e renovação
 ════════════════════════════════════ */
 
-export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
+export function TelaExames({ obras, trabalhadores, empresa: empresaProp, onBack, onVerTrabalhador }) {
+  // Empresa cliente para o documento: vem por prop; sem prop, lê o cadastro salvo (Sistema → Empresa)
+  const [empresaSalva, setEmpresaSalva] = useState({});
+  useEffect(() => {
+    if (empresaProp && Object.keys(empresaProp).length) return;
+    let vivo = true;
+    store.get("empresa").then(e => { if (vivo && e && typeof e === "object") setEmpresaSalva(e); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [empresaProp]);
+  const empresa = (empresaProp && Object.keys(empresaProp).length) ? empresaProp : empresaSalva;
   const [filtro, setFiltro] = useState("vence_30"); // vence_30 | vencido | apto | inapto | sem_aso
 
   const checaASO = (t) => {
@@ -2280,47 +1997,75 @@ export function TelaExames({ obras, trabalhadores, onBack, onVerTrabalhador }) {
 
   const exportar = () => {
     const titulo = { vencido: "ASO Vencidos", vence_30: "ASO Vencendo (30 dias)", apto: "Aptos", inapto: "Inaptos / Restrições", sem_aso: "Sem ASO Cadastrado" }[filtro];
-    const html = `<html><head><title>${titulo}</title>
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    // "YYYY-MM-DD" lido como texto (new Date("YYYY-MM-DD") é UTC → um dia a menos no Brasil)
+    const fmtDataDoc = (d) => {
+      if (!d) return "—";
+      const s = String(d).trim();
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+      if (s.includes("/")) return esc(s);
+      const dt = new Date(s);
+      return isNaN(dt) ? esc(s) : dt.toLocaleDateString("pt-BR");
+    };
+    const prazo = (a) => {
+      if (!a.tem) return "";
+      const dias = n => Math.abs(n) + (Math.abs(n) === 1 ? " dia" : " dias");
+      if (a.vencido) return `<br><small class="txt-erro">vencido há ${dias(a.dias)}</small>`;
+      if (a.vencendo) return `<br><small class="txt-alerta">vence em ${dias(a.dias)}</small>`;
+      return `<br><small class="txt-cinza">faltam ${dias(a.dias)}</small>`;
+    };
+    const selo = (t) => {
+      if (!t._aso.tem) return `<span class="selo">Sem ASO</span>`;
+      const st = String(t.asoStatus || "").trim();
+      if (!st) return "—";
+      return `<span class="selo ${st === "Apto" ? "ok" : "erro"}">${esc(st)}</span>`;
+    };
+    const linhas = lista.map((t, i) => {
+      const obra = obras.find(o => o.id === t.obraId);
+      return `<tr>
+            <td class="num">${i + 1}</td>
+            <td><b>${esc(t.nome)}</b></td>
+            <td>${esc(t.cargo || "—")}</td>
+            <td>${esc(obra?.nome || "—")}</td>
+            <td class="centro">${fmtDataDoc(t.asoValidade)}${prazo(t._aso)}</td>
+            <td>${selo(t)}</td>
+            <td>${esc(t.tel || "—")}</td>
+          </tr>`;
+    }).join("");
+    const html = `<html><head><meta charset="UTF-8"><title>Controle de Exames Médicos - ${esc(titulo)}</title>
       <style>
         ${KM_PDF_PAGE_CSS}
-        @page { size: A4 portrait; margin: 12mm 10mm; }
-        @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-        body { font-family: Arial; color: #222; margin: 0 auto; max-width: 190mm; padding: 6mm 4mm; box-sizing: border-box; }
-        h1, h2, h3 { page-break-after: avoid; break-after: avoid; }
-        h1 { color: #004080; border-bottom: 3px solid #C0A040; padding-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; table-layout: auto; page-break-inside: auto; break-inside: auto; }
-        tr { page-break-inside: avoid; break-inside: avoid; }
-        thead { display: table-header-group; }
-        th { background: #004080; color: #fff; padding: 8px; white-space: nowrap; }
-        td { padding: 6px 8px; border: 1px solid #ddd; vertical-align: top; overflow-wrap: break-word; word-break: normal; }
-        /* Coluna do nome (1ª): NÃO quebra, se alarga ao texto */
-        th:first-child, td:first-child { white-space: nowrap; min-width: 110px; }
-        /* Coluna 2 (cargo): NÃO quebra */
-        th:nth-child(2), td:nth-child(2) { white-space: nowrap; min-width: 80px; }
-        /* Datas/status: não quebram */
-        th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5) { white-space: nowrap; }
-        td.td-wrap { white-space: normal; overflow-wrap: break-word; word-break: normal; }
-        tr:nth-child(even) td { background: #f5f8fc; }
+        ${KM_PDF_CSS}
+        /* específico deste documento: etiqueta de situação pode quebrar em duas linhas dentro da tabela */
+        .quadro .selo { white-space: normal; }
+        .quadro td small { font-size: 7pt; }
       </style></head><body>
-      <h1>🏥 Controle de Exames Médicos — ${titulo}</h1>
-      <p><b>Total:</b> ${lista.length} trabalhador(es) • <b>Gerado:</b> ${new Date().toLocaleString("pt-BR")}</p>
-      <table>
-        <tr><th>Nome</th><th>Cargo</th><th>Obra</th><th>Validade</th><th>Status</th><th>Telefone</th></tr>
-        ${lista.map(t => {
-          const obra = obras.find(o => o.id === t.obraId);
-          return `<tr>
-            <td><b>${t.nome}</b></td>
-            <td>${t.cargo}</td>
-            <td>${obra?.nome || "—"}</td>
-            <td>${t.asoValidade ? new Date(t.asoValidade).toLocaleDateString("pt-BR") : "—"}</td>
-            <td>${t.asoStatus || "—"}</td>
-            <td>${t.tel || "—"}</td>
-          </tr>`;
-        }).join("")}
+      ${gerarHeaderHTML({ tipo: "Controle de Exames Médicos (ASO)", periodo: titulo, empresa, info_extra: `${lista.length} trabalhador(es) na lista` })}
+      <div class="kpis">
+        <div class="kpi erro"><b>${grupos.vencido.length}</b><span>ASO vencidos</span></div>
+        <div class="kpi alerta"><b>${grupos.vence_30.length}</b><span>Vencendo em 30 dias</span></div>
+        <div class="kpi ok"><b>${grupos.apto.length}</b><span>Aptos</span></div>
+        <div class="kpi erro"><b>${grupos.inapto.length}</b><span>Inaptos / restrições</span></div>
+        <div class="kpi"><b>${grupos.sem_aso.length}</b><span>Sem ASO cadastrado</span></div>
+      </div>
+      <div class="sec">${esc(titulo)} <small>${lista.length} trabalhador(es) · todas as obras</small></div>
+      <table class="quadro">
+        <thead><tr>
+          <th style="width:4%" class="num">Nº</th>
+          <th style="width:20%">Nome</th>
+          <th style="width:18%">Cargo</th>
+          <th style="width:15%">Obra</th>
+          <th style="width:14%" class="centro">Validade do ASO</th>
+          <th style="width:11%">Situação</th>
+          <th style="width:18%">Telefone</th>
+        </tr></thead>
+        <tbody>${linhas || `<tr><td class="vazio" colspan="7">Sem registros</td></tr>`}</tbody>
       </table>
-      <script>window.onload=()=>setTimeout(()=>window.print(),300);</script>
+      <div class="nota">ASO = Atestado de Saúde Ocupacional (NR-7). Prazos contados a partir da data de emissão deste documento; a situação (Apto / Inapto / restrições) é a registrada na ficha do trabalhador.</div>
+      ${gerarFooterHTML({ empresa })}
       </body></html>`;
-    abrirOuBaixarHTML(html, `Exames-${titulo.replace(/\s/g, "_")}.html`);
+    abrirOuBaixarHTML(html, `Exames-ASO-${titulo.replace(/[^a-z0-9]/gi, "_")}`);
   };
 
   const cores = {
