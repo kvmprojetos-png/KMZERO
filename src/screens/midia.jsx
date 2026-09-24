@@ -395,7 +395,7 @@ export function TelaLinks({ links, empresa = {}, onBack, onAdd, onRemover }) {
             <select value={ufSinapi} onChange={e => setUfSinapi(e.target.value)} aria-label="Estado da tabela SINAPI" style={{ ...selS, flex: "0 0 96px", marginBottom: 0 }}>
               {UFS_SINAPI.map(uf => <option key={uf} value={uf}>{uf === "BR" ? "Brasil" : uf}</option>)}
             </select>
-            <Btn label="🔎 Buscar no SINAPI ↗" color={NAVY} onClick={buscarSinapi} style={{ flex: "1 1 200px", marginTop: 0 }} />
+            <Btn label="🔎 Buscar no SINAPI" color={NAVY} onClick={buscarSinapi} style={{ flex: "1 1 200px", marginTop: 0 }} />
           </div>
         </div>
         {Object.keys(grupos).length === 0 && (
@@ -410,7 +410,7 @@ export function TelaLinks({ links, empresa = {}, onBack, onAdd, onRemover }) {
               <a key={l.id} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
                 <div style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 6, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer" }}>
                   <div style={{ fontSize: 26, marginRight: 12 }}>{l.icon}</div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{l.nome}</div>
                     <div style={{ fontSize: 10, color: T.texto2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.url}</div>
                   </div>
