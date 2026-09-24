@@ -648,6 +648,11 @@ export function gerarFichaCadastralPDF(t, obra, empresa = {}) {
         .foto span, .cracha-foto span { font-weight: 700; letter-spacing: 0.6px; }
         .foto img, .cracha-foto img { display: block; width: 100%; height: 100%; object-fit: cover; }
         .local-data { text-align: right; font-size: 8pt; color: #5c6b73; margin: 6px 0 0; }
+        /* fecho da ficha: "7. Dados bancários", nota LGPD e assinaturas viajam juntos — a página das assinaturas sempre leva dados do colaborador */
+        .ficha-fecho { break-inside: avoid; page-break-inside: avoid; }
+        /* carteira: sempre em folha própria (.quebra): os crachás são recortados e a folha assinada fica inteira para arquivo */
+        .ficha-carteira { break-inside: avoid; page-break-inside: avoid; margin-top: 14px; }
+        .km-continua + .ficha-carteira, .ficha-carteira > .sec:first-child, .km-continua + .ficha-fecho > .sec:first-child { margin-top: 0; }
         /* crachá (85 x 54 mm, dois por folha) */
         .crachas { display: flex; flex-wrap: nowrap; justify-content: center; gap: 8mm; margin: 4mm 0 6mm; }
         .cracha { flex: 0 0 85mm; width: 85mm; height: 54mm; border: 1.5px solid #052f3d; border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
@@ -736,6 +741,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa = {}) {
         ${cel("Telefone", fmtTel(t.emergenciaTel))}
       </div>
 
+      <div class="ficha-fecho">
       <div class="sec">7. Dados bancários</div>
       <div class="grade-dados g4">
         ${cel("Banco", v(t.banco), "c2")}
@@ -748,11 +754,13 @@ export function gerarFichaCadastralPDF(t, obra, empresa = {}) {
 
       ${gerarAssinaturasHTML({ empresa, assinantes: [
         { nome: vz(t.nome), cargo: "Assinatura do colaborador · CPF " + fmtCPF(t.cpf) },
-        { nome: vz(empresa.responsavel), cargo: ["Responsável pela empresa", vz(empresa.registro)].filter(Boolean).join(" · ") },
+        { nome: vz(empresa.responsavel), cargo: "Responsável pela empresa" }, // o registro profissional já está no cabeçalho (e pode nomear outra pessoa)
       ] })}
       <p class="local-data">Local e data: _______________________________________ , _____ / _____ / _________</p>
+      </div>
 
-      <div class="sec quebra">Carteira de identificação <small>recorte na linha externa e plastifique para uso em obra</small></div>
+      <div class="ficha-carteira quebra">
+      <div class="sec">Carteira de identificação <small>recorte na linha externa e plastifique para uso em obra</small></div>
       <div class="crachas">${cracha}${cracha}</div>
       <div class="bloco">
         <span class="rotulo">Instruções de uso</span>
@@ -766,6 +774,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa = {}) {
         </ol>
       </div>
       <div class="nota">${esc(matricula)} · Carteira emitida com os dados cadastrados na ficha do colaborador.</div>
+      </div>
 
       ${gerarFooterHTML({ empresa, documento: matricula })}
     </body>

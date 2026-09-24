@@ -59,26 +59,41 @@ export const KM_DOC_CSS = `
   /* Rótulo pequeno em caixa alta */
   .rotulo { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #5c6b73; }
 
-  /* ── Cabeçalho (1ª página) ── */
-  .km-header { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 10px; padding: 0 0 8px; border-bottom: 2px solid #052f3d; break-inside: avoid; page-break-inside: avoid; }
-  .km-header-empresa { flex: 1 1 42%; min-width: 0; display: flex; align-items: center; gap: 10px; }
-  .km-header-empresa img { max-height: 16mm; max-width: 38mm; object-fit: contain; flex: 0 0 auto; }
+  /* ── Cabeçalho (1ª página) ──
+     Grade de três colunas (empresa | documento | emitido). A coluna do documento ocupa o que precisa, até 38% da
+     largura; a da empresa fica com o resto (no visualizador o limite é medido de 34% a 46%: vale o que deixa o
+     cabeçalho mais baixo — ver ajustarColunasCabecalho). Nenhum texto longo (razão social, registro, endereço, e-mail, obra)
+     empurra a coluna vizinha: ele quebra dentro da própria coluna (mínimo 0 em toda coluna e todo filho flex).
+     Logo e texto da empresa lado a lado quando cabem (logo quadrado ou pouco largo; papel paisagem); logo largo
+     no A4 retrato fica em cima e o texto desce para baixo dele (flex-wrap: o texto pede no mínimo 58 mm). */
+  .km-header { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(38%) auto; column-gap: 12px; align-items: start; margin: 0 0 10px; padding: 0 0 8px; border-bottom: 2px solid #052f3d; break-inside: avoid; page-break-inside: avoid; }
+  .km-header > * { min-width: 0; }
+  .km-header-empresa { min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 10px; }
+  .km-header-empresa img, .km-header-empresa .km-logo { display: block; flex: 0 0 auto; align-self: flex-start; width: auto; height: auto; max-height: 15mm; max-width: min(46mm, 100%); object-fit: contain; }
+  .km-empresa-texto { flex: 1 1 58mm; min-width: 0; }
   .km-empresa-nome { font-size: 12pt; font-weight: 800; color: #052f3d; line-height: 1.15; overflow-wrap: anywhere; }
+  .km-empresa-nome.longo { font-size: 10.5pt; }
+  .km-empresa-nome.muito-longo { font-size: 9.5pt; }
   .km-empresa-linhas { font-size: 7.5pt; color: #5c6b73; line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
   .km-empresa-linhas b { color: #1c2a30; font-weight: 600; }
-  /* cada dado (CNPJ, registro, telefone) é indivisível: a linha só quebra nos separadores " · "; endereço e e-mail podem quebrar */
+  /* CNPJ e telefone são indivisíveis (a linha só quebra nos separadores " · "); registro, responsável, endereço e
+     e-mail são texto e quebram onde precisar — mas códigos como "CREA-ES 000000/D" e o CEP ficam inteiros (.km-nq) */
   .km-empresa-linhas .km-dado { white-space: nowrap; }
   .km-empresa-linhas .km-dado.km-dado-texto { white-space: normal; }
-  .km-header-doc { flex: 1 1 38%; min-width: 0; border-left: 3px solid #ffb830; padding-left: 10px; }
-  .km-doc-tipo { font-size: 10.5pt; font-weight: 800; color: #052f3d; text-transform: uppercase; letter-spacing: 0.4px; line-height: 1.2; overflow-wrap: anywhere; }
-  .km-doc-num { font-size: 8.5pt; color: #1c2a30; font-weight: 600; margin-top: 2px; }
+  .km-nq { white-space: nowrap; }
+  .km-header-doc { min-width: 0; border-left: 3px solid #ffb830; padding-left: 10px; }
+  .km-doc-tipo { font-size: 10.5pt; font-weight: 800; color: #052f3d; text-transform: uppercase; letter-spacing: 0.4px; line-height: 1.2; overflow-wrap: break-word; }
+  .km-doc-num { font-size: 8.5pt; color: #1c2a30; font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
   .km-doc-sub { font-size: 7.5pt; color: #5c6b73; margin-top: 2px; overflow-wrap: anywhere; }
-  .km-header-meta { flex: 0 0 auto; max-width: 34%; text-align: right; font-size: 7pt; color: #5c6b73; }
+  .km-header-meta { min-width: 0; max-width: 40mm; justify-self: end; text-align: right; font-size: 7pt; color: #5c6b73; }
   .km-header-meta .km-emitido { display: block; color: #1c2a30; font-weight: 600; font-size: 7.5pt; margin-top: 1px; }
   .km-header-meta .km-lockup { display: inline-block; font-size: 11pt; margin-top: 6px; text-align: right; }
   /* variante compacta (A6 e documentos curtos) */
   .km-header.compacto { display: block; padding-bottom: 5px; margin-bottom: 6px; }
   .km-header.compacto .km-header-linha { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .km-header.compacto .km-header-linha > * { min-width: 0; }
+  .km-header.compacto .km-header-linha > .km-lockup { flex: 0 0 auto; }
+  .km-header.compacto .km-header-linha > .km-doc-num { text-align: right; }
   .km-header.compacto .km-empresa-nome { font-size: 9.5pt; }
   .km-header.compacto .km-empresa-linhas { font-size: 6.5pt; margin: 1px 0 4px; }
   .km-header.compacto .km-doc-tipo { font-size: 9pt; }
@@ -87,19 +102,27 @@ export const KM_DOC_CSS = `
   .km-header.compacto .km-lockup { font-size: 8.5pt; }
 
   /* ── Cabeçalho de continuação (páginas 2+) — gerado pelo visualizador ── */
+  /* Nada é cortado com reticências: o texto quebra em outra linha. Cada parte (.km-inteiro: tipo, Nº, período,
+     nome do documento) vai inteira para a linha seguinte e só quebra por dentro se for maior que a linha toda.
+     O paginador troca a razão social pelo nome fantasia quando a linha não cabe (ver "nomes" em paginarDocumento). */
   .km-continua { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 7.5pt; color: #5c6b73; border-bottom: 1px solid #d5dce6; padding-bottom: 4px; margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; }
-  .km-continua > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .km-continua > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
   .km-continua > span:first-child { flex: 1 1 auto; }
-  .km-continua > span:last-child { flex: 0 0 auto; } /* o lockup nunca é cortado */
+  .km-continua > span:last-child { flex: 0 0 auto; white-space: nowrap; } /* o lockup nunca é cortado */
   .km-continua b { color: #052f3d; }
   .km-continua .km-lockup { font-size: 8.5pt; }
+  /* Parte de linha indivisível (span/b: tipo, Nº, período, nome do documento no cabeçalho, na continuação e no rodapé).
+     Só em elementos de linha: um <div class="km-inteiro"> de template continua bloco comum (margens colapsam). */
+  span.km-inteiro, b.km-inteiro { display: inline-block; max-width: 100%; vertical-align: baseline; }
+  /* Bloco que muda de página inteiro (título + quadro curto). Se for maior que uma página, o paginador abre assim mesmo. */
+  div.km-inteiro, .km-quadro-inteiro, .km-bloco-inteiro { display: block; break-inside: avoid; page-break-inside: avoid; }
 
   /* ── Rodapé (todas as páginas) ── */
-  .km-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 7pt; color: #5c6b73; border-top: 1px solid #d5dce6; padding-top: 4px; margin-top: 3.5mm; break-inside: avoid; page-break-inside: avoid; }
-  .km-footer > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .km-footer { display: flex; justify-content: space-between; align-items: center; gap: 2px 10px; font-size: 7pt; color: #5c6b73; border-top: 1px solid #d5dce6; padding-top: 4px; margin-top: 3.5mm; break-inside: avoid; page-break-inside: avoid; }
+  .km-footer > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
   .km-footer b { color: #052f3d; font-weight: 700; }
-  .km-footer .km-footer-pag { flex: 0 0 auto; color: #1c2a30; font-weight: 600; }
-  .km-footer .km-footer-dir { flex: 0 0 auto; text-align: right; }
+  .km-footer .km-footer-pag { flex: 0 0 auto; color: #1c2a30; font-weight: 600; white-space: nowrap; }
+  .km-footer .km-footer-dir { flex: 0 0 auto; text-align: right; white-space: nowrap; }
   .km-footer .km-footer-esq { flex: 1 1 auto; }
   .km-footer .km-lockup { font-size: 7.5pt; }
 
@@ -108,11 +131,16 @@ export const KM_DOC_CSS = `
   .km-assinaturas .ass { flex: 1 1 0; min-width: 0; text-align: center; margin-top: 40px; padding-top: 4px; border-top: 1px solid #5c6b73; }
   .km-assinaturas .ass b { display: block; color: #052f3d; font-size: 8.5pt; overflow-wrap: anywhere; }
   .km-assinaturas .ass span { display: block; color: #5c6b73; font-size: 7.5pt; margin-top: 1px; }
+  .km-assinaturas .ass .km-nq { display: inline; margin: 0; font-size: inherit; }
 
   /* ── Título de seção ── */
   .sec { font-size: 9.5pt; font-weight: 800; color: #052f3d; text-transform: uppercase; letter-spacing: 0.4px; margin: 12px 0 5px; padding: 0 0 3px; border-bottom: 1.5px solid #ffb830; break-after: avoid; page-break-after: avoid; break-inside: avoid; page-break-inside: avoid; }
   .sec small { font-weight: 600; font-size: 7.5pt; color: #5c6b73; text-transform: none; letter-spacing: 0; margin-left: 6px; }
   .km-header + .sec, .km-continua + .sec, .km-pagina-corpo > .sec:first-child { margin-top: 0; }
+  /* o mesmo quando o título abre um bloco inteiro (título + quadro) no topo da página */
+  .km-header + .km-quadro-inteiro > .sec:first-child, .km-continua + .km-quadro-inteiro > .sec:first-child, .km-pagina-corpo > .km-quadro-inteiro:first-child > .sec:first-child,
+  .km-header + .km-bloco-inteiro > .sec:first-child, .km-continua + .km-bloco-inteiro > .sec:first-child, .km-pagina-corpo > .km-bloco-inteiro:first-child > .sec:first-child,
+  .km-header + div.km-inteiro > .sec:first-child, .km-continua + div.km-inteiro > .sec:first-child, .km-pagina-corpo > div.km-inteiro:first-child > .sec:first-child { margin-top: 0; }
 
   /* ── Tabela padrão ── */
   .quadro { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 8.5pt; margin: 0 0 8px; }
@@ -202,6 +230,8 @@ const fmtDataHora = (d = new Date()) => {
   const p = n => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+/* Período em partes que não se separam por dentro ("Últimos 30 dias · 26/08/2026 a 24/09/2026" → 2 partes) */
+const partesPeriodo = periodo => String(periodo || "").split(/\s+·\s+/).map(t => t.trim()).filter(Boolean);
 const fmtNumeroDoc = numero => (numero === null || numero === undefined || numero === "") ? "" : (typeof numero === "number" ? String(numero).padStart(3, "0") : String(numero));
 const LOCKUP = `<span class="km-lockup">KM<span>ZERO</span></span>`;
 
@@ -209,17 +239,65 @@ const LOCKUP = `<span class="km-lockup">KM<span>ZERO</span></span>`;
    dados da KM Consultoria: o KMZERO é vendido para várias empresas e cada documento
    leva só o que a própria empresa cadastrou em Sistema → Empresa. Campo vazio = omitido. */
 export const nomeEmpresa = (empresa = {}) => String(empresa.razaoSocial || empresa.nomeFantasia || "").trim();
-/* Cada dado vira um <span class="km-dado"> indivisível (CNPJ, registro, telefone nunca quebram no meio);
-   { texto: true } marca os que podem quebrar em várias linhas (endereço, nome do responsável, e-mail). */
+/* Nome curto (nome fantasia) — só quando existe e é diferente do nome principal. O visualizador usa no rodapé e
+   no cabeçalho de continuação quando a razão social não cabe numa linha (o nome do documento vem sempre inteiro). */
+export const nomeCurtoEmpresa = (empresa = {}) => {
+  const curto = String(empresa.nomeFantasia || "").trim();
+  return curto && curto.toLowerCase() !== nomeEmpresa(empresa).toLowerCase() ? curto : "";
+};
+
+/* ── Registro profissional (Sistema → Empresa → "Registro Profissional") ──
+   Há quem digite o rótulo dentro do campo ("Resp. técnico: Eng. Civil Fulano — CREA-MG 000000/D"). Onde o documento
+   já escreve o rótulo ("Responsável técnico · <registro>") ele sai do texto, para não repetir. Não inventa nada:
+   só remove o rótulo do começo; o resto fica como a empresa digitou. */
+const RE_ROTULO_RESP_TECNICO = /^\s*(?:resp(?:ons[aá]vel)?\.?\s*t[eé]c(?:nic[oa]|n)?\.?|r\.\s*t\.)\s*[:\-–—]?\s*/i;
+export const registroSemRotulo = registro => {
+  const txt = String(registro ?? "").trim();
+  const limpo = txt.replace(RE_ROTULO_RESP_TECNICO, "").trim();
+  return limpo || (RE_ROTULO_RESP_TECNICO.test(txt) ? "" : txt);
+};
+/* Cargo do bloco de assinatura do responsável técnico: "Responsável técnico · <registro sem o rótulo>" */
+export const cargoResponsavelTecnico = (empresa = {}, rotulo = "Responsável técnico") => {
+  const reg = registroSemRotulo(empresa.registro);
+  return rotulo + (reg ? " · " + reg : "");
+};
+
+/* Texto que pode quebrar em várias linhas, mas sem partir códigos curtos com hífen ou barra
+   ("CEP 00000-000", "Cidade/UF"): esses ficam num <span class="km-nq"> indivisível. O conselho e o número
+   do registro ("CREA-ES 000000/D", "CAU/SP A00000-0", "CFT 000000") formam um bloco só (espaço inseparável). */
+const RE_CONSELHO = /\b((?:CREA|CAU|CFT|CRT|CRQ|CRBio|CREF|CRC|CRA)(?:[-\/–]?[A-Z]{2})?)[ \t]+([A-Z]{0,2}\d[\d.\/\-–]*[A-Z]?)(?![\w-])/g;
+const textoQuebravel = v => esc(v)
+  .replace(RE_CONSELHO, "$1 $2")
+  .split(/([ \t\r\n]+)/)
+  .map(t => (/[-\/– ]/.test(t) && t.length <= 26 && !/[ \t\r\n]/.test(t)) ? `<span class="km-nq">${t}</span>` : t)
+  .join("");
+/* Partes de uma linha separadas por " · ": o separador vai GRUDADO na parte seguinte ("·&nbsp;parte"), então a
+   linha só quebra ANTES do ponto e nenhum "·" fica pendurado no fim da linha. No visualizador, o separador que
+   cair no começo de uma linha some (ocultarSeparadoresNaQuebra); no HTML bruto ele fica no começo da linha. */
+const SEP_HTML = `<span class="km-sep">·&nbsp;</span>`;
+const sepGrudado = html => String(html || "").replace(/ · /g, " " + SEP_HTML);
+/* Cada dado vira um <span class="km-dado">: CNPJ e telefone são indivisíveis (nunca quebram no meio);
+   { texto: true } marca os que podem quebrar em várias linhas (registro, endereço, nome do responsável, e-mail). */
 const juntarDados = partes => partes
   .map(p => (p && typeof p === "object") ? { v: String(p.v || "").trim(), texto: !!p.texto } : { v: String(p || "").trim(), texto: false })
   .filter(p => p.v)
-  .map(p => `<span class="km-dado${p.texto ? " km-dado-texto" : ""}">${esc(p.v)}</span>`)
-  .join(" · ");
+  .map((p, i) => `<span class="km-dado${p.texto ? " km-dado-texto" : ""}">${i ? SEP_HTML : ""}${p.texto ? sepGrudado(textoQuebravel(p.v)) : esc(p.v)}</span>`)
+  .join(" ");
+/* Responsável técnico nas linhas da empresa: UM rótulo só — "Resp. técnico: <responsável> · <registro sem o rótulo>".
+   Se o registro já traz o nome do responsável ("Eng. Civil Fulano — CREA-ES 000000/D"), o nome não se repete.
+   Não inventa nada: só o que a empresa cadastrou em Sistema → Empresa. */
+const chaveNome = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const dadoResponsavelTecnico = (empresa = {}) => {
+  const nome = String(empresa.responsavel || "").trim();
+  const reg = registroSemRotulo(empresa.registro);
+  const nomeNoRegistro = !!(nome && reg && (" " + chaveNome(reg) + " ").includes(" " + chaveNome(nome) + " "));
+  const partes = [nomeNoRegistro ? "" : nome, reg].filter(Boolean);
+  return partes.length ? { v: "Resp.\u00a0técnico: " + partes.join(" · "), texto: true } : "";
+};
 export function linhasEmpresaHTML(empresa = {}) {
   const linhas = [
     nomeEmpresa(empresa) ? `<b>${esc(nomeEmpresa(empresa))}</b>` : "",
-    juntarDados([empresa.cnpj ? "CNPJ " + empresa.cnpj : "", { v: empresa.responsavel, texto: true }, empresa.registro]),
+    juntarDados([empresa.cnpj ? "CNPJ " + empresa.cnpj : "", dadoResponsavelTecnico(empresa)]),
     juntarDados([{ v: empresa.email, texto: true }, empresa.telefone]),
   ].filter(Boolean);
   return linhas.join("<br/>");
@@ -227,14 +305,16 @@ export function linhasEmpresaHTML(empresa = {}) {
 /* Só as linhas de contato (sem o nome, que o cabeçalho já destaca) */
 function linhasContatoEmpresaHTML(empresa = {}) {
   return [
-    juntarDados([empresa.cnpj ? "CNPJ " + empresa.cnpj : "", { v: empresa.responsavel, texto: true }, empresa.registro]),
+    juntarDados([empresa.cnpj ? "CNPJ " + empresa.cnpj : "", dadoResponsavelTecnico(empresa)]),
     juntarDados([{ v: empresa.endereco, texto: true }, { v: empresa.email, texto: true }, empresa.telefone]),
   ].filter(Boolean).join("<br/>");
 }
 const logoEmpresaHTML = (empresa = {}) => {
   const src = empresa.logo || empresa.logoBase64 || "";
-  return src ? `<img src="${esc(src)}" alt="" />` : "";
+  return src ? `<img class="km-logo" src="${esc(src)}" alt="" />` : "";
 };
+/* Tamanho do nome da empresa no cabeçalho: razão social longa desce um pouco a letra (cabe em 2 linhas na coluna) */
+const classeTamanhoNome = nome => (nome.length > 44 ? " muito-longo" : (nome.length > 30 ? " longo" : ""));
 
 /* ═══ CABEÇALHO ═══
    gerarHeaderHTML({ tipo, numero, empresa, periodo, info_extra, subtitulo, compacto, emitido })
@@ -247,24 +327,26 @@ export function gerarHeaderHTML({ tipo, numero, empresa = {}, periodo, info_extr
   const periodoTxt = String(periodo || "").trim();
   const emitidoTxt = emitido || fmtDataHora();
   const nome = nomeEmpresa(empresa);
-  const linhaNum = [numeroTxt ? "Nº " + esc(numeroTxt) : "", periodoTxt ? esc(periodoTxt) : ""].filter(Boolean).join(" · ");
-  const sub = [subtitulo, info_extra].map(s => String(s || "").trim()).filter(Boolean).map(esc).join(" · ");
-  const dados = `class="km-header${compacto ? " compacto" : ""}" data-tipo="${esc(tipoTxt)}" data-numero="${esc(numeroTxt)}" data-periodo="${esc(periodoTxt)}" data-empresa="${esc(nome)}" data-emitido="${esc(emitidoTxt)}"`;
+  // Nº e período: cada um inteiro na linha (a quebra acontece entre eles, nunca no meio do número)
+  const linhaNum = [numeroTxt ? "Nº " + numeroTxt : "", ...partesPeriodo(periodoTxt)].filter(Boolean).map((t, i) => `<span class="km-inteiro">${i ? SEP_HTML : ""}${esc(t)}</span>`).join(" ");
+  const sub = sepGrudado([subtitulo, info_extra].map(s => String(s || "").trim()).filter(Boolean).map(esc).join(" · "));
+  const curto = nomeCurtoEmpresa(empresa);
+  const dados = `class="km-header${compacto ? " compacto" : ""}" data-tipo="${esc(tipoTxt)}" data-numero="${esc(numeroTxt)}" data-periodo="${esc(periodoTxt)}" data-empresa="${esc(nome)}"${curto ? ` data-empresa-curta="${esc(curto)}"` : ""} data-emitido="${esc(emitidoTxt)}"`;
   if (compacto) {
     return `
     <div ${dados}>
       <div class="km-header-linha"><span class="km-empresa-nome">${esc(nome) || "&nbsp;"}</span>${LOCKUP}</div>
       ${linhasContatoEmpresaHTML(empresa) ? `<div class="km-empresa-linhas">${linhasContatoEmpresaHTML(empresa)}</div>` : ""}
       <div class="km-header-linha"><span class="km-doc-tipo">${esc(tipoTxt)}</span>${linhaNum ? `<span class="km-doc-num">${linhaNum}</span>` : ""}</div>
-      <div class="km-doc-sub">${sub ? sub + " · " : ""}Emitido em <span class="km-emitido">${esc(emitidoTxt)}</span></div>
+      <div class="km-doc-sub">${sub ? sub + " " + SEP_HTML : ""}Emitido em <span class="km-emitido">${esc(emitidoTxt)}</span></div>
     </div>`;
   }
   return `
     <div ${dados}>
       <div class="km-header-empresa">
         ${logoEmpresaHTML(empresa)}
-        <div>
-          ${nome ? `<div class="km-empresa-nome">${esc(nome)}</div>` : ""}
+        <div class="km-empresa-texto">
+          ${nome ? `<div class="km-empresa-nome${classeTamanhoNome(nome)}">${esc(nome)}</div>` : ""}
           ${linhasContatoEmpresaHTML(empresa) ? `<div class="km-empresa-linhas">${linhasContatoEmpresaHTML(empresa)}</div>` : ""}
         </div>
       </div>
@@ -285,11 +367,13 @@ export function gerarHeaderHTML({ tipo, numero, empresa = {}, periodo, info_extr
    No visualizador o rodapé é repetido em todas as páginas e "Página N de M" é preenchido depois de paginar. */
 export function gerarFooterHTML({ empresa = {}, autor, documento, emitido, pagina, total } = {}) {
   const nome = nomeEmpresa(empresa);
+  const curto = nomeCurtoEmpresa(empresa);
   const emitidoTxt = emitido || fmtDataHora();
-  const esq = [nome ? `<b>${esc(nome)}</b>` : "", documento ? esc(documento) : "", autor ? esc(autor) : ""].filter(Boolean).join(" · ");
+  const esq = [nome ? `<b>${esc(nome)}</b>` : "", documento ? esc(documento) : "", autor ? esc(autor) : ""].filter(Boolean)
+    .map((t, i) => i ? `<span class="km-inteiro">${SEP_HTML}${t}</span>` : t).join(" ");
   const pag = `Página ${pagina || 1} de ${total || 1}`;
   return `
-    <div class="km-footer" data-empresa="${esc(nome)}" data-autor="${esc(autor || "")}" data-documento="${esc(documento || "")}" data-emitido="${esc(emitidoTxt)}">
+    <div class="km-footer" data-empresa="${esc(nome)}"${curto ? ` data-empresa-curta="${esc(curto)}"` : ""} data-autor="${esc(autor || "")}" data-documento="${esc(documento || "")}" data-emitido="${esc(emitidoTxt)}">
       <span class="km-footer-esq">${esq || "&nbsp;"}</span>
       <span class="km-footer-pag">${pag}</span>
       <span class="km-footer-dir">Emitido em ${esc(emitidoTxt)} · Sistema ${LOCKUP}</span>
@@ -297,15 +381,25 @@ export function gerarFooterHTML({ empresa = {}, autor, documento, emitido, pagin
 }
 
 /* ═══ ASSINATURAS ═══  padrão: responsável (autor ou empresa.responsavel) + fiscalização.
-   assinantes: [{ nome, cargo }] substitui os blocos padrão. */
+   assinantes: [{ nome, cargo }] substitui os blocos padrão.
+   O cargo "Responsável técnico · <registro>" nunca repete o rótulo: se o registro digitado já começa com
+   "Resp. técnico:" / "Responsável técnico:" (qualquer caixa ou abreviação), esse começo sai — vale também
+   para os assinantes montados pelos templates. */
+const normalizarCargo = cargo => {
+  const txt = String(cargo ?? "").trim();
+  const m = /^(.*?respons[aá]vel\s+t[eé]cnic[oa])\s*[·:\-–—]\s*(.+)$/i.exec(txt);
+  if (!m) return txt;
+  const reg = registroSemRotulo(m[2]);
+  return reg ? `${m[1]} · ${reg}` : m[1];
+};
 export function gerarAssinaturasHTML({ empresa = {}, autor, assinantes } = {}) {
   const lista = Array.isArray(assinantes) && assinantes.length ? assinantes : [
-    { nome: autor || empresa.responsavel || "", cargo: "Responsável técnico" + (empresa.registro ? " · " + empresa.registro : "") },
+    { nome: autor || empresa.responsavel || "", cargo: cargoResponsavelTecnico(empresa) },
     { nome: "Fiscalização", cargo: "Visto / Carimbo" },
   ];
   return `
     <div class="km-assinaturas">
-      ${lista.map(a => `<div class="ass"><b>${esc(a.nome) || "&nbsp;"}</b><span>${esc(a.cargo || "")}</span></div>`).join("")}
+      ${lista.map(a => `<div class="ass"><b>${esc(a.nome) || "&nbsp;"}</b><span>${textoQuebravel(normalizarCargo(a.cargo))}</span></div>`).join("")}
     </div>`;
 }
 
@@ -461,13 +555,14 @@ const cssImpressao = papel => `
    window.__kmzeroDocumentoMeta (se o template definir) e o 3º parâmetro de abrirOuBaixarHTML. */
 function extrairMeta(fonte, extra) {
   const texto = el => (el ? semEmoji(el.textContent) : "");
-  const meta = { tipo: "", numero: "", periodo: "", empresa: "", empresaObj: null, emitido: fmtDataHora(), autor: "", subtitulo: "", documentoTemplate: "" };
+  const meta = { tipo: "", numero: "", periodo: "", empresa: "", empresaCurta: "", empresaObj: null, emitido: fmtDataHora(), autor: "", subtitulo: "", documentoTemplate: "" };
   const h = fonte.querySelector(".km-header");
   if (h) {
     meta.tipo = h.dataset.tipo || texto(h.querySelector(".km-doc-tipo"));
     meta.numero = h.dataset.numero || "";
     meta.periodo = h.dataset.periodo || "";
     meta.empresa = h.dataset.empresa || texto(h.querySelector(".km-empresa-nome"));
+    meta.empresaCurta = h.dataset.empresaCurta || "";
     meta.emitido = h.dataset.emitido || texto(h.querySelector(".km-emitido")) || meta.emitido;
   } else {
     const h1 = fonte.querySelector("h1");
@@ -475,6 +570,7 @@ function extrairMeta(fonte, extra) {
   }
   fonte.querySelectorAll(".km-footer").forEach(f => {
     meta.empresa = meta.empresa || f.dataset.empresa || "";
+    meta.empresaCurta = meta.empresaCurta || f.dataset.empresaCurta || "";
     meta.autor = meta.autor || f.dataset.autor || "";
     meta.documentoTemplate = meta.documentoTemplate || semEmoji(f.dataset.documento || "");
     if (f.dataset.emitido) meta.emitido = f.dataset.emitido;
@@ -487,10 +583,11 @@ function extrairMeta(fonte, extra) {
     for (const k of ["tipo", "numero", "periodo", "emitido", "autor", "subtitulo"]) {
       if (fonteExtra[k] !== undefined && fonteExtra[k] !== null && fonteExtra[k] !== "") meta[k] = k === "numero" ? fmtNumeroDoc(fonteExtra[k]) : String(fonteExtra[k]);
     }
-    if (fonteExtra.empresa && typeof fonteExtra.empresa === "object") { meta.empresaObj = fonteExtra.empresa; meta.empresa = nomeEmpresa(fonteExtra.empresa) || meta.empresa; }
+    if (fonteExtra.empresa && typeof fonteExtra.empresa === "object") { meta.empresaObj = fonteExtra.empresa; meta.empresa = nomeEmpresa(fonteExtra.empresa) || meta.empresa; meta.empresaCurta = nomeCurtoEmpresa(fonteExtra.empresa) || meta.empresaCurta; }
     else if (fonteExtra.empresa) meta.empresa = String(fonteExtra.empresa);
   }
   meta.tipo = semEmoji(meta.tipo);
+  if (meta.empresaCurta && meta.empresaCurta.toLowerCase() === String(meta.empresa).toLowerCase()) meta.empresaCurta = "";
   meta.referencia = [meta.numero ? "Nº " + meta.numero : "", meta.periodo].filter(Boolean).join(" · ");
   // rodapé: o "documento" que o template passou a gerarFooterHTML; senão tipo + Nº (o período fica no cabeçalho e na continuação)
   meta.documento = meta.documentoTemplate || [meta.tipo, meta.numero ? "Nº " + meta.numero : ""].filter(Boolean).join(" ");
@@ -510,22 +607,36 @@ function prepararCabecalhoMinimo(fonte, meta) {
   if (cab) h1.replaceWith(cab);
 }
 
-/* Cabeçalho de continuação: tipo · Nº/período · empresa · continuação. No A6 a empresa sai (já está no rodapé de toda página). */
-function montarContinua(meta, papel = PAPEIS.a4) {
+/* Cabeçalho de continuação: tipo · Nº · período · empresa · continuação. No A6 a empresa sai (já está no rodapé de toda página).
+   Nada é cortado: cada parte vai inteira para a linha seguinte se não couber (.km-inteiro); a empresa pode quebrar.
+   "empresaTxt" é o nome escolhido pelo paginador (razão social, ou o nome fantasia se a razão social não couber). */
+function montarContinua(meta, papel = PAPEIS.a4, empresaTxt = meta.empresa) {
   const d = document.createElement("div");
   d.className = "km-continua";
   const curto = papel.id === "a6";
-  const partes = [meta.tipo ? `<b>${esc(meta.tipo)}</b>` : "", meta.referencia ? esc(meta.referencia) : "", meta.empresa && !curto ? esc(meta.empresa) : "", "continuação"].filter(Boolean);
-  d.innerHTML = `<span>${partes.join(" · ")}</span><span>${LOCKUP}</span>`;
+  // cada parte leva o separador grudado na frente ("·&nbsp;parte"): a quebra nunca deixa "·" no fim da linha
+  const partes = [
+    meta.tipo ? { html: esc(meta.tipo), tag: "b", classe: "km-inteiro" } : null,
+    meta.numero ? { html: "Nº " + esc(meta.numero) } : null,
+    ...partesPeriodo(meta.periodo).map(t => ({ html: esc(t) })),
+    empresaTxt && !curto ? { html: esc(empresaTxt), classe: "km-continua-empresa" } : null,
+    { html: "continuação" },
+  ].filter(Boolean).map((p, i) => {
+    const tag = p.tag || "span";
+    return `<${tag} class="${p.classe || "km-inteiro"}">${i ? SEP_HTML : ""}${p.html}</${tag}>`;
+  });
+  d.innerHTML = `<span>${partes.join(" ")}</span><span>${LOCKUP}</span>`;
   return d;
 }
 
 /* Rodapé: empresa · documento | Página N de M | Emitido em … · Sistema KMZERO.
-   No A6: empresa · Nº | Página N de M | Sistema KMZERO (a hora de emissão já está no cabeçalho). */
-function montarFooter(meta, papel) {
+   No A6: empresa · Nº | Página N de M | Sistema KMZERO (a hora de emissão já está no cabeçalho).
+   O nome do documento e "Página N de M" saem sempre inteiros; a empresa pode quebrar (ou virar o nome fantasia). */
+function montarFooter(meta, papel, empresaTxt = meta.empresa) {
   const d = document.createElement("div");
   const curto = papel.id === "a6";
-  const esq = [meta.empresa ? `<b>${esc(meta.empresa)}</b>` : "", curto ? (meta.numero ? "Nº " + esc(meta.numero) : "") : (meta.documento ? esc(meta.documento) : "")].filter(Boolean).join(" · ");
+  const doc = curto ? (meta.numero ? "Nº " + esc(meta.numero) : "") : (meta.documento ? esc(meta.documento) : "");
+  const esq = [empresaTxt ? `<b class="km-footer-empresa">${esc(empresaTxt)}</b>` : "", doc ? `<span class="km-inteiro">${empresaTxt ? SEP_HTML : ""}${doc}</span>` : ""].filter(Boolean).join(" ");
   d.innerHTML = `
     <div class="km-footer" data-empresa="${esc(meta.empresa)}" data-documento="${esc(meta.documento)}" data-emitido="${esc(meta.emitido)}">
       <span class="km-footer-esq">${esq || "&nbsp;"}</span>
@@ -533,6 +644,54 @@ function montarFooter(meta, papel) {
       <span class="km-footer-dir">${curto ? "" : "Emitido em " + esc(meta.emitido) + " · "}Sistema ${LOCKUP}</span>
     </div>`;
   return d.firstElementChild;
+}
+
+/* Cabeçalho (grade empresa | documento | emitido): a coluna do documento ocupa o que precisa até um limite e a da
+   empresa fica com o resto. O limite sai de medir (34% a 46% da largura): vale o que deixa o cabeçalho mais baixo;
+   no empate (até 1 px), o maior — o Nº, o período e o subtítulo do documento quebram menos. Empresa com texto curto
+   não deixa vão vazio enquanto o período quebra; empresa com logo largo e texto longo não perde largura à toa.
+   Sem o visualizador (HTML bruto), vale o limite do CSS. */
+const LIMITES_COLUNA_DOC = [34, 38, 42, 46];
+function ajustarColunasCabecalho(h) {
+  if (!h || !h.isConnected || h.classList.contains("compacto")) return;
+  if (getComputedStyle(h).display !== "grid") { ocultarSeparadoresNaQuebra(h); return; }
+  let melhor = null;
+  for (const lim of LIMITES_COLUNA_DOC) {
+    h.style.gridTemplateColumns = `minmax(0, 1fr) fit-content(${lim}%) auto`;
+    ocultarSeparadoresNaQuebra(h);
+    const alt = h.getBoundingClientRect().height;
+    if (!melhor || alt <= melhor.alt + 1) melhor = { lim, alt: melhor ? Math.min(alt, melhor.alt) : alt };
+  }
+  h.style.gridTemplateColumns = `minmax(0, 1fr) fit-content(${melhor.lim}%) auto`;
+  ocultarSeparadoresNaQuebra(h);
+}
+
+/* Separador " · " que abriu uma linha nova (a quebra caiu antes dele): some. Mede em ordem, um por vez — esconder
+   um separador só mexe no que vem depois dele. */
+function ocultarSeparadoresNaQuebra(raiz) {
+  if (!raiz || !raiz.isConnected) return;
+  for (const sep of raiz.querySelectorAll(".km-sep")) {
+    sep.style.display = "";
+    const r = sep.getBoundingClientRect();
+    if (!r.height) continue;
+    const bloco = sep.closest(".km-empresa-linhas, .km-doc-num, .km-doc-sub, .km-header-linha, .km-continua > span, .km-footer-esq") || sep.parentElement;
+    if (!bloco) continue;
+    const faixa = document.createRange();
+    faixa.setStart(bloco, 0);
+    faixa.setEndBefore(sep);
+    const antes = [...faixa.getClientRects()].filter(x => x.width > 0.5 && x.height > 0.5);
+    const ultimo = antes[antes.length - 1];
+    if (ultimo && r.top >= ultimo.bottom - 2) sep.style.display = "none";
+  }
+}
+
+/* O texto quebrou em mais de uma linha? (mede a altura contra a altura de linha calculada) */
+function quebrouLinha(el) {
+  if (!el) return false;
+  const cs = getComputedStyle(el);
+  let lh = parseFloat(cs.lineHeight);
+  if (!lh || isNaN(lh)) lh = (parseFloat(cs.fontSize) || 10) * 1.35;
+  return el.getBoundingClientRect().height > lh * 1.5;
 }
 
 /* ── O paginador ──
@@ -543,13 +702,20 @@ function montarFooter(meta, papel) {
    - títulos (.sec, h1-h4, .junto) nunca ficam por último na página; .quebra força nova página;
    - .km-assinaturas (ou .km-com-anterior) que não cabe leva junto o último bloco da página (se ele tiver
      menos de 60 mm e a página não ficar vazia), para não abrir uma página só com as assinaturas;
-   - bloco indivisível maior que uma página fica sozinho (aviso no console). */
+   - nota (.nota, ou <p>/<small> até 15 mm) ou assinaturas logo depois de uma TABELA nunca abrem a página
+     sozinhas: as 2 últimas linhas da tabela (o total nunca sozinho) vão junto, com o cabeçalho repetido;
+     tabela com poucas linhas nesta página vai inteira (regra dos 60 mm acima);
+   - bloco indivisível maior que uma página fica sozinho (aviso no console).
+   O rodapé e a continuação usam a razão social; se ela não couber numa linha, o nome fantasia (se houver). */
 function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
   const TOL = pxPorMM() * 2;
   const ALTURA_LEVAR = pxPorMM() * 60; // bloco de até 60 mm acompanha as assinaturas para a página seguinte
   const TAGS_FOLHA = new Set(["TABLE", "IMG", "SVG", "CANVAS", "VIDEO", "IFRAME", "HR", "BR", "INPUT", "BUTTON", "SELECT", "TEXTAREA", "PRE", "THEAD", "TBODY", "TFOOT", "TR", "FIGURE"]);
   const paginas = [];
   let atual = null;
+  /* Nome da empresa no rodapé e na continuação: a razão social; se ela fizer a linha quebrar e houver nome
+     fantasia, o nome fantasia (decidido na 1ª vez que cada um aparece, medindo, e mantido nas páginas seguintes). */
+  const nomes = { rodape: meta.empresa, continua: meta.empresa, rodapeDecidido: !meta.empresaCurta, continuaDecidido: !meta.empresaCurta };
 
   const novaPagina = () => {
     const pg = document.createElement("div");
@@ -560,12 +726,33 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
     const corpo = document.createElement("div");
     corpo.className = "km-pagina-corpo";
     corpo.style.cssText = "flex:1 1 0;min-height:0;position:relative;";
-    if (paginas.length) corpo.appendChild(montarContinua(meta, papel));
-    const rodape = montarFooter(meta, papel);
+    let continua = null;
+    if (paginas.length) { continua = montarContinua(meta, papel, nomes.continua); corpo.appendChild(continua); }
+    let rodape = montarFooter(meta, papel, nomes.rodape);
     rodape.style.flex = "0 0 auto";
     pg.appendChild(corpo);
     pg.appendChild(rodape);
     raiz.appendChild(pg);
+    if (!nomes.rodapeDecidido) {
+      nomes.rodapeDecidido = true;
+      if (quebrouLinha(rodape.querySelector(".km-footer-esq"))) {
+        nomes.rodape = meta.empresaCurta;
+        const novo = montarFooter(meta, papel, nomes.rodape);
+        novo.style.flex = "0 0 auto";
+        rodape.replaceWith(novo);
+        rodape = novo;
+      }
+    }
+    if (continua && !nomes.continuaDecidido) {
+      nomes.continuaDecidido = true;
+      if (quebrouLinha(continua.firstElementChild)) {
+        nomes.continua = meta.empresaCurta;
+        const novo = montarContinua(meta, papel, nomes.continua);
+        continua.replaceWith(novo);
+      }
+    }
+    ocultarSeparadoresNaQuebra(pg.querySelector(".km-continua"));
+    ocultarSeparadoresNaQuebra(rodape);
     const p = { el: pg, corpo, rodape, mapa: new Map(), blocos: [] };
     paginas.push(p);
     return p;
@@ -577,6 +764,20 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
     if (i >= 0) paginas.splice(i, 1);
   };
   const limite = p => p.corpo.getBoundingClientRect().bottom + TOL;
+  /* Altura útil de uma página de continuação (corpo menos o cabeçalho de continuação): medida na 1ª página que tiver
+     continuação; antes disso, estimada pelo corpo da página atual menos 12 mm. */
+  let alturaUtilContinuacao = 0;
+  const alturaUtil = p => {
+    const c = p.corpo.getBoundingClientRect();
+    const cont = p.corpo.querySelector(":scope > .km-continua");
+    if (cont) {
+      const r = cont.getBoundingClientRect();
+      const h = c.bottom - r.bottom - (parseFloat(getComputedStyle(cont).marginBottom) || 0);
+      if (!alturaUtilContinuacao) alturaUtilContinuacao = h;
+      return h;
+    }
+    return alturaUtilContinuacao || (c.height - pxPorMM() * 12);
+  };
   const alvoPara = (p, item) => {
     let pai = p.corpo;
     for (const anc of item.cadeia) {
@@ -612,10 +813,12 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
   };
   const ehTitulo = el => el.nodeType === 1 && (el.matches("h1, h2, h3, h4, .sec, .junto") || /avoid/.test(getComputedStyle(el).breakAfter));
   const exigeQuebra = el => el.nodeType === 1 && (el.classList.contains("quebra") || /page|always|left|right/.test(getComputedStyle(el).breakBefore));
-  const podeAbrir = el => {
+  /* ignorarAvoid: rede de segurança para bloco "inteiro" (break-inside: avoid) maior que uma página — abrir é melhor
+     que deixar sozinho e cortado (a tabela de dentro se divide pelas linhas, como qualquer quadro longo). */
+  const podeAbrir = (el, ignorarAvoid = false) => {
     if (el.nodeType !== 1 || TAGS_FOLHA.has(el.tagName) || el.classList.contains("km-solto")) return false;
     const cs = getComputedStyle(el);
-    if (/avoid/.test(cs.breakInside) || cs.position === "absolute" || cs.position === "fixed" || cs.display === "none") return false;
+    if ((!ignorarAvoid && /avoid/.test(cs.breakInside)) || cs.position === "absolute" || cs.position === "fixed" || cs.display === "none") return false;
     // linha flex horizontal (filhos lado a lado) é indivisível: abrir separaria as colunas entre páginas
     if (/flex/.test(cs.display) && /^row/.test(cs.flexDirection) && cs.flexWrap === "nowrap") return false;
     const uteis = [...el.childNodes].filter(n => n.nodeType === 1 || (n.nodeType === 3 && n.textContent.trim()));
@@ -668,6 +871,46 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
     removerItem(p, ultimo);
     const orfaos = retirarOrfaos(p);
     return [...orfaos, ultimo];
+  };
+
+  /* Nota que pertence ao bloco de cima: .nota (qualquer altura) ou parágrafo pequeno (<p>/<small> até 15 mm). */
+  const ALTURA_NOTA = pxPorMM() * 15;
+  const ehNota = el => el.nodeType === 1 && (el.classList.contains("nota") || ((el.tagName === "P" || el.tagName === "SMALL") && el.getBoundingClientRect().height <= ALTURA_NOTA));
+  const ultimoConteudo = p => { const u = p.blocos[p.blocos.length - 1]; return u && !u.orfaoMovido ? u : null; };
+  /* Nota (ou assinaturas) que não coube logo depois de uma tabela: em vez de abrir a página seguinte sozinha,
+     leva junto as últimas linhas da tabela (2 linhas; a linha de total nunca vai sozinha). Ficam ao menos
+     2 linhas nesta página; senão devolve null (e quem chamou tenta levar a tabela inteira, se for curta).
+     A parte levada é um clone da tabela com o cabeçalho (thead / cabeçalho sintético) repetido. */
+  const partirFimTabela = (p, item) => {
+    const tabela = item.el;
+    const corpos = [...tabela.tBodies].filter(tb => !tb.classList.contains("km-cabecalho-repetido"));
+    const linhas = corpos.flatMap(tb => [...tb.rows]);
+    const cabecalho = [];
+    const repetido = [...tabela.tBodies].find(tb => tb.classList.contains("km-cabecalho-repetido"));
+    if (repetido) cabecalho.push(...repetido.rows);
+    else if (!tabela.tHead) while (linhas.length && linhas[0].cells.length && [...linhas[0].cells].every(c => c.tagName === "TH")) cabecalho.push(linhas.shift());
+    let k = linhas.length - 2; // linhas que ficam nesta página
+    while (k > 0 && linhas[k] && linhas[k].classList.contains("total")) k--;
+    if (k < 2) return null;
+    const resto = tabela.cloneNode(false);
+    resto.classList.add("km-continuacao");
+    for (const filho of [...tabela.children]) if (filho.tagName === "CAPTION" || filho.tagName === "COLGROUP" || filho.tagName === "THEAD") resto.appendChild(filho.cloneNode(true));
+    if (cabecalho.length) {
+      const tb = document.createElement("tbody");
+      tb.className = "km-cabecalho-repetido";
+      cabecalho.forEach(tr => tb.appendChild(tr.cloneNode(true)));
+      resto.appendChild(tb);
+    }
+    const clones = new Map();
+    for (let i = k; i < linhas.length; i++) {
+      const tr = linhas[i], orig = tr.parentElement;
+      let c = clones.get(orig);
+      if (!c) { c = orig.cloneNode(false); clones.set(orig, c); resto.appendChild(c); }
+      c.appendChild(tr);
+    }
+    if (tabela.tFoot) resto.appendChild(tabela.tFoot);
+    corpos.forEach(tb => { if (!tb.rows.length) tb.remove(); });
+    return { el: resto, cadeia: item.cadeia, continuacao: true };
   };
 
   /* Divide a tabela pelas linhas que cabem. Devolve true se colocou uma parte (o resto volta para a fila). */
@@ -760,6 +1003,7 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
     const pai = alvoPara(atual, item);
     pai.appendChild(el);
     atual.blocos.push(item);
+    if (el.nodeType === 1 && el.classList.contains("km-header")) { if (el.classList.contains("compacto")) ocultarSeparadoresNaQuebra(el); else ajustarColunasCabecalho(el); }
     // quebra forçada (.quebra ou break-before: page) com conteúdo na página → próxima página
     if (!item.jaQuebrou && tinhaConteudo && exigeQuebra(el)) {
       item.jaQuebrou = true;
@@ -773,8 +1017,21 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
     // não coube: decide enquanto ainda está no DOM (estilos computados)
     const ehTabela = el.nodeType === 1 && el.tagName === "TABLE";
     const abrivel = !ehTabela && podeAbrir(el);
+    // bloco "inteiro" (break-inside: avoid) que só não abre por causa do avoid: se for maior que uma página inteira,
+    // abre aqui mesmo (o título e as primeiras linhas ficam nesta página, o resto segue) em vez de sair cortado
+    const abrivelForcado = !ehTabela && !abrivel && podeAbrir(el, true);
+    const maiorQuePagina = abrivelForcado && el.getBoundingClientRect().height > alturaUtil(atual) + TOL;
+    const nota = !ehTabela && ehNota(el);
     removerItem(atual, item);
     const fresca = !temConteudo(atual);
+    const anterior = ultimoConteudo(atual);
+    const aposTabela = !!(anterior && anterior.el.nodeType === 1 && anterior.el.tagName === "TABLE");
+
+    // nota (ou assinaturas) logo depois de uma tabela nunca abre a página sozinha: leva as últimas linhas junto
+    if (!fresca && aposTabela && (nota || ficaComAnterior(el))) {
+      const parte = partirFimTabela(atual, anterior);
+      if (parte) { fila.unshift(parte, item); atual = null; continue; }
+    }
 
     if (ehTabela) {
       if (dividirTabela(atual, item, fresca, fila)) { atual = null; continue; }
@@ -785,7 +1042,8 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
         atual = null;
         continue;
       }
-    } else if (abrivel) {
+    } else if (abrivel || maiorQuePagina || (fresca && abrivelForcado)) {
+      if (!abrivel) console.warn("[KMZERO documentos] bloco inteiro maior que a página; aberto para dividir:", el);
       fila.unshift(...abrir(item));
       continue;
     } else if (fresca) {
@@ -795,9 +1053,9 @@ function paginarDocumento({ raiz, fonte, papel, meta, classesPagina = [] }) {
       atual = null;
       continue;
     }
-    // vai para a próxima página, levando títulos órfãos do fim desta (e, para assinaturas, o último bloco curto)
+    // vai para a próxima página, levando títulos órfãos do fim desta (e, para assinaturas e notas, o último bloco curto)
     const orfaos = retirarOrfaos(atual);
-    const anteriores = ficaComAnterior(el) ? levarAnterior(atual) : [];
+    const anteriores = (ficaComAnterior(el) || (nota && (aposTabela || el.classList.contains("nota")))) ? levarAnterior(atual) : [];
     fila.unshift(...anteriores, ...orfaos, item);
     descartarPaginaVazia(atual);
     atual = null;
