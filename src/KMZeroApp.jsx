@@ -4,15 +4,18 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { logoutFirebase, resultadoRedirecionamento, aguardarSessao } from "./firebase.js";
 
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "./theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T, DEFAULT_FONT, ESCURO } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
-import { setEmpresaId, getEmpresaId, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
+import { setEmpresaId, getEmpresaId, setModoDemo, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
-import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
-import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "./components/ui.jsx";
+import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, gerarDadosDemo, gerarAvisosDemo, DEMO_ID, DEMO_USUARIO, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
+import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, UsuarioContext, EscritorioContext } from "./components/ui.jsx";
 import { MenuLateral } from "./components/MenuLateral.jsx";
+import { TODAS_TELAS_MENU } from "./components/menuGrupos.js";
 import { useModoEscritorio } from "./lib/useLargura.js";
+import { CHAVE_TEMA, aplicarTema } from "./lib/useTema.js";
+import { LARGURA_POR_TELA, tipoDaTela } from "./lib/layoutEscritorio.js";
 import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
 
 /* ── Telas separadas por domínio ── */
@@ -28,18 +31,62 @@ import { TelaEquip, TelaEquipamentosGestao, TelaFrota, TelaAtivos, TelaFerrament
 import { TelaCustos, TelaDespesasAvulsas, TelaPagamentos } from "./screens/financeiro.jsx";
 import { TelaRDO, gerarPDFRDORabnt, TelaCronograma, TelaCronogramaPro, CurvaSChart, calcularKPIsCronograma, detectarInconsistenciasCronograma, calcularPctPrevistoEtapa, gerarPontosCurvaS, TelaProdutividade } from "./screens/rdo.jsx";
 import { TelaFotos, TelaGaleria, TelaAnexosObra, TelaMensagens, TelaLinks } from "./screens/midia.jsx";
+import { TelaAvisos } from "./screens/avisos.jsx";
+import { observarAvisosNuvem, observarLeituraAvisos, marcarAvisosLidos, publicarAviso, renovarNotificacoes, desligarNotificacoes, situacaoNotificacoes } from "./lib/avisos.js";
+import { avisoEhPara, uidDe } from "./lib/avisosRegras.js";
 import { TelaConfigEmpresa, TelaEscritorio, TelaAjuda, TelaBackup, TelaGerarSimulacao, TelaDiagnostico, TelaZerarTudo } from "./screens/sistema.jsx";
 
-export default function App() {
-  const [splashAtivo, setSplashAtivo] = useState(true);
-  const [splashSaindo, setSplashSaindo] = useState(false);
-  useEffect(() => {
-    const tSaida = setTimeout(() => setSplashSaindo(true), 4100); // inicia fade-out
-    const tFim = setTimeout(() => setSplashAtivo(false), 4500);   // remove de vez
-    return () => { clearTimeout(tSaida); clearTimeout(tFim); };
-  }, []);
+/* ── MODO DEMONSTRAÇÃO (/app/?demo=1, apelido /app/demo) ──────────────────────
+   Demo pública sem login, como GESTOR da "Construtora Exemplo". Três defesas para
+   nada vazar para a nuvem nem para a empresa real deste navegador:
+   1) store.js: setModoDemo(true) faz cloudRefs() devolver null → nenhuma função de
+      nuvem (store.js, avisos.js, cloudSync.js) chega ao Firestore/Storage;
+   2) DEMO_USUARIO sem firebaseUid → syncAtivo e os observadores diretos ficam desligados;
+   3) o boot pula aguardarSessao/resultadoRedirecionamento/verificarAcessoNuvem e nunca
+      grava _kmzero_empresaId nem _kmzero_sessao: a conta Google real não é tocada.
+   Os dados vivem em localStorage com prefixo demo_ (empresaId "demo") e no IndexedDB
+   demo_files; "Sair" apaga tudo isso e volta para a vitrine. */
+const CHAVE_SEMENTE_DEMO = "demo__semente";
+const detectarDemo = () => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    return p.get("demo") === "1" || /^\/app\/demo\/?$/.test(window.location.pathname);
+  } catch { return false; }
+};
+// Tema da demo: ?tema=claro|escuro grava a preferência (só na demo) antes do app montar — capturas e links da vitrine
+const aplicarTemaDaDemo = () => {
+  try {
+    const t = new URLSearchParams(window.location.search).get("tema");
+    if (t === "claro" || t === "escuro") { localStorage.setItem(CHAVE_TEMA, t); aplicarTema(t); }
+  } catch {}
+};
+// Tela inicial da demo: ?tela=<nav do menu> abre direto nela (links da vitrine e capturas); senão, o Painel
+const telaInicialDemo = () => {
+  try {
+    const t = new URLSearchParams(window.location.search).get("tela");
+    return t && TODAS_TELAS_MENU.has(t) ? t : "gestor";
+  } catch { return "gestor"; }
+};
+// Limpeza oportunista: em todo login real, apaga o que a demo deixou (chaves demo_* e o banco demo_files)
+const limparRestosDemo = () => {
+  try { Object.keys(localStorage).filter(k => k.startsWith("demo_")).forEach(k => localStorage.removeItem(k)); } catch {}
+  try { if (typeof indexedDB !== "undefined") indexedDB.deleteDatabase("demo_files"); } catch {}
+};
+// Faixa fixa no topo: ouro, 32 px, acima de tudo (os wrappers compensam com paddingTop 32)
+function FaixaDemo({ onSair }) {
+  return (
+    <div className="km-faixa-demo" role="status" style={{ position: "fixed", top: 0, left: 0, right: 0, height: 32, zIndex: 10000, background: GOLD, color: NAVY, fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "0 12px", boxSizing: "border-box", fontFamily: DEFAULT_FONT }}>
+      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Modo demonstração<span className="km-faixa-demo-longo"> — dados de exemplo</span></span>
+      <button type="button" onClick={onSair} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", minHeight: 0, height: 24, lineHeight: "18px", fontFamily: "inherit", flexShrink: 0 }}>Sair</button>
+      <a href="/?site#contato" style={{ color: NAVY, fontSize: 12, fontWeight: 700, textDecoration: "underline", whiteSpace: "nowrap", flexShrink: 0 }}>Quero na minha obra</a>
+    </div>
+  );
+}
 
+export default function App() {
   const [tela, setTelaRaw]        = useState("login");
+  // Demonstração pública (/app/?demo=1): decidido uma vez, na abertura
+  const [modoDemo] = useState(detectarDemo);
   const [historicoTelas, setHistoricoTelas] = useState([]); // pilha de navegação
   const [usuario, setUsuario]     = useState(null);
   // Largura da tela: >= 1024 px vira "modo escritório" (só para gestor, ver `escritorio` abaixo)
@@ -80,18 +127,41 @@ export default function App() {
   const [empresaIdState, setEmpresaIdState] = useState(null);
   const [usuarios, setUsuarios]   = useState([]);
   const [usuarioGoogle, setUsuarioGoogle] = useState(null); // conta Google sem empresa (primeiro acesso)
-  const [erroEntrada, setErroEntrada] = useState("");        // erro vindo do login por redirecionamento
+  const [erroEntrada, setErroEntrada] = useState("");        // aviso para a tela de entrada: { codigo, mensagem, email } (redirect, acesso desativado)
   const [obras, setObras]         = useState([]);
   const [trabalhadores, setTrab]  = useState([]);
   const [equips, setEquips]       = useState([]);
   const [pedidos, setPedidos]     = useState([]);
+  // Refs para os avisos automáticos lerem o valor atual dentro de callbacks estáveis
+  const usuarioRef = useRef(null); usuarioRef.current = usuario;
+  const pedidosRef = useRef([]);   pedidosRef.current = pedidos;
+  const enviarAvisoRef = useRef(null); // preenchido mais abaixo, onde enviarAviso é criado
 
   // ── SYNC PEDIDOS (Fase 2): lançador cria na obra, gestor vê de qualquer cidade ──
-  const criarPedidoSync = useCallback(p => {
+  const criarPedidoSync = useCallback(p0 => {
+    const p = { ...p0, criadoPorUid: p0.criadoPorUid || uidDe(usuarioRef.current) || null };
     setPedidos(ps => [p, ...ps]);
     enviarDocNuvem("pedidos", p.id, p);
+    // Aviso: gestores recebem o pedido novo
+    const itens = (p.itens || []).map(i => [i.material, i.qtd && `(${i.qtd}${i.unidade ? " " + i.unidade : ""})`].filter(Boolean).join(" "));
+    enviarAvisoRef.current?.({
+      tipo: "pedido", titulo: `📦 Pedido de material — ${p.obra || "obra"}`,
+      texto: `${p.enc || "Encarregado"} pediu: ${itens.slice(0, 4).join(", ") || p.material || ""}${itens.length > 4 ? ` e mais ${itens.length - 4}` : ""}`,
+      para: { tipo: "gestores" }, navegarPara: "pedidos",
+    });
   }, []);
   const mudarStatusPedidoSync = useCallback((id, status, extras = {}) => {
+    // Aviso: quem pediu fica sabendo que o gestor aprovou/negou/entregou
+    const antes = pedidosRef.current.find(x => x.id === id);
+    if (antes && antes.status !== status && ["Aprovado", "Negado", "Entregue", "Recebido"].includes(status)) {
+      const icone = status === "Negado" ? "❌" : "✅";
+      enviarAvisoRef.current?.({
+        tipo: "pedido", titulo: `${icone} Pedido ${status.toLowerCase()} — ${antes.obra || "obra"}`,
+        texto: [antes.material, extras.prazoEntrega && `Entrega: ${extras.prazoEntrega}`].filter(Boolean).join(" · "),
+        para: antes.criadoPorUid ? { tipo: "pessoa", uid: antes.criadoPorUid } : { tipo: "obra", obraId: antes.obraId, perfil: "encarregado" },
+        navegarPara: "home",
+      });
+    }
     setPedidos(ps => ps.map(p => {
       if (p.id !== id) return p;
       const novo = { ...p, status, ...extras };
@@ -124,7 +194,7 @@ export default function App() {
     }));
   }, []);
   useEffect(() => {
-    if (!usuario?.firebaseUid) return;
+    if (modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("mensagens", nuvem => {
       setMensagens(loc => {
         const porId = new Map(loc.map(m => [String(m.id), m]));
@@ -133,6 +203,59 @@ export default function App() {
       });
     });
   }, [usuario?.firebaseUid]);
+
+  // ── AVISOS (notificações): sininho no app + push no celular (api/notificar) ──
+  const [avisos, setAvisos] = useState([]);
+  const [ultimaLeituraAvisos, setUltimaLeituraAvisos] = useState(0);
+  const [avisoNaTela, setAvisoNaTela] = useState(null); // faixa no topo quando o push não está ligado
+  const enviarAviso = useCallback(async parcial => {
+    const u = usuarioRef.current;
+    if (!u) return { ok: false, erro: "Sem login." };
+    const agora = Date.now();
+    const aviso = { id: String(agora), criadoEm: agora, de: uidDe(u), deNome: u.nome || "", tipo: "manual", ...parcial };
+    setAvisos(as => [aviso, ...as.filter(a => a.id !== aviso.id)]);
+    if (modoDemo) return { ok: true }; // demo: fica só em memória (sem nuvem, sem push)
+    try { return await publicarAviso(aviso); }
+    catch (e) { console.error("enviarAviso:", e); return { ok: false, erro: "Não foi possível enviar agora." }; }
+  }, []);
+  enviarAvisoRef.current = enviarAviso;
+  useEffect(() => {
+    if (modoDemo || !usuario?.firebaseUid || !empresaIdState) return;
+    const pararA = observarAvisosNuvem(nuvem => setAvisos(loc => {
+      const porId = new Map(loc.map(a => [String(a.id), a]));
+      nuvem.forEach(n => porId.set(String(n.id), n));
+      return [...porId.values()];
+    }));
+    const pararL = observarLeituraAvisos(usuario.firebaseUid, t => setUltimaLeituraAvisos(v => Math.max(v, t)));
+    renovarNotificacoes(usuario);
+    return () => { pararA(); pararL(); };
+  }, [usuario?.firebaseUid, empresaIdState]);
+  const avisosVisiveis = useMemo(() => {
+    if (!usuario) return [];
+    const eu = uidDe(usuario);
+    return avisos.filter(a => a.de === eu || avisoEhPara(a, usuario)).sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0));
+  }, [avisos, usuario]);
+  const avisosNaoLidos = useMemo(() => {
+    const eu = uidDe(usuario);
+    return avisosVisiveis.filter(a => a.de !== eu && (a.criadoEm || 0) > ultimaLeituraAvisos).length;
+  }, [avisosVisiveis, ultimaLeituraAvisos, usuario]);
+  const marcarAvisosLidosAgora = useCallback(() => {
+    const agora = Date.now();
+    setUltimaLeituraAvisos(agora);
+    marcarAvisosLidos(usuarioRef.current?.firebaseUid, agora);
+  }, []);
+  // Aviso novo com o app aberto e sem push ligado: mostra uma faixa no topo por alguns segundos
+  const inicioSessaoRef = useRef(Date.now());
+  const avisosJaMostradosRef = useRef(new Set());
+  useEffect(() => {
+    const eu = uidDe(usuario);
+    const novo = avisosVisiveis.find(a => a.de !== eu && (a.criadoEm || 0) > inicioSessaoRef.current && !avisosJaMostradosRef.current.has(a.id));
+    avisosVisiveis.forEach(a => avisosJaMostradosRef.current.add(a.id));
+    if (!novo || situacaoNotificacoes() === "ligada") return;
+    setAvisoNaTela(novo);
+    const t = setTimeout(() => setAvisoNaTela(x => (x === novo ? null : x)), 8000);
+    return () => clearTimeout(t);
+  }, [avisosVisiveis]);
   const [diario, setDiario]       = useState([]);
   const [ativos, setAtivos]       = useState([]);
   const [abastecimentos, setAbast]= useState([]);
@@ -157,7 +280,7 @@ export default function App() {
     removerDocNuvem("rdos", id);
   }, []);
   useEffect(() => {
-    if (!usuario?.firebaseUid) return;
+    if (modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("rdos", nuvem => {
       setRdos(loc => {
         const ids = new Set(loc.map(r => String(r.id)));
@@ -197,7 +320,7 @@ export default function App() {
 
   // Recebe fotos dos outros aparelhos em tempo real (gestor vê fotos do encarregado)
   useEffect(() => {
-    if (!usuario?.firebaseUid) return;
+    if (modoDemo || !usuario?.firebaseUid) return;
     const parar = observarFotosNuvem(nuvem => {
       setFotosObras(loc => {
         const ids = new Set(loc.map(x => String(x.id)));
@@ -210,7 +333,7 @@ export default function App() {
 
   // Recebe pedidos de todos os aparelhos (nuvem vence em caso de mesmo id — ex: aprovação do gestor)
   useEffect(() => {
-    if (!usuario?.firebaseUid) return;
+    if (modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("pedidos", nuvem => {
       setPedidos(loc => {
         const porId = new Map(loc.map(p => [String(p.id), p]));
@@ -222,7 +345,7 @@ export default function App() {
 
   // Recebe presenças de todos os aparelhos (gestor enxerga o ponto lançado na obra)
   useEffect(() => {
-    if (!usuario?.firebaseUid) return;
+    if (modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("presencas", docs => {
       setHistorico(local => {
         const novo = { ...local };
@@ -257,8 +380,9 @@ export default function App() {
       store.set("usuarioLogado", null);
       localStorage.removeItem("_kmzero_sessao");
       setUsuario(null);
+      // A tela de entrada mostra o aviso (AvisoEntrada, com "Entrar com outra conta" e "Falar com o gestor")
+      setErroEntrada({ codigo: "acesso-desativado", email: u.email || "" });
       setTelaRaw("login");
-      setTimeout(() => alert("⛔ Seu acesso foi desativado pelo gestor da empresa."), 300);
       return;
     }
     if (u.perfil !== "gestor") {
@@ -271,13 +395,45 @@ export default function App() {
     }
   };
 
+  // Semente da demonstração: grava cada coleção com o MESMO nome de chave que o boot
+  // abaixo lê com store.get (o prefixo demo_ vem de setEmpresaId(DEMO_ID)).
+  const semearDemo = async () => {
+    const d = gerarDadosDemo({ links: LINKS_PADRAO });
+    const chaves = {
+      obras: d.obras, trabalhadores: d.trabalhadores, equips: d.equips, pedidos: d.pedidos,
+      historico: d.historico, usuarios: d.usuarios, mensagens: d.mensagens, diario: d.diario,
+      ativos: d.ativos, abastecimentos: d.abastecimentos, ferias: d.ferias, rdos: d.rdosEmitidos,
+      empresa: d.empresa, produtividade: d.produtividade, recebimentos: d.recebimentos,
+      movimentacoes: d.movimentacoes, ferramentas: d.ferramentas, links: d.links,
+      adiantamentos: d.adiantamentos, manutencoes: d.manutencoes, folhasSalvas: d.folhasSalvas,
+      cronogramas: d.cronogramas, movEquip: d.movEquip, despesasAvulsas: d.despesasAvulsas,
+      fotosObras: d.fotosObras, fornecedores: d.fornecedores, clientes: d.clientes,
+    };
+    for (const [k, v] of Object.entries(chaves)) await store.set(k, v);
+  };
+
   useEffect(() => {
     (async () => {
-      const cachedEmpresaId = localStorage.getItem("_kmzero_empresaId");
-      empresaCarregadaRef.current = cachedEmpresaId || null;
-      if (cachedEmpresaId) {
-        setEmpresaId(cachedEmpresaId);
-        setEmpresaIdState(cachedEmpresaId);
+      if (modoDemo) {
+        // Demo: empresa "demo" (prefixo demo_ / demo_files), nuvem desligada, nada de _kmzero_*
+        setModoDemo(true);
+        aplicarTemaDaDemo();
+        setEmpresaId(DEMO_ID);
+        setEmpresaIdState(DEMO_ID);
+        empresaCarregadaRef.current = DEMO_ID;
+        let semeada = false;
+        try { semeada = localStorage.getItem(CHAVE_SEMENTE_DEMO) === "1"; } catch {}
+        if (!semeada) {
+          await semearDemo();
+          try { localStorage.setItem(CHAVE_SEMENTE_DEMO, "1"); } catch {}
+        }
+      } else {
+        const cachedEmpresaId = localStorage.getItem("_kmzero_empresaId");
+        empresaCarregadaRef.current = cachedEmpresaId || null;
+        if (cachedEmpresaId) {
+          setEmpresaId(cachedEmpresaId);
+          setEmpresaIdState(cachedEmpresaId);
+        }
       }
       const obras_   = await store.get("obras");
       const trab_    = await store.get("trabalhadores");
@@ -343,7 +499,14 @@ export default function App() {
       if (fotos_) setFotosObras(normIds(fotos_));
       if (forn_)    setFornecedores(forn_);
       if (clientes_) setClientes(normIds(clientes_));
-      if (userLogado) {
+      if (modoDemo) {
+        // Visitante gestor, sem conta Google: nunca chama aguardarSessao/resultadoRedirecionamento/
+        // verificarAcessoNuvem (restaurariam a conta real do navegador) e nunca grava _kmzero_sessao.
+        setUsuario(DEMO_USUARIO);
+        setAvisos(gerarAvisosDemo()); // avisos só existem na nuvem; na demo ficam em memória
+        setTelaRaw(telaInicialDemo());
+      } else if (userLogado) {
+        limparRestosDemo(); // login real: o que a demo deixou neste navegador sai
         if (userLogado.empresaId) {
           setEmpresaId(userLogado.empresaId);
           setEmpresaIdState(userLogado.empresaId);
@@ -356,9 +519,15 @@ export default function App() {
         // Sem sessão local: pode ser a volta do login por redirecionamento (Google),
         // ou a sessão Google gravada no aparelho ainda vale (ex.: app fechado no meio do 1º acesso).
         const viaRedirect = await resultadoRedirecionamento();
-        if (viaRedirect && viaRedirect.erro) setErroEntrada(viaRedirect.erro);
+        if (viaRedirect && viaRedirect.erro) setErroEntrada({ codigo: viaRedirect.codigo || "", mensagem: viaRedirect.erro });
         const sessao = (viaRedirect && viaRedirect.uid) ? viaRedirect : await aguardarSessao();
-        if (sessao) await concluirLoginGoogle(sessao);
+        if (sessao) {
+          const fim = await concluirLoginGoogle(sessao);
+          if (fim && !fim.ok && (fim.erro || fim.codigo)) setErroEntrada({ codigo: fim.codigo || "", mensagem: fim.erro || "", email: fim.email || "" });
+        } else if (viaRedirect && viaRedirect.semUsuario) {
+          // Saiu para o Google e voltou sem conta (Safari com o app instalado, por exemplo)
+          setErroEntrada({ codigo: "redirect-sem-usuario" });
+        }
       }
 
       // ⭐ AUTO-POPULA 30 DIAS apenas se ativado manualmente em Sistema > Gerar 30 dias
@@ -402,7 +571,7 @@ export default function App() {
   // O gestor cadastra a obra no escritório e o encarregado vê no celular; o que
   // o encarregado lança na obra aparece pro gestor. (pedidos, mensagens, RDOs,
   // presenças e fotos já tinham sync próprio acima — continuam iguais.)
-  const syncAtivo = !carregando && !!usuario?.firebaseUid && !!empresaIdState;
+  const syncAtivo = !modoDemo && !carregando && !!usuario?.firebaseUid && !!empresaIdState;
 
   useSyncColecao("obras",           obras,           setObras,           syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("trabalhadores",   trabalhadores,   setTrab,            syncAtivo, { ordenar: porIdAsc });
@@ -569,10 +738,11 @@ export default function App() {
     if (r.tipo === "perfil") { await login(r.usuario); return { ok: true }; }
     if (r.tipo === "sem_convite") { setUsuarioGoogle(userGoogle); setTelaRaw("primeiro_acesso"); return { ok: true, semConvite: true }; }
     if (r.desativado) { try { await logoutFirebase(); } catch {} }
-    return { ok: false, erro: r.erro };
+    return { ok: false, erro: r.erro, codigo: r.codigo || "", email: r.email || "" };
   };
 
   const login = async (u) => {
+    limparRestosDemo(); // login real: apaga demo_* e demo_files deixados pela demonstração
     const eidNovo = u.empresaId || null;
     if (eidNovo !== (empresaCarregadaRef.current || null)) {
       // Os dados em memória são de outra empresa (ou de antes de existir empresa).
@@ -593,6 +763,7 @@ export default function App() {
       localStorage.setItem("_kmzero_empresaId", u.empresaId);
     }
     setUsuario(u);
+    setErroEntrada(""); // aviso antigo da entrada (ex.: acesso desativado) não volta no próximo login
     localStorage.setItem("_kmzero_sessao", "1"); // a página inicial (vitrine) manda direto para o app
     // Guarda/atualiza o perfil na lista deste aparelho (pra próxima vez entrar por PIN / "Continuar como")
     setUsuarios(us => upsertUsuarioLista(us, u));
@@ -608,6 +779,7 @@ export default function App() {
     return "home";
   };
   const sairDaConta = async () => {
+    try { await Promise.race([desligarNotificacoes(), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
     try { await logoutFirebase(); } catch (e) {}
     setUsuario(null);
     setEmpresaIdState(null);
@@ -618,9 +790,19 @@ export default function App() {
     // para a nuvem de outra empresa se o próximo login for de outra conta)
     window.location.reload();
   };
+  // Sair da demonstração: apaga tudo que é demo_* (localStorage), o banco demo_files e a
+  // marca da semente, e volta para a vitrine. Sem isso, qualquer "Sair" recarregaria
+  // /app/?demo=1 e entraria na demo de novo.
+  const sairDemo = async () => {
+    try { await store.clear(); } catch {}
+    try { if (typeof indexedDB !== "undefined") indexedDB.deleteDatabase("demo_files"); } catch {}
+    try { localStorage.removeItem(CHAVE_SEMENTE_DEMO); } catch {}
+    window.location.replace("/");
+  };
   // "Sair" chamado pelos botões da home/painel (confirmado=false) e pelo modal de
   // Minha Conta (confirmado=true, a pessoa já confirmou lá).
   const logout = (confirmado = false) => {
+    if (modoDemo) return sairDemo();
     // Regra escolhida pelo gestor (opção A): sem internet NÃO deixa sair, porque só se
     // entra de novo com o Google e a pessoa ficaria trancada fora do app no canteiro.
     if (navigator.onLine === false) {
@@ -701,27 +883,64 @@ export default function App() {
   const badgesMenu = useMemo(() => escritorio ? {
     pedidos: (pedidos || []).filter(p => p.status === "Aguardando").length,
     aprovar_mov: (movimentacoes || []).filter(m => m.status === "Aguardando").length,
+    mov_equip: (movEquip || []).filter(m => m.status === "Aguardando").length,
     mensagens: (mensagens || []).filter(m => m.para === usuario.id && !m.lida).length,
+    avisos: avisosNaoLidos,
     alertas: gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos }).length,
-  } : {}, [escritorio, pedidos, movimentacoes, mensagens, usuario, obras, trabalhadores, equips, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos]);
+  } : {}, [escritorio, avisosNaoLidos, pedidos, movimentacoes, mensagens, usuario, obras, trabalhadores, equips, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos]);
+  // Pessoa logada para os cabeçalhos (foto do Google + nome). Gestor toca e abre "Minha conta".
+  const usuarioCtx = useMemo(() => ({ usuario, onAbrirConta: usuario?.perfil === "gestor" ? () => setTela("minha_conta") : null }), [usuario]);
+  // Moldura do escritório (KMHeader vira barra de página, KMFooter some, Btn fica de largura
+  // automática): usa o MESMO flag `escritorio` de cima, nunca só a largura — encarregado no PC
+  // e as telas de entrada continuam com a moldura do celular.
+  const escritorioCtx = useMemo(() => escritorio ? { tela } : null, [escritorio, tela]);
+  // Telas de entrada (sem sessão): no PC ocupam a largura toda (painel dividido em auth.jsx),
+  // sem a coluna de 420 px do celular. Depende só da largura porque aqui não há gestor nem contexto.
+  const telaEntrada = ["login", "primeiro_acesso", "registro"].includes(tela);
 
-  if (carregando) return (
-    <div style={{ flex: 1, background: `linear-gradient(175deg,${NAVY},#071030)`, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-      <div style={{ fontSize: 52, fontWeight: 900, color: "#fff", letterSpacing: -2 }}>KM<span style={{ color: GOLD }}>ZERO</span></div>
-      <div style={{ color: "rgba(255,255,255,0.5)", marginTop: 16, fontSize: 13 }}>Carregando...</div>
-    </div>
-  );
+  // Toque na notificação: com o app aberto, o service worker avisa (push-sw.js);
+  // com o app fechado, ele abre /app/?aviso=ID — nos dois casos vai para a tela Avisos.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    const aoReceber = e => { if (e.data && e.data.tipo === "kmzero-abrir-aviso") setTela("avisos"); };
+    sw.addEventListener("message", aoReceber);
+    return () => sw.removeEventListener("message", aoReceber);
+  }, []);
+  useEffect(() => {
+    if (carregando || !usuario) return;
+    const qs = new URLSearchParams(window.location.search);
+    if (!qs.has("aviso")) return;
+    qs.delete("aviso");
+    window.history.replaceState(null, "", window.location.pathname + (qs.toString() ? `?${qs}` : ""));
+    setTela("avisos");
+  }, [carregando, usuario?.firebaseUid]);
 
-  // 🔒 SEGURANÇA: telas restritas ao gestor (encarregado não tem acesso)
+  // Splash único: o .loading-splash de app/index.html (fora do #root) cobre a tela até os
+  // dados locais carregarem. Aqui só o fade-out — mínimo 600 ms desde a abertura da página,
+  // para não piscar quando o cache é rápido. Nada de segundo splash em React.
+  useEffect(() => {
+    if (carregando) return;
+    const splash = document.querySelector(".loading-splash");
+    if (!splash) return;
+    const decorrido = typeof performance !== "undefined" && performance.now ? performance.now() : 600;
+    const minimo = modoDemo ? 0 : 600; // demo: sem espera mínima, a tela entra assim que a semente carrega
+    const t = setTimeout(() => {
+      splash.classList.add("saindo");
+      setTimeout(() => splash.remove(), 400);
+    }, Math.max(0, minimo - decorrido));
+    return () => clearTimeout(t);
+  }, [carregando]);
+
+  if (carregando) return null; // o splash do index.html ainda está na frente
+
+  // 🔒 SEGURANÇA: telas restritas ao gestor (encarregado não tem acesso).
+  // Derivado do menu (menuGrupos.js, inclui as telas do desenvolvedor) + telas de detalhe
+  // abertas a partir dele + alias antigo "folha" + Minha conta. Antes a lista tinha 13 nomes
+  // que não existiam no switch e por isso não bloqueava nada.
   const TELAS_GESTOR = new Set([
-    "gestor", "obras", "cronograma", "cronograma_pro", "clientes", "equipe", "trab_detalhe", "fichas",
-    "ativos", "frota", "manutencoes", "equipamentos_gestao", "ferramentas_gestao",
-    "custos", "folha", "folha_mensal", "historico", "adiantamentos", "movimentacoes",
-    "dashboard", "diagnostico", "consolidado", "mapa", "calendario", "alertas",
-    "fornecedores", "clientes", "empresa", "minha_conta", "ajuda", "acessos", "backup", "gerar_simulacao", "zerar_tudo",
-    "aso_aniversarios", "ferias", "contatos_emergencia", "links", "produtividade_gestor",
-    "pedidos", "pedido_detalhe", "despesas_avulsas", "mov_pess_detalhe",
-    "recebimentos_gestor", "comissionamento"
+    ...TODAS_TELAS_MENU,
+    "folha", "trab_detalhe", "pedido_detalhe", "mov_pess_detalhe", "mov_equip_detalhe", "anexos_obra", "minha_conta",
   ]);
 
   // Se for encarregado e tentar acessar tela do gestor, bloqueia
@@ -732,8 +951,8 @@ export default function App() {
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
           <div>
             <div style={{ fontSize: 64, marginBottom: 16 }}>🔒</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Acesso Restrito</div>
-            <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, marginBottom: 20 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>Acesso Restrito</div>
+            <div style={{ fontSize: 13, color: T.texto2, lineHeight: 1.5, marginBottom: 20 }}>
               Esta área é apenas para o gestor.<br/>
               Se precisar, fale com o gestor da empresa.
             </div>
@@ -757,12 +976,12 @@ export default function App() {
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
             <div>
               <div style={{ fontSize: 64, marginBottom: 16 }}>🏗️</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Sem obra vinculada</div>
-              <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5, marginBottom: 20 }}>
-                Peça ao gestor para vincular você a uma obra em Sistema → Acessos do App.
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>Sem obra vinculada</div>
+              <div style={{ fontSize: 13, color: T.texto2, lineHeight: 1.5, marginBottom: 20 }}>
+                Peça ao gestor para vincular você a uma obra em Sistema → Usuários e acessos.
               </div>
               <button onClick={() => window.location.reload()} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13, marginRight: 8 }}>🔄 Atualizar</button>
-              <button onClick={() => setTela("home")} style={{ background: "#eee", color: NAVY, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
+              <button onClick={() => setTela("home")} style={{ background: T.superficie2, color: T.titulo, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
             </div>
           </div>
           <KMFooter />
@@ -773,7 +992,7 @@ export default function App() {
       case "login":      return <TelaEntrar onGoogle={concluirLoginGoogle} erroInicial={erroEntrada} />;
       case "primeiro_acesso": return <TelaPrimeiroAcesso usuarioGoogle={usuarioGoogle} onCriarEmpresa={() => setTelaRaw("registro")} onVerificar={() => usuarioGoogle ? concluirLoginGoogle(usuarioGoogle) : Promise.resolve({ ok: false, erro: "Entre com o Google de novo." })} onSair={async () => { try { await logoutFirebase(); } catch {} setUsuarioGoogle(null); setTelaRaw("login"); }} />;
       case "registro":   return <TelaRegistro usuarioGoogle={usuarioGoogle} onBack={() => setTelaRaw("primeiro_acesso")} onRegistrado={login} />;
-      case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} onNav={setTela} onLogout={logout} />;
+      case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} />;
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
       case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={criarPedidoSync} />;
       case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => f.obraId === obraAtual?.id).length} onBack={() => setTela("home")} onSalvar={salvarFotoObraSync} />;
@@ -781,7 +1000,7 @@ export default function App() {
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
       case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={salvarFotoObraSync} />;
-      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
+      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
       case "obras":      return <TelaObras usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
@@ -789,7 +1008,7 @@ export default function App() {
       case "mov_equip_detalhe": return movEquipSel ? <TelaMovEquipDetalhe mov={movEquip.find(x => x.id === movEquipSel.id) || movEquipSel} obras={obras} equips={equips} ferramentas={ferramentas} usuario={usuario} onBack={voltar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} /> : <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} />;
       case "equipe":     return <TelaEquipe obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onAdd={(t) => {
         setTrab(ts => [...ts, t]);
-        // Acesso ao app é separado: Sistema → Acessos do App (Gmail da pessoa)
+        // Acesso ao app é separado: Sistema → Usuários e acessos (Gmail da pessoa)
       }} onRemove={(id) => {
         // Remove trabalhador
         const trab = trabalhadores.find(t => t.id === id);
@@ -817,9 +1036,9 @@ export default function App() {
       case "mapa":       return <TelaMapa obras={obras} trabalhadores={trabalhadores} onBack={voltar} onEditar={() => setTela("obras")} />;
       case "clientes":  return <TelaClientes clientes={clientes} onBack={voltar} onAdd={c => setClientes(cs => [...cs, c])} onEditar={c => setClientes(cs => cs.map(x => x.id === c.id ? c : x))} onRemover={id => setClientes(cs => cs.filter(x => x.id !== id))} />;
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} usuario={usuario} onBack={voltar} onEditar={editarTrabalhador} onEditarPresenca={editarPresencaDia} />;
+      case "avisos":     return <TelaAvisos usuario={usuario} usuarios={usuarios} obras={obras} avisos={avisosVisiveis} ultimaLeitura={ultimaLeituraAvisos} onEnviar={enviarAviso} onMarcarLidos={marcarAvisosLidosAgora} onNav={setTela} onBack={voltar} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={enviarMensagemSync} onMarcarLida={marcarLidaSync} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
-      case "folha":      return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} onMarcarValesDescontados={marcarValesDescontados} />;
       case "equip_gestao":return <TelaEquipamentosGestao obras={obras} equips={equips} onBack={voltar} onAdd={eq => setEquips(es => [...es, eq])} onEditar={eq => setEquips(es => es.map(x => x.id === eq.id ? eq : x))} onRemover={id => setEquips(es => es.filter(e => e.id !== id))} />;
       case "ativos":     return <TelaAtivos obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onAdd={a => setAtivos(as => [...as, a])} onEditar={a => setAtivos(as => as.map(x => x.id === a.id ? a : x))} onRemover={id => setAtivos(as => as.filter(a => a.id !== id))} onAbastecer={a => setAbast(abs => [a, ...abs])} />;
       case "frota":      return <TelaFrota obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
@@ -829,11 +1048,12 @@ export default function App() {
       case "ferias":     return <TelaFerias obras={obras} trabalhadores={trabalhadores} ferias={ferias} onBack={voltar} onAdd={f => setFerias(fs => [...fs, f])} onRemove={id => setFerias(fs => fs.filter(f => f.id !== id))} />;
       case "rdo":        return <TelaRDO obras={obras} trabalhadores={trabalhadores} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} historico={historico} diario={diario} usuario={usuario} empresa={empresa} rdosEmitidos={rdosEmitidos} recebimentos={recebimentos} fotosObras={fotosObras} despesasAvulsas={despesasAvulsas} movimentacoes={movimentacoes} movEquip={movEquip} produtividade={produtividade} cronogramas={cronogramas} onBack={voltar} onEmitirRDO={emitirRDOSync} onUpdateRDO={updateRDOSync} onRemoveRDO={removeRDOSync} />;
       case "empresa":    return <TelaConfigEmpresa empresa={empresa} onSave={setEmpresa} onBack={voltar} />;
-      case "minha_conta": return <TelaMinhaConta usuario={usuario} empresa={empresa} onBack={voltar} onLogout={logout} />;
+      case "minha_conta": return <TelaMinhaConta usuario={usuario} empresa={empresa} demo={modoDemo} onBack={voltar} onLogout={logout} />;
       case "ajuda":      return <TelaAjuda empresa={empresa} onBack={voltar} />;
-      case "acessos":    return <TelaAcessosApp usuario={usuario} usuarios={usuarios} obras={obras} empresa={empresa} onBack={voltar} />;
+      case "acessos":    return <TelaAcessosApp usuario={usuario} usuarios={usuarios} obras={obras} empresa={empresa} demo={modoDemo} onBack={voltar} />;
       case "produtividade": return <TelaProdutividade obras={obras} usuario={usuario} produtividade={produtividade} onBack={voltar} onAdd={p => setProd(ps => [p, ...ps])} onRemove={id => setProd(ps => ps.filter(p => p.id !== id))} />;
       case "recebimento":   return <TelaRecebimento obras={obras} pedidos={pedidos} usuario={usuario} recebimentos={recebimentos} onBack={voltar} onAdd={r => setReceb(rs => [r, ...rs])} />;
+      case "folha": // alias antigo ("Folha Mensal"): o menu e os tiles apontam para folha_quinzenal
       case "folha_quinzenal": return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} onMarcarValesDescontados={marcarValesDescontados} />;
       case "hist_folha":      return <TelaHistFolha obras={obras} trabalhadores={trabalhadores} folhasSalvas={folhasSalvas} onBack={voltar} onRemover={id => { setFolhasSalvas(fs => fs.filter(f => f.id !== id)); setAdiant(ads => ads.map(a => String(a.folhaId) === String(id) ? { ...a, descontadoEm: null, folhaId: null, folhaPeriodo: null, descontado: false } : a)); }} />;
       case "manutencao":      return <TelaManutencao obras={obras} ativos={ativos} ferramentas={ferramentas} equips={equips} manutencoes={manutencoes} onBack={voltar} onAdd={salvarManutencao} onRemover={id => setManut(ms => ms.filter(m => m.id !== id))} />;
@@ -914,126 +1134,13 @@ export default function App() {
   };
 
   return (
-    <div style={{ fontFamily: "'Segoe UI',sans-serif", backgroundColor: "#0a1535", minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
-      {/* SPLASH SCREEN */}
-      {splashAtivo && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          background: "linear-gradient(135deg, #0a1535 0%, #0F2151 50%, #1e3a8a 100%)",
-          zIndex: 99999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          animation: splashSaindo ? "kmSplashOut 0.4s ease-in forwards" : "kmSplashFade 0.4s ease-out",
-        }}>
-          <style>{`
-            @keyframes kmSplashFade { from { opacity: 0; } to { opacity: 1; } }
-            @keyframes kmSplashOut { from { opacity: 1; } to { opacity: 0; } }
-            @keyframes kmSplashProgress { from { width: 0%; } to { width: 100%; } }
-            @keyframes kmSplashPulse {
-              0%, 100% { transform: scale(1); text-shadow: 0 0 20px rgba(245,166,35,0.4); }
-              50% { transform: scale(1.04); text-shadow: 0 0 50px rgba(245,166,35,0.8); }
-            }
-            @keyframes kmSplashLine {
-              0% { width: 0; opacity: 0; }
-              50% { opacity: 1; }
-              100% { width: 80px; opacity: 1; }
-            }
-            @keyframes kmSplashTagline {
-              0% { opacity: 0; transform: translateY(10px); }
-              60% { opacity: 0; }
-              100% { opacity: 1; transform: translateY(0); }
-            }
-            @keyframes kmSplashOrb {
-              0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.4; }
-              50% { transform: scale(1.2) translate(20px, -20px); opacity: 0.7; }
-            }
-            @keyframes kmSplashRise {
-              0% { opacity: 0; transform: translateY(16px) scale(0.96); }
-              100% { opacity: 1; transform: translateY(0) scale(1); }
-            }
-            @keyframes kmSplashSpin { to { transform: rotate(360deg); } }
-          `}</style>
-
-          {/* Orbs decorativos */}
-          <div style={{
-            position: "absolute", top: "-100px", right: "-100px",
-            width: 350, height: 350, borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(245,166,35,0.35), transparent 70%)",
-            filter: "blur(40px)",
-            animation: "kmSplashOrb 4s ease-in-out infinite",
-          }} />
-          <div style={{
-            position: "absolute", bottom: "-100px", left: "-100px",
-            width: 300, height: 300, borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(124,58,237,0.3), transparent 70%)",
-            filter: "blur(40px)",
-            animation: "kmSplashOrb 5s ease-in-out infinite reverse",
-          }} />
-
-          {/* Halo dourado girando atrás do logo */}
-          <div style={{
-            position: "absolute", width: 280, height: 280, borderRadius: "50%",
-            background: "conic-gradient(from 0deg, transparent 0%, rgba(245,166,35,0.28) 18%, transparent 36%)",
-            filter: "blur(3px)", zIndex: 0,
-            animation: "kmSplashSpin 6s linear infinite",
-          }} />
-
-          {/* Logo central */}
-          <div style={{ textAlign: "center", zIndex: 1, animation: "kmSplashRise 0.85s cubic-bezier(0.16,1,0.3,1) both" }}>
-            <div style={{
-              fontSize: 12, color: "rgba(255,255,255,0.5)",
-              letterSpacing: 5, fontWeight: 600, marginBottom: 14,
-              textTransform: "uppercase",
-            }}>
-              🏗️ Gestão de Obras
-            </div>
-            <div style={{ animation: "kmSplashPulse 2.5s ease-in-out infinite" }}>
-              <span style={{ fontWeight: 900, fontSize: 64, color: "#fff", letterSpacing: -2 }}>KM</span>
-              <span style={{ fontWeight: 900, fontSize: 64, color: "#F5A623", letterSpacing: -2 }}>ZERO</span>
-            </div>
-            <div style={{
-              height: 3, background: "#F5A623", margin: "14px auto", borderRadius: 2,
-              animation: "kmSplashLine 1s ease-out forwards",
-              boxShadow: "0 0 12px rgba(245,166,35,0.6)",
-            }} />
-            <div style={{
-              fontSize: 13, color: "rgba(255,255,255,0.65)", fontStyle: "italic",
-              animation: "kmSplashTagline 1.8s ease-out forwards",
-              opacity: 0,
-            }}>
-              Gestao Inteligente de Obras
-            </div>
-          </div>
-
-          {/* Footer da splash — barra de progresso */}
-          <div style={{
-            position: "absolute", bottom: 40, left: 0, right: 0,
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-          }}>
-            <div style={{
-              width: 160, height: 3, borderRadius: 3,
-              background: "rgba(255,255,255,0.12)", overflow: "hidden",
-            }}>
-              <div style={{
-                height: "100%", borderRadius: 3,
-                background: "linear-gradient(90deg, #F5A623, #ffd27a)",
-                boxShadow: "0 0 10px rgba(245,166,35,0.7)",
-                animation: "kmSplashProgress 4.4s cubic-bezier(0.4,0,0.2,1) forwards",
-              }} />
-            </div>
-            <div style={{
-              fontSize: 10, color: "rgba(255,255,255,0.35)",
-              letterSpacing: 3, fontWeight: 600,
-            }}>
-              CARREGANDO...
-            </div>
-          </div>
-        </div>
-      )}
+    <UsuarioContext.Provider value={usuarioCtx}>
+    <EscritorioContext.Provider value={escritorioCtx}>
+    <div className={modoDemo ? "km-demo" : undefined} style={{ fontFamily: DEFAULT_FONT, backgroundColor: T.fundoExterno, minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
       <style>{`
+        /* Modo demonstração: a faixa fixa de 32 px no topo empurra a barra de página (sticky) */
+        .km-demo .km-barra-pagina { top: 32px !important; }
+        @media (max-width: 479px) { .km-faixa-demo-longo { display: none; } }
         /* Responsividade adaptável */
         @media (min-width: 768px) {
           .km-app-wrapper {
@@ -1045,11 +1152,22 @@ export default function App() {
             max-width: 520px !important;
           }
         }
-        /* Modo escritório (gestor em tela larga): menu lateral + conteúdo na largura toda */
-        .km-app-wrapper.km-escritorio {
+        /* Modo escritório (gestor em tela larga): menu lateral + conteúdo na largura toda.
+           Telas de entrada no PC (km-entrada): largura toda também, painel dividido em auth.jsx */
+        .km-app-wrapper.km-escritorio, .km-app-wrapper.km-entrada {
           max-width: none !important;
           box-shadow: none !important;
         }
+        /* Densidade do escritório: campos de 40 px (no celular continuam 46 px de toque) */
+        .km-escritorio input, .km-escritorio select, .km-escritorio textarea {
+          min-height: 40px !important;
+          padding: 8px 12px !important;
+          margin-bottom: 10px !important;
+        }
+        .km-escritorio textarea { min-height: 80px !important; }
+        .km-escritorio input[type="checkbox"], .km-escritorio input[type="radio"] { min-height: 0 !important; padding: 0 !important; margin-bottom: 0 !important; }
+        /* Linha de chips/botões lado a lado (no celular o inline style da tela empilha) */
+        .km-escritorio .km-chips { display: flex !important; flex-direction: row !important; gap: 8px !important; flex-wrap: wrap; align-items: center; }
         /* Ajustes para telas pequenas */
         @media (max-width: 380px) {
           .km-app-wrapper {
@@ -1083,25 +1201,48 @@ export default function App() {
           .km-tela-transicao { animation: none; }
         }
       `}</style>
+      {modoDemo && <FaixaDemo onSair={sairDemo} />}
+      {avisoNaTela && tela !== "avisos" && (
+        <button onClick={() => { setAvisoNaTela(null); setTela("avisos"); }} style={{
+          position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 10px)", left: "50%", transform: "translateX(-50%)", zIndex: 9999,
+          width: "min(92vw, 420px)", background: NAVY, color: "#fff", border: `2px solid ${GOLD}`, borderRadius: 14,
+          padding: "10px 14px", textAlign: "left", boxShadow: "0 8px 24px rgba(0,0,0,0.25)", cursor: "pointer",
+        }}>
+          <div style={{ fontWeight: 800, fontSize: 13 }}>{avisoNaTela.titulo}</div>
+          {avisoNaTela.texto && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{avisoNaTela.texto}</div>}
+        </button>
+      )}
       {escritorio ? (
-        <div className="km-app-wrapper km-escritorio" style={{ width: "100%", maxWidth: "none", minHeight: "100vh", display: "flex", flexDirection: "row", alignItems: "stretch", backgroundColor: LIGHT, position: "relative", boxShadow: "none" }}>
-          <MenuLateral tela={tela} onNav={setTela} usuario={usuario} empresa={empresa} badges={badgesMenu} onLogout={logout} />
-          <div style={{ flex: 1, minWidth: 0, padding: "0 24px 24px", display: "flex", flexDirection: "column" }}>
-            <div style={{ maxWidth: 1280, margin: "0 auto", width: "100%", flex: 1, display: "flex", flexDirection: "column", backgroundColor: "#fff" }}>
+        <div className="km-app-wrapper km-escritorio" style={{ width: "100%", maxWidth: "none", minHeight: "100vh", display: "flex", flexDirection: "row", alignItems: "stretch", backgroundColor: T.fundo, position: "relative", boxShadow: "none", ...(modoDemo ? { paddingTop: 32, boxSizing: "border-box" } : {}) }}>
+          <MenuLateral tela={tela} onNav={setTela} usuario={usuario} empresa={empresa} badges={badgesMenu} onLogout={logout} topo={modoDemo ? 32 : 0} />
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            {/* Coluna de conteúdo: largura por tipo de tela (formulário 720 / lista 1080 / painel 1400),
+                fundo transparente (a página é o wrapper T.fundo; os cartões ficam em T.superficie) */}
+            <div style={{ maxWidth: LARGURA_POR_TELA[tipoDaTela(tela)], margin: "0 auto", width: "100%", flex: 1, display: "flex", flexDirection: "column", padding: "24px 32px 40px", boxSizing: "border-box" }}>
               <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
                 {render()}
               </div>
             </div>
           </div>
         </div>
+      ) : modoEscritorio && telaEntrada ? (
+        // Entrada no PC: sem a coluna de 420 px — a tela (auth.jsx/registro.jsx) desenha o painel dividido
+        <div className="km-app-wrapper km-entrada" style={{ width: "100%", maxWidth: "none", minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: ESCURO.fundo, position: "relative", boxShadow: "none" }}>
+          <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            {render()}
+          </div>
+        </div>
       ) : (
-        <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#fff", position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
+        // Wrapper do celular é a "página" do app de campo (T.fundo), não um cartão; a sombra fica porque o fundo externo é escuro nos dois temas
+        <div className="km-app-wrapper" style={{ width: "100%", maxWidth: 420, minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: T.fundo, position: "relative", boxShadow: "0 0 60px rgba(0,0,0,0.5)", ...(modoDemo ? { paddingTop: 32, boxSizing: "border-box" } : {}) }}>
           <div key={tela} className="km-tela-transicao" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             {render()}
           </div>
         </div>
       )}
     </div>
+    </EscritorioContext.Provider>
+    </UsuarioContext.Provider>
   );
 }
 

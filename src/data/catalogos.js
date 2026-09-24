@@ -198,20 +198,28 @@ export const DEFAULT_TRABALHADORES = [
    GERADOR DE 30 DIAS — pré-popula tudo
    Só roda pela tela "Gerar 30 dias" (dados fictícios, empresa de teste)
 ════════════════════════════════════ */
-export function gerarDadosMes30Dias() {
+/* Opções (todas com o comportamento antigo por padrão):
+   fotosPorDia   fotos por obra por dia útil (5; a demo usa 2 para caber no localStorage)
+   obras         lista de obras (DEFAULT_OBRAS; a demo passa DEMO_OBRAS com nomes neutros)
+   trabalhadores lista de trabalhadores (DEFAULT_TRABALHADORES; quem tem obraId > 0 entra na simulação)
+   fotosNoRdo    copia as fotos do dia para dentro do RDO (true; a demo desliga para não dobrar o espaço) */
+export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, trabalhadores: listaTrab = DEFAULT_TRABALHADORES, fotosNoRdo = true } = {}) {
   const hoje = new Date();
-  const trabs = [
-    { id: 1, obraId: 1 }, { id: 2, obraId: 1 }, { id: 3, obraId: 1 }, { id: 4, obraId: 1 },
-    { id: 5, obraId: 1 }, { id: 6, obraId: 1 }, { id: 7, obraId: 1 }, { id: 8, obraId: 1 },
-    { id: 9, obraId: 1 }, { id: 10, obraId: 1 }, { id: 11, obraId: 1 },
-    { id: 12, obraId: 2 }, { id: 13, obraId: 2 }, { id: 14, obraId: 2 },
-    { id: 15, obraId: 4 }, { id: 16, obraId: 4 },
-  ];
-  const obrasAtivas = [
-    { id: 1, nome: "Drenagem Rua Emílio Marins (Trecho 2)", encarregado: "Trabalhador Exemplo 1" },
-    { id: 2, nome: "Reforma e Ampliação - IFES", encarregado: "Trabalhador Exemplo 12" },
-    { id: 4, nome: "Quadra Poliesportiva Jerônimo Monteiro", encarregado: "Trabalhador Exemplo 15" },
-  ];
+  const nomeTrab = {};
+  listaTrab.forEach(t => { nomeTrab[t.id] = t.nome; });
+  // Só quem está em obra entra na simulação (obraId 0 = escritório)
+  const trabs = listaTrab.filter(t => t.obraId).map(t => ({ id: t.id, obraId: t.obraId }));
+  // Obras com equipe: o encarregado é o primeiro "Encarregado" da obra (ou o primeiro da lista)
+  const obrasAtivas = obras
+    .map(o => {
+      const equipe = listaTrab.filter(t => String(t.obraId) === String(o.id));
+      const enc = equipe.find(t => /encarregad/i.test(t.cargo || "")) || equipe[0];
+      return enc ? { id: o.id, nome: o.nome, encarregado: enc.nome } : null;
+    })
+    .filter(Boolean);
+  const obraA = obrasAtivas[0] || { id: 1, nome: "", encarregado: "" };
+  const obraB = obrasAtivas[1] || obraA;
+  const HORAS_FOTO = ["08:30", "10:15", "12:30", "14:45", "16:50"];
 
   // Materiais e despesas
   const materiais = [
@@ -309,13 +317,13 @@ export function gerarDadosMes30Dias() {
       const faltas = trabsObra.filter(t => historico[isoData][t.id] === "Falta").length;
       const atestados = trabsObra.filter(t => historico[isoData][t.id] === "Atestado").length;
 
-      // 5 fotos
+      // fotosPorDia fotos (5 por padrão)
       if (!fotosPorObra[obra.id]) fotosPorObra[obra.id] = 0;
       const fotosDia = [];
-      for (let f = 0; f < 5; f++) {
+      for (let f = 0; f < fotosPorDia; f++) {
         fotosPorObra[obra.id]++;
         const numero = fotosPorObra[obra.id];
-        const horaFoto = ["08:30", "10:15", "12:30", "14:45", "16:50"][f];
+        const horaFoto = HORAS_FOTO[f % HORAS_FOTO.length];
         // Placeholder em texto (sem canvas, leve)
         const placeholderUrl = `data:image/svg+xml;utf8,${encodeURIComponent(
           `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><linearGradient id="g${numero}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${["#0f2151","#0891b2","#16a34a","#7c3aed"][idxObra % 4]}"/><stop offset="1" stop-color="#000"/></linearGradient></defs><rect width="800" height="600" fill="url(#g${numero})"/><text x="400" y="240" font-size="120" text-anchor="middle" fill="rgba(255,255,255,0.2)" font-family="Arial">${["🏗️","🏛️","🏟️","🛣️"][idxObra % 4]}</text><text x="400" y="350" font-size="34" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-weight="bold">${obra.nome.substring(0, 28)}</text><text x="400" y="395" font-size="22" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="Arial">Foto #${String(numero).padStart(3, "0")} — ${dataStr}</text><rect x="40" y="490" width="720" height="80" rx="10" fill="rgba(0,0,0,0.6)" stroke="#f5a623" stroke-width="3"/><text x="60" y="525" font-size="22" fill="#f5a623" font-family="Arial,sans-serif" font-weight="bold">KMZERO</text><text x="60" y="555" font-size="16" fill="#fff" font-family="Arial">Foto #${String(numero).padStart(3, "0")} — ${horaFoto}</text><text x="740" y="525" font-size="14" fill="#fff" text-anchor="end" font-family="Arial">📅 ${dataStr}</text><text x="740" y="555" font-size="14" fill="#fff" text-anchor="end" font-family="Arial">👷 ${obra.encarregado}</text></svg>`
@@ -357,13 +365,14 @@ export function gerarDadosMes30Dias() {
         dataIso: isoData,
         encarregado: obra.encarregado,
         clima: ["Bom", "Bom", "Bom", "Nublado", "Chuvoso"][Math.floor(Math.random() * 5)],
-        observacoes: `Equipe trabalhou normalmente. ${presentes} presente(s), ${faltas} falta(s), ${atestados} atestado(s). 5 foto(s) registrada(s).`,
+        observacoes: `Equipe trabalhou normalmente. ${presentes} presente(s), ${faltas} falta(s), ${atestados} atestado(s). ${fotosDia.length} foto(s) registrada(s).`,
         ts,
         autoGerado: true,
         horasTrabalhadas,
         totalHE: +totalHE.toFixed(1),
-        horimetros: obra.id === 1 ? { 1: { inicio: 1234 + (29 - d) * 8, fim: 1234 + (29 - d) * 8 + 7, horas: 7 } } : {},
-        fotos: fotosDia,
+        horimetros: obra.id === obraA.id ? { 1: { inicio: 1234 + (29 - d) * 8, fim: 1234 + (29 - d) * 8 + 7, horas: 7 } } : {},
+        fotos: fotosNoRdo ? fotosDia : [],
+        qtdFotosNaGaleria: fotosDia.length,
         presencas,
         alimentacao,
         totalAlimentacao: presentes * 23,
@@ -451,19 +460,19 @@ export function gerarDadosMes30Dias() {
 
     // MOVIMENTAÇÃO de pessoal a cada 7 dias
     if (d % 7 === 0 && d > 0) {
-      const trabsEM = trabs.filter(t => t.obraId === 1);
+      const trabsEM = trabs.filter(t => t.obraId === obraA.id);
       if (trabsEM.length > 1) {
         const trabEsc = trabsEM[Math.floor(Math.random() * trabsEM.length)];
         movimentacoes.push({
           id: ts + movNum,
           numero: movNum++,
           trabId: trabEsc.id,
-          trabNome: `Trabalhador Exemplo ${trabEsc.id}`,
-          obraOrigem: 1,
-          obraDestino: 2,
+          trabNome: nomeTrab[trabEsc.id] || `Trabalhador ${trabEsc.id}`,
+          obraOrigem: obraA.id,
+          obraDestino: obraB.id,
           tipo: Math.random() < 0.6 ? "hoje" : "definitiva",
           motivo: ["Reforço para a concretagem", "Apoio na alvenaria", "Substituir falta da equipe"][Math.floor(Math.random() * 3)],
-          solicitante: "Trabalhador Exemplo 1",
+          solicitante: obraA.encarregado,
           status: d <= 1 ? "Aguardando" : "Aprovado",
           data: dataStr,
           ts,
@@ -480,14 +489,14 @@ export function gerarDadosMes30Dias() {
         itemId: 1,
         itemNome: "Betoneira 400L",
         itemCodigo: "BET-001",
-        obraOrigemId: 1,
-        obraOrigemNome: "Drenagem Rua Emílio Marins (Trecho 2)",
-        obraDestinoId: 2,
-        obraDestinoNome: "Reforma e Ampliação - IFES",
+        obraOrigemId: obraA.id,
+        obraOrigemNome: obraA.nome,
+        obraDestinoId: obraB.id,
+        obraDestinoNome: obraB.nome,
         tipo: "emprestimo",
         prazo: dataLocalIso(new Date(ts + 7 * 86400000)),
         motivo: "Concretagem da fundação",
-        solicitante: "Trabalhador Exemplo 12",
+        solicitante: obraB.encarregado,
         status: d <= 2 ? "Aguardando" : "Aprovado",
         dataSolicitacao: dataStr,
         ts,
@@ -499,7 +508,7 @@ export function gerarDadosMes30Dias() {
       abastecimentos.push({
         id: ts + d,
         ativoId: 1, // Retroescavadeira
-        obraId: 1, // Emílio Marins (onde tá a retro)
+        obraId: obraA.id, // primeira obra com equipe (onde está a retro)
         data: dataStr,
         ts,
         litros: 30 + Math.floor(Math.random() * 20),
@@ -527,11 +536,11 @@ export function gerarDadosMes30Dias() {
 
     // ADIANTAMENTOS — 2 ao longo do mês
     if (d === 22 || d === 8) {
-      const trabId = d === 22 ? 2 : 5;
+      const trabId = d === 22 ? (trabs[1] || trabs[0] || { id: 2 }).id : (trabs[4] || trabs[0] || { id: 5 }).id;
       adiantamentos.push({
         id: ts,
         trabId,
-        trabNome: `Trabalhador Exemplo ${trabId}`,
+        trabNome: nomeTrab[trabId] || `Trabalhador ${trabId}`,
         valor: 200,
         data: dataStr,
         descontado: false,
@@ -583,10 +592,10 @@ export function gerarDadosMes30Dias() {
   }
 
   // trabalhadores/obras de exemplo: a tela de simulação só usa se a empresa ainda não tiver os seus
-  const trabalhadores = DEFAULT_TRABALHADORES.map(t => ({ ...t }));
-  const obras = DEFAULT_OBRAS.map(o => ({ ...o }));
+  const trabalhadores = listaTrab.map(t => ({ ...t }));
+  const obrasCopia = obras.map(o => ({ ...o }));
 
-  return { historico, fotosObras, rdosEmitidos, pedidos, movimentacoes, movEquip, diario, despesasAvulsas, adiantamentos, recebimentos, abastecimentos, produtividade, trabalhadores, obras };
+  return { historico, fotosObras, rdosEmitidos, pedidos, movimentacoes, movEquip, diario, despesasAvulsas, adiantamentos, recebimentos, abastecimentos, produtividade, trabalhadores, obras: obrasCopia };
 }
 
 export const DEFAULT_EQUIPS = [
@@ -1771,5 +1780,237 @@ export const VALOR_HORA_CARGO = {
   "Operador de Máquina": 25, "Carpinteiro": 18, "Azulejista": 20,
   "Motorista": 18, "Vigia": 12,
 };
+
+/* ════════════════════════════════════
+   MODO DEMONSTRAÇÃO (/app/?demo=1)
+   Empresa fictícia "Construtora Exemplo": obras com nomes neutros (nunca os
+   contratos reais da KM), fornecedores e clientes sem CNPJ real, telefones
+   de exemplo. Tudo aqui é semente para o localStorage com prefixo demo_ e
+   NUNCA vai para a nuvem (store.js: setModoDemo → cloudRefs() devolve null).
+════════════════════════════════════ */
+export const DEMO_ID = "demo";
+
+// Datas relativas a hoje (a demo tem de parecer viva em qualquer dia)
+const isoDaqui = (dias) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + dias); return dataLocalIso(d); };
+// Última sexta-feira ANTES de hoje (menos N semanas) — âncora dos ciclos de pagamento
+const ultimaSexta = (semanasAtras = 0) => {
+  const d = new Date(); d.setHours(12, 0, 0, 0);
+  const desde = ((d.getDay() - 5 + 7) % 7) || 7;
+  d.setDate(d.getDate() - desde - 7 * semanasAtras);
+  return dataLocalIso(d);
+};
+// Dia 5 mais recente já passado (âncora do regime mensal)
+const dia5Passado = () => {
+  const d = new Date(); d.setHours(12, 0, 0, 0);
+  if (d.getDate() <= 5) d.setMonth(d.getMonth() - 1);
+  d.setDate(5);
+  return dataLocalIso(d);
+};
+const mesAtual = String(new Date().getMonth() + 1).padStart(2, "0");
+
+/* Gestor visitante: SEM firebaseUid (não liga a sincronização) e SEM email
+   (não abre o menu do desenvolvedor). `demo: true` para as telas saberem. */
+export const DEMO_USUARIO = {
+  id: "demo-gestor", nome: "Visitante", perfil: "gestor", cargo: "Gestor · demonstração",
+  empresaId: DEMO_ID, email: "", foto: "", demo: true,
+};
+export const DEMO_USUARIOS = [
+  DEMO_USUARIO,
+  { id: "demo-enc-1", nome: "Carlos Andrade", perfil: "encarregado", cargo: "Encarregado", obraId: 1, email: "", foto: "", tel: "(00) 90000-0001", demo: true },
+  { id: "demo-enc-2", nome: "Roberto Lima",   perfil: "encarregado", cargo: "Encarregado", obraId: 2, email: "", foto: "", tel: "(00) 90000-0012", demo: true },
+];
+
+export const DEMO_EMPRESA = {
+  ...EMPRESA_TEMPLATE,
+  razaoSocial: "Construtora Exemplo Ltda",
+  nomeFantasia: "Construtora Exemplo",
+  cnpj: "00.000.000/0001-00",
+  responsavel: "Visitante",
+  email: "contato@construtoraexemplo.com.br",
+  telefone: "(00) 90000-0000",
+  logradouro: "Rua das Palmeiras", numero: "100", bairro: "Centro", cidade: "Alegre", uf: "ES", cep: "",
+  endereco: "Rua das Palmeiras, 100 - Centro, Alegre - ES",
+  valorCafeManha: 6, valorCafeTarde: 5, valorMarmita: 18, valorLanche: 6,
+};
+
+// Mesmos ids 1-4 do DEFAULT_OBRAS (equipamentos e ativos padrão apontam para eles)
+export const DEMO_OBRAS = [
+  { id: 1, nome: "Residencial Vista Verde",        local: "Alegre - ES", endereco: "Rua das Acácias, 120 - Alegre - ES",       refLocal: "Em frente à praça",      lat: -20.7612, lng: -41.5301, status: "Ativa", tipo: "Edificação",   clienteId: 1, cliente: "Incorporadora Exemplo",           clienteDoc: "00.000.000/0001-00", valorContrato: "850000",  dataInicioContrato: isoDaqui(-75),  dataFimContrato: isoDaqui(120), formaPagContrato: "Por medição" },
+  { id: 2, nome: "Galpão Logístico Norte",         local: "Alegre - ES", endereco: "Rodovia Exemplo, km 12 - Alegre - ES",     refLocal: "Saída para o norte",     lat: -20.7420, lng: -41.5180, status: "Ativa", tipo: "Edificação",   clienteId: 1, cliente: "Incorporadora Exemplo",           clienteDoc: "00.000.000/0001-00", valorContrato: "1200000", dataInicioContrato: isoDaqui(-40),  dataFimContrato: isoDaqui(200), formaPagContrato: "Por medição" },
+  { id: 3, nome: "Reforma Escola Municipal",       local: "Alegre - ES", endereco: "Rua da Escola, 45 - Centro, Alegre - ES", refLocal: "Ao lado do ginásio",     lat: -20.7660, lng: -41.5350, status: "Ativa", tipo: "Edificação",   clienteId: 2, cliente: "Prefeitura Municipal de Exemplo", clienteDoc: "00.000.000/0001-00", valorContrato: "320000",  dataInicioContrato: isoDaqui(15),   dataFimContrato: isoDaqui(140), formaPagContrato: "Por medição", obsContrato: "Início previsto após a ordem de serviço." },
+  { id: 4, nome: "Pavimentação Rua das Palmeiras", local: "Alegre - ES", endereco: "Rua das Palmeiras - Bairro Exemplo, Alegre - ES", refLocal: "",              lat: -20.7705, lng: -41.5262, status: "Ativa", tipo: "Pavimentação", clienteId: 2, cliente: "Prefeitura Municipal de Exemplo", clienteDoc: "00.000.000/0001-00", valorContrato: "540000",  dataInicioContrato: isoDaqui(-20),  dataFimContrato: isoDaqui(100), formaPagContrato: "Por medição" },
+];
+
+/* Trabalhadores da demo: nomes genéricos, CPF/RG zerados, telefones de exemplo.
+   Equipe 1 = regime quinzenal, Equipe 2 = semanal — os dois ciclos fecham na
+   próxima sexta (Folha "Por Ciclo" e o filtro de equipe aparecem preenchidos). */
+const trabDemo = (id, nome, cargo, obraId, diaria, equipe, extra = {}) => ({
+  id, nome, cargo, obraId, diaria: String(diaria),
+  cpf: "000.000.000-00", rg: "0000000", nasc: `1${String(id).padStart(2, "0").slice(-1)}/0${1 + (id % 9)}/198${id % 10}`,
+  tel: `(00) 90000-00${String(id).padStart(2, "0")}`, endereco: `Rua Exemplo, ${id * 10}`,
+  inicio: isoDaqui(-(120 + id * 7)),
+  tamCalca: "42", tamCamisa: "G", tamBota: "41", tamLuva: "M", tamCapacete: "Único",
+  epiEntregue: true, epiData: isoDaqui(-(30 + id)),
+  asoData: isoDaqui(-(200 + id * 3)), asoValidade: isoDaqui(165 - id * 3), asoStatus: "Apto",
+  formaCalculo: "diaria",
+  tipoFolha: equipe === 2 ? "semanal" : "quinzenal", equipe,
+  ultimoPagamento: equipe === 2 ? ultimaSexta(0) : ultimaSexta(1),
+  ...extra,
+});
+export const DEMO_TRABALHADORES = [
+  // OBRA 1 — Residencial Vista Verde
+  trabDemo(1,  "Carlos Andrade",   "Encarregado / Operador Retroescavadeira", 1, 180, 1, { nasc: `12/${mesAtual}/1979` }), // aniversariante do mês
+  trabDemo(2,  "João Batista",     "Pedreiro",    1, 150, 1),
+  trabDemo(3,  "Marcos Vinícius",  "Pedreiro",    1, 150, 1),
+  trabDemo(4,  "Antônio Ferreira", "Pedreiro",    1, 150, 1, { asoValidade: isoDaqui(12) }),  // ASO vencendo (alerta)
+  trabDemo(5,  "Rafael Souza",     "Pedreiro",    1, 150, 2),
+  trabDemo(6,  "Paulo Henrique",   "Pedreiro",    1, 150, 2),
+  trabDemo(7,  "Lucas Martins",    "Auxiliar",    1, 100, 2, { nasc: `25/${mesAtual}/1998` }),
+  trabDemo(8,  "Diego Alves",      "Auxiliar",    1, 100, 1),
+  trabDemo(9,  "Bruno Costa",      "Auxiliar",    1, 100, 2),
+  trabDemo(10, "Sérgio Ramos",     "Pintor",      1, 150, 1),
+  trabDemo(11, "Felipe Nunes",     "Auxiliar",    1, 100, 2, { epiEntregue: false, epiData: "" }), // sem EPI (alerta)
+
+  // OBRA 2 — Galpão Logístico Norte
+  trabDemo(12, "Roberto Lima",     "Encarregado", 2, 180, 1),
+  trabDemo(13, "Eduardo Pires",    "Pintor",      2, 150, 1),
+  trabDemo(14, "Wagner Rocha",     "Eletricista", 2, 180, 2),
+
+  // OBRA 4 — Pavimentação Rua das Palmeiras
+  trabDemo(15, "Jorge Teixeira",   "Encarregado", 4, 180, 1),
+  trabDemo(16, "Márcio Gomes",     "Pedreiro",    4, 150, 2),
+
+  // ESCRITÓRIO (obraId 0: fora da simulação de presença)
+  trabDemo(17, "Ana Lúcia Ribeiro", "Engenheiro / Diretor", 0, 0, 1, { formaCalculo: "mensal_fixo", salarioFixo: "9500", tipoFolha: "mensal", diaPagamentoMes: "5", ultimoPagamento: dia5Passado() }),
+  trabDemo(18, "Geraldo Mendes",    "Mestre de Obras",      0, 250, 1, { tipoFolha: "mensal", diaPagamentoMes: "5", ultimoPagamento: dia5Passado() }),
+];
+
+export const DEMO_ATIVOS = [
+  { ...DEFAULT_ATIVOS[0], nome: "Retroescavadeira 01", placa: "", marca: "Exemplo", modelo: "RX 420", ano: "2019", horimetro: 1450, responsavel: "Carlos Andrade" },
+  { ...DEFAULT_ATIVOS[1], nome: "Caminhonete da empresa", placa: "EXE-0A00", marca: "Exemplo", modelo: "Pickup 4x4", ano: "2021", cor: "Branca", km: 48200, responsavel: "Visitante" },
+];
+
+// Fornecedores fictícios (sem CNPJ, sem telefone real)
+export const DEMO_FORNECEDORES = [
+  { id: 1, nome: "Depósito Exemplo",           razaoSocial: "Depósito Exemplo Ltda",            cnpj: "", categoria: "Material de construção",  contato: "Balcão", telefone: "(00) 3000-0001", whatsapp: "(00) 90000-0101", email: "", endereco: "Rua do Comércio, 10 - Centro, Alegre - ES", obs: "Entrega em toda a região. Prazo de 30 dias no boleto." },
+  { id: 2, nome: "Areial e Britas Exemplo",     razaoSocial: "Areial Exemplo",                   cnpj: "", categoria: "Agregados",               contato: "",       telefone: "(00) 3000-0002", whatsapp: "",               email: "", endereco: "Rodovia Exemplo, km 3 - Alegre - ES",         obs: "Areia, brita e pó de pedra. Carrada mínima 6 m³." },
+  { id: 3, nome: "Locadora de Máquinas Exemplo", razaoSocial: "Locadora Exemplo Ltda",           cnpj: "", categoria: "Locação de equipamentos", contato: "",       telefone: "(00) 3000-0003", whatsapp: "(00) 90000-0303", email: "", endereco: "Av. Principal, 500 - Alegre - ES",             obs: "Betoneira, compactador e andaime por diária." },
+  { id: 4, nome: "Elétrica e Hidráulica Exemplo", razaoSocial: "EH Exemplo Comércio",             cnpj: "", categoria: "Elétrica e hidráulica",   contato: "",       telefone: "(00) 3000-0004", whatsapp: "",               email: "", endereco: "Rua das Flores, 77 - Alegre - ES",             obs: "" },
+];
+
+export const DEMO_CLIENTES = [
+  { id: 1, nome: "Incorporadora Exemplo",           documento: "00.000.000/0001-00", telefone: "(00) 3000-0100", email: "obras@incorporadoraexemplo.com.br", endereco: "Av. Central, 1000 - Sala 12", cidade: "Alegre - ES", observacoes: "Contato: engenheiro fiscal. Medição mensal até o dia 25." },
+  { id: 2, nome: "Prefeitura Municipal de Exemplo", documento: "00.000.000/0001-00", telefone: "(00) 3000-0200", email: "obras@exemplo.gov.br",             endereco: "Praça da Matriz, s/n",         cidade: "Alegre - ES", observacoes: "Obras por licitação. Diário de obra e RDO exigidos na medição." },
+];
+
+export const DEMO_FERRAMENTAS = [
+  { id: 1, nome: "Carrinho de mão",       quantidade: 6, obraId: 1, estado: "Bom",     icon: "🛒" },
+  { id: 2, nome: "Enxada",                quantidade: 8, obraId: 1, estado: "Bom",     icon: "🔨" },
+  { id: 3, nome: "Nível a laser",         quantidade: 1, obraId: 2, estado: "Bom",     icon: "📐" },
+  { id: 4, nome: "Andaime tubular (jogo)", quantidade: 4, obraId: 2, estado: "Regular", icon: "🪜" },
+];
+
+function gerarManutencoesDemo() {
+  const agora = Date.now();
+  return [
+    { id: agora - 900000, tipoItem: "ativo",       itemId: "1", tipo: "Troca de óleo",  proxData: isoDaqui(4),  observacao: "Óleo do motor e filtro (a cada 250 h)", obraId: "1", ts: agora - 900000, realizada: false },
+    { id: agora - 800000, tipoItem: "equipamento", itemId: "1", tipo: "Revisão geral",  proxData: isoDaqui(21), observacao: "Correia e rolamentos da betoneira",     obraId: "1", ts: agora - 800000, realizada: false },
+  ];
+}
+
+function gerarFeriasDemo() {
+  return [{ id: Date.now() - 700000, trabId: 10, inicio: isoDaqui(14), fim: isoDaqui(43), obs: "Férias anuais — Sérgio Ramos (Pintor)" }];
+}
+
+// Mensagens entre gestor e encarregados (as do encarregado ainda não lidas: badge no menu)
+function gerarMensagensDemo() {
+  const agora = Date.now();
+  return [
+    { id: agora - 3600000 * 2,  de: "demo-enc-1", para: "demo-gestor", texto: "Bom dia. Concretagem da laje do bloco B marcada para amanhã às 7h. Precisamos confirmar o caminhão de concreto.", ts: agora - 3600000 * 2,  lida: false },
+    { id: agora - 3600000 * 26, de: "demo-gestor", para: "demo-enc-1", texto: "Pedido de cimento aprovado. Entrega prevista para quinta.", ts: agora - 3600000 * 26, lida: true },
+    { id: agora - 3600000 * 5,  de: "demo-enc-2", para: "demo-gestor", texto: "O eletricista precisa de mais 200 m de cabo 2,5 mm². Já lancei o pedido no app.", ts: agora - 3600000 * 5, lida: false },
+  ];
+}
+
+// Avisos (tela Avisos / sininho). Na demo ficam só em memória: não há nuvem.
+export function gerarAvisosDemo() {
+  const agora = Date.now();
+  return [
+    { id: String(agora - 3600000 * 3),  criadoEm: agora - 3600000 * 3,  de: "demo-enc-1", deNome: "Carlos Andrade", tipo: "pedido", titulo: "📦 Pedido de material — Residencial Vista Verde", texto: "Carlos Andrade pediu: Cimento CP-II (40 saco), Areia Lavada (6 m³)", para: { tipo: "gestores" }, navegarPara: "pedidos" },
+    { id: String(agora - 3600000 * 20), criadoEm: agora - 3600000 * 20, de: "demo-enc-2", deNome: "Roberto Lima",   tipo: "ponto",  titulo: "⏰ Ponto lançado — Galpão Logístico Norte", texto: "3 presentes, 0 faltas. Equipe completa hoje.", para: { tipo: "gestores" }, navegarPara: "calendario" },
+    { id: String(agora - 3600000 * 50), criadoEm: agora - 3600000 * 50, de: "demo-gestor", deNome: "Visitante",      tipo: "manual", titulo: "📢 Treinamento NR-18 na sexta", texto: "Todas as equipes às 7h no canteiro do Residencial Vista Verde. Presença obrigatória.", para: { tipo: "todos" }, navegarPara: "avisos" },
+  ];
+}
+
+/* Cronogramas no formato de TelaCronograma (id, nome, ordem, inicio, fim, progresso,
+   responsavel, obs) + campos do Cronograma Pro (custoBase, pctPrevisto, critica).
+   Etapas em sequência a partir de `inicioDias` (relativo a hoje); pctPrevisto vem
+   das datas e o progresso real fica um pouco atrás ou à frente para os KPIs
+   (IDP, curva S, inconsistências) terem o que mostrar. */
+function etapasDemo(inicioDias, etapas, responsavel) {
+  let cursor = inicioDias;
+  const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+  return etapas.map(([nome, duracao, custoBase, critica, desvio], i) => {
+    const ini = cursor, fim = cursor + duracao;
+    cursor = fim + 1;
+    const decorrido = -ini; // dias desde o início da etapa (negativo = ainda não começou)
+    const pctPrevisto = decorrido <= 0 ? 0 : decorrido >= duracao ? 100 : Math.round((decorrido / duracao) * 100);
+    const progresso = Math.max(0, Math.min(100, pctPrevisto + (pctPrevisto > 0 && pctPrevisto < 100 ? desvio : 0)));
+    return { id: 1700000000000 + i, nome, ordem: i, inicio: isoDaqui(ini), fim: isoDaqui(fim), progresso, responsavel, obs: "", custoBase, pctPrevisto, critica: !!critica };
+  });
+}
+function gerarCronogramasDemo() {
+  return {
+    1: etapasDemo(-75, [
+      ["Serviços preliminares e canteiro", 10,  25000, false, 0],
+      ["Fundações",                        25,  120000, true,  0],
+      ["Estrutura (pilares, vigas e lajes)", 45, 260000, true, -8],
+      ["Alvenaria e vedações",             30,  90000, false, -14],
+      ["Instalações elétricas e hidráulicas", 25, 110000, false, 0],
+      ["Cobertura",                        15,  60000, true,  0],
+      ["Revestimentos e pintura",          30,  120000, false, 0],
+      ["Limpeza final e entrega",          10,  15000, false, 0],
+    ], "Carlos Andrade"),
+    2: etapasDemo(-40, [
+      ["Terraplenagem e drenagem",         20,  140000, true,  6],
+      ["Fundações e pisos industriais",    35,  320000, true,  -5],
+      ["Estrutura metálica e cobertura",   40,  420000, true,  0],
+      ["Fechamentos e instalações",        30,  220000, false, 0],
+      ["Pátio, acessos e entrega",         20,  100000, false, 0],
+    ], "Roberto Lima"),
+    4: etapasDemo(-20, [
+      ["Sinalização e desvio de tráfego",   5,  12000, false, 0],
+      ["Drenagem (tubos e poços de visita)", 20, 160000, true, -10],
+      ["Sub-base e base",                  15,  120000, true,  0],
+      ["Meio-fio e sarjeta",               10,  60000, false, 0],
+      ["Pavimento e sinalização final",    12,  188000, true,  0],
+    ], "Jorge Teixeira"),
+  };
+}
+
+/* Semente completa da demonstração. As chaves são as mesmas que o boot de
+   KMZeroApp.jsx lê com store.get (obras, trabalhadores, rdos, historico,
+   fotosObras, movEquip, despesasAvulsas...). `links` vem de fora (LINKS_PADRAO
+   mora em screens/equipe.jsx e este arquivo não importa telas). */
+export function gerarDadosDemo({ links = [] } = {}) {
+  const base = gerarDadosMes30Dias({ fotosPorDia: 2, obras: DEMO_OBRAS, trabalhadores: DEMO_TRABALHADORES, fotosNoRdo: false });
+  return {
+    ...base,
+    equips: DEFAULT_EQUIPS.map(e => ({ ...e })),
+    ativos: DEMO_ATIVOS.map(a => ({ ...a })),
+    fornecedores: DEMO_FORNECEDORES.map(f => ({ ...f })),
+    empresa: { ...DEMO_EMPRESA },
+    usuarios: DEMO_USUARIOS.map(u => ({ ...u })),
+    mensagens: gerarMensagensDemo(),
+    avisos: gerarAvisosDemo(),
+    cronogramas: gerarCronogramasDemo(),
+    clientes: DEMO_CLIENTES.map(c => ({ ...c })),
+    ferramentas: DEMO_FERRAMENTAS.map(f => ({ ...f })),
+    manutencoes: gerarManutencoesDemo(),
+    ferias: gerarFeriasDemo(),
+    links: links.map(l => ({ ...l })),
+    folhasSalvas: [],
+  };
+}
 
 /* ── SHARED STYLES ── */

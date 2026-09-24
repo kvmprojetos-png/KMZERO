@@ -96,6 +96,23 @@ Alternativa sem terminal: Console Firebase → Firestore Database → Regras →
 - Acessos antigos da equipe criados com "usuário sem @" não entram mais: cadastre o Gmail da pessoa em Acessos do App.
 - Faça o primeiro login **no aparelho que tem os dados reais**: ele envia os cadastros para a nuvem e os outros aparelhos passam a receber. Antes disso, vale exportar um backup em Sistema → Backup.
 
+## 🎬 Modo demonstração
+
+**O que é.** Uma visita ao sistema sem login, como gestor de uma empresa fictícia (“Construtora Exemplo”): 4 obras com nomes neutros, 18 trabalhadores, 30 dias de presenças, RDOs, fotos, pedidos, folha por ciclo, cronogramas, mensagens e avisos de exemplo. É a mesma interface do app real (modo escritório no computador, app de campo no celular) e a fonte das capturas da vitrine.
+
+**Como abrir.** `https://kmzero.vercel.app/app/?demo=1` (apelido: `/app/demo`). Os botões “Ver demonstração” da vitrine e o link “Só quero ver como funciona” da tela de entrada levam para lá. Uma faixa ouro fixa no topo (“Modo demonstração — dados de exemplo”) marca a sessão o tempo todo.
+
+**Como sair.** Qualquer “Sair” (faixa do topo, menu lateral, Painel, Minha conta → “Sair da demonstração”) apaga os dados de exemplo deste navegador (chaves `demo_*` do localStorage e o banco `demo_files` do IndexedDB) e volta para `/`. Abrir `/app/` em seguida mostra a empresa real do navegador exatamente como estava.
+
+**O que NÃO faz.**
+
+- Não toca na nuvem: em `src/lib/store.js`, `setModoDemo(true)` faz `cloudRefs()` devolver `null`, então nenhuma função de Firestore/Storage (store.js, avisos.js, cloudSync.js) envia ou recebe nada. Não há requisição ao Firestore no Network.
+- Não usa a conta Google do navegador: o boot pula `aguardarSessao`, `resultadoRedirecionamento` e `verificarAcessoNuvem`; o visitante (`DEMO_USUARIO`) não tem `firebaseUid` nem e-mail, então a sincronização multiaparelho e o menu do desenvolvedor ficam desligados.
+- Não mexe na empresa real: os dados vivem só no prefixo `demo_` (empresaId `demo`); as chaves `_kmzero_empresaId` e `_kmzero_sessao` nunca são gravadas. Em todo login real o app apaga o que a demo deixou.
+- Não convida ninguém nem manda push: Usuários e acessos fica só de leitura, e os avisos enviados ficam em memória.
+
+A semente vive em `src/data/catalogos.js` (`gerarDadosDemo`, `DEMO_OBRAS`, `DEMO_EMPRESA`, `DEMO_TRABALHADORES`…) e ocupa cerca de 0,5 MB do localStorage; para regerar, basta sair e abrir de novo.
+
 ## 🌐 Site e domínio próprio
 
 O endereço do KMZERO tem duas partes:
@@ -123,6 +140,26 @@ Não precisa programar. Tenha em mãos o login da Vercel e do Firebase; leva uns
 6. **Conferir**: abrir `https://kmzero.com.br` (vitrine) e `https://kmzero.com.br/app/` (sistema) e fazer um login de teste.
 
 > **Depois do domínio, reinstale o app no celular pelo endereço novo**: abrir `https://kmzero.com.br/app/` no navegador → menu → "Adicionar à tela inicial" / "Instalar app". O ícone antigo, instalado por `kmzero.vercel.app`, continua abrindo o endereço antigo (que segue funcionando); remova-o para a equipe não confundir.
+
+## 🔔 Avisos e notificações
+
+- **No app**: sininho (🔔) com contador em todas as telas iniciais e "Avisos" no menu lateral. O gestor escreve aviso para *todos*, *gestores e diretores*, *encarregados*, *uma obra* ou *uma pessoa*; o encarregado escreve para o escritório.
+- **Automáticos**: pedido de material novo (→ gestores) e aprovado/negado (→ quem pediu); e, pelo servidor, duas vezes por dia:
+  - **~16h (seg–sex)**: obra sem ponto lançado → lembrete para o encarregado da obra;
+  - **~19h**: ponto ainda não lançado, pagamento no próximo dia útil (Equipe 1/2, mensal) e prazos (contrato perto do fim/vencido, etapa atrasada, ASO, equipamento quebrado) → gestores. Cada alerta de prazo é avisado **uma vez**.
+- **No celular com o app fechado**: Firebase Cloud Messaging + `api/notificar.js` e `api/cron-avisos.js` (funções da Vercel). No iPhone só funciona com o app **instalado na Tela de Início** (iOS 16.4+).
+
+### Ligar as notificações no celular (uma vez)
+
+São 3 variáveis na Vercel → projeto → **Settings → Environment Variables** (ambiente *Production*):
+
+| Variável | De onde vem |
+|---|---|
+| `VITE_FCM_VAPID_KEY` | Firebase → ⚙️ Configurações do projeto → **Cloud Messaging** → *Certificados push da Web* → **Gerar par de chaves** → copiar a chave (é pública) |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase → ⚙️ Configurações do projeto → **Contas de serviço** → **Gerar nova chave privada** → abrir o `.json` baixado e colar **o conteúdo inteiro**. É secreta: não mande por e-mail/WhatsApp, não suba no GitHub e apague o arquivo depois de colar |
+| `CRON_SECRET` | Uma senha longa inventada por você (ex.: 40 letras e números). A Vercel a usa para chamar a verificação das 16h/19h |
+
+Depois: **Deployments → ⋯ → Redeploy**. Para conferir: app → 🔔 Avisos → **Ativar notificações** → **Testar**.
 
 ## � Documentação Técnica
 

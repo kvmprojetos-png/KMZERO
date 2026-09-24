@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -13,7 +13,7 @@ export function TelaGerarSimulacao({ onGerar, onBack }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Gerar 30 Dias" sub="Modo demonstração" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         <div style={{ background: `linear-gradient(135deg,#7c3aed,#5b21b6)`, color: "#fff", borderRadius: 14, padding: 18, marginBottom: 14 }}>
           <div style={{ fontSize: 36, marginBottom: 6 }}>🎬</div>
@@ -23,9 +23,9 @@ export function TelaGerarSimulacao({ onGerar, onBack }) {
           </div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>📋 O que vai ser gerado:</div>
-          <div style={{ fontSize: 12, color: "#444", lineHeight: 1.7 }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 10, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, marginBottom: 8 }}>📋 O que vai ser gerado:</div>
+          <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.7 }}>
             ✅ <b>30 dias</b> de presença (70% Presente, 20% Falta, 10% Atestado)<br/>
             ✅ <b>~70 RDOs</b> (1 por obra ativa por dia útil)<br/>
             ✅ <b>~350 fotos</b> carimbadas (5 por obra/dia)<br/>
@@ -41,14 +41,15 @@ export function TelaGerarSimulacao({ onGerar, onBack }) {
           </div>
         </div>
 
-        <div style={{ background: "#fef9e7", borderRadius: 12, padding: 12, marginBottom: 10, fontSize: 11, color: "#8b6f00", lineHeight: 1.5 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 12, padding: 12, marginBottom: 10, fontSize: 11, color: T.avisoTexto, lineHeight: 1.5 }}>
           ⚠️ <b>Cuidado:</b> Isto vai <b>SUBSTITUIR</b> todos os dados atuais (RDOs, pedidos, fotos, despesas, etc).<br/><br/>
           🗑️ Você pode <b>excluir cada um manualmente</b> depois pra ver o app vazio de novo.<br/><br/>
-          💾 Antes de gerar, recomendo fazer um <b>Backup</b> em <i>Sistema → Backup</i>.
+          💾 Antes de gerar, recomendo fazer um <b>Backup</b> em <i>Sistema → Exportar dados</i>.
         </div>
 
         <Btn label="🎬 GERAR 30 DIAS DE DADOS" color="#7c3aed" onClick={onGerar} />
-        <Btn label="Cancelar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 8 }} />
+        {/* Botão neutro segue o tema; o Btn cola `${color}55` na sombra (inválido com var()), por isso a sombra vem do token */}
+        <Btn label="Cancelar" color={T.superficie2} text={T.titulo} onClick={onBack} style={{ marginTop: 8, boxShadow: T.sombra }} />
       </div>
       <KMFooter />
     </div>
@@ -163,38 +164,36 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Backup & Restaurar" sub="Segurança dos seus dados" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📦 Resumo dos Dados</div>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📦 Resumo dos Dados</div>
           {Object.entries(stats).map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #f0f0f0" }}>
-              <span style={{ fontSize: 13, color: "#666" }}>{k}</span>
-              <span style={{ fontSize: 13, color: NAVY, fontWeight: 700 }}>{v}</span>
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.borda}` }}>
+              <span style={{ fontSize: 13, color: T.texto2 }}>{k}</span>
+              <span style={{ fontSize: 13, color: T.titulo, fontWeight: 700 }}>{v}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 4, fontSize: 14 }}>💾 Salvar Backup</div>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>Recomendação: faça backup ao menos 1× por semana.</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 4, fontSize: 14 }}>💾 Salvar Backup</div>
+          <div style={{ fontSize: 11, color: T.texto2, marginBottom: 12 }}>Recomendação: faça backup ao menos 1× por semana.</div>
 
-          <button onClick={compartilhar} style={{ width: "100%", padding: 14, marginBottom: 8, background: BLUE, color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: `0 4px 14px ${BLUE}44`, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            📲 Compartilhar (WhatsApp / Drive / Email)
-          </button>
-          <div style={{ fontSize: 10, color: "#888", textAlign: "center", marginBottom: 10 }}>Funciona melhor no celular</div>
+          <Btn label="📲 Compartilhar (WhatsApp / Drive / Email)" color={BLUE} onClick={compartilhar} style={{ marginBottom: 8 }} />
+          <div style={{ fontSize: 10, color: T.texto2, textAlign: "center", marginBottom: 10 }}>Funciona melhor no celular</div>
 
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             <button onClick={enviarWhatsApp} style={{ flex: 1, padding: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>💬 WhatsApp</button>
-            <button onClick={enviarEmail} style={{ flex: 1, padding: 10, background: "#dc2626", color: "#fff", border: "none", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>📧 E-mail</button>
+            <button onClick={enviarEmail} style={{ flex: 1, padding: 10, background: RED, color: "#fff", border: "none", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>📧 E-mail</button>
           </div>
-          <button onClick={exportar} style={{ width: "100%", padding: 12, background: GREEN, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>💾 Baixar Arquivo .json</button>
+          <Btn label="💾 Baixar Arquivo .json" color={GREEN} onClick={exportar} />
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 4, fontSize: 14 }}>📥 Restaurar Backup</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 4, fontSize: 14 }}>📥 Restaurar Backup</div>
           <div style={{ fontSize: 11, color: ORANGE, marginBottom: 10, fontWeight: 600 }}>⚠️ Mescla o backup aos dados atuais (mesmo id: vale o do backup). Com a nuvem ativa, vale para toda a empresa.</div>
 
-          <label style={{ display: "block", padding: 12, borderRadius: 10, border: "1.5px dashed #c5d0e5", background: "#f9fafb", textAlign: "center", cursor: "pointer", fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 8 }}>
+          <label style={{ display: "block", padding: 12, borderRadius: 10, border: `1.5px dashed ${T.borda2}`, background: T.superficie2, textAlign: "center", cursor: "pointer", fontSize: 13, color: T.titulo, fontWeight: 600, marginBottom: 8 }}>
             📁 Escolher arquivo .json
             <input type="file" accept=".json,application/json" onChange={importarArquivo} style={{ display: "none" }} />
           </label>
@@ -211,10 +210,10 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
           )}
         </div>
 
-        {sucesso && <div style={{ background: "#f0fdf4", color: GREEN, borderRadius: 8, padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>{sucesso}</div>}
-        {erro && <div style={{ background: "#fef2f2", color: RED, borderRadius: 8, padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>{erro}</div>}
+        {sucesso && <div style={{ background: T.sucessoFundo, color: GREEN, borderRadius: 8, padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>{sucesso}</div>}
+        {erro && <div style={{ background: T.erroFundo, color: RED, borderRadius: 8, padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>{erro}</div>}
 
-        <div style={{ background: "#fffaeb", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#8b6f00", marginTop: 12 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 10, padding: "10px 14px", fontSize: 11, color: T.avisoTexto, marginTop: 12 }}>
           💡 <b>Dica:</b> use o botão "Compartilhar" no celular pra enviar o backup direto pro Google Drive, e-mail ou WhatsApp num só toque.
         </div>
       </div>
@@ -251,12 +250,12 @@ export function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar,
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Escritório" sub="Funcionários indiretos" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* CARD EXPLICATIVO */}
-        <div style={{ background: "#f3e8ff", borderRadius: 12, padding: 14, marginBottom: 12, border: `1px solid #7c3aed33` }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#5b21b6", marginBottom: 4 }}>📐 Custo indireto / Rateio</div>
-          <div style={{ fontSize: 11, color: "#5b21b6", lineHeight: 1.5 }}>
+        <div style={{ background: T.roxoFundo, borderRadius: 12, padding: 14, marginBottom: 12, border: `1px solid #7c3aed33` }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.roxoTexto, marginBottom: 4 }}>📐 Custo indireto / Rateio</div>
+          <div style={{ fontSize: 11, color: T.roxoTexto, lineHeight: 1.5 }}>
             Funcionários do escritório (engenheiro, secretária, contador, etc) têm o salário <b>rateado igualmente</b> entre as obras ativas. Aparece em cada obra como <b>"Mão de obra indireta"</b>.
           </div>
         </div>
@@ -288,15 +287,15 @@ export function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar,
             cor="#7c3aed"
           />
         ) : funcEscritorio.map(f => (
-          <div key={f.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${f.ativo ? "#7c3aed" : "#ccc"}`, opacity: f.ativo ? 1 : 0.6 }}>
+          <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${f.ativo ? "#7c3aed" : T.desabilitado}`, opacity: f.ativo ? 1 : 0.6 }}>
             <div style={{ display: "flex", alignItems: "center" }}>
               <div style={{ fontSize: 32, marginRight: 12 }}>📐</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: NAVY, fontSize: 14 }}>{f.nome}{!f.ativo && <span style={{ fontSize: 10, color: "#888", marginLeft: 6 }}>(inativo)</span>}</div>
-                <div style={{ fontSize: 11, color: "#666" }}>{f.cargo || "—"}</div>
+                <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{f.nome}{!f.ativo && <span style={{ fontSize: 10, color: T.texto2, marginLeft: 6 }}>(inativo)</span>}</div>
+                <div style={{ fontSize: 11, color: T.texto2 }}>{f.cargo || "—"}</div>
                 <div style={{ fontSize: 12, color: GREEN, fontWeight: 700, marginTop: 4 }}>R$ {(parseFloat(f.salarioMensal) || 0).toFixed(2)}/mês</div>
                 {f.ativo && numObrasAtivas > 0 && (
-                  <div style={{ fontSize: 10, color: "#888", marginTop: 2, fontStyle: "italic" }}>
+                  <div style={{ fontSize: 10, color: T.texto2, marginTop: 2, fontStyle: "italic" }}>
                     → R$ {((parseFloat(f.salarioMensal) || 0) / numObrasAtivas).toFixed(2)} por obra ativa
                   </div>
                 )}
@@ -317,15 +316,15 @@ export function TelaEscritorio({ obras, funcEscritorio, onBack, onAdd, onEditar,
         <input value={form.salarioMensal} onChange={e => set("salarioMensal", e.target.value)} type="number" placeholder="Ex: 5000" style={inputS} />
         <label style={labelS}>Data de Admissão</label>
         <input value={form.dataAdmissao} onChange={e => set("dataAdmissao", e.target.value)} type="date" style={dateS} />
-        <div style={{ background: "#f9fafb", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: NAVY, fontWeight: 600 }}>
+        <div style={{ background: T.superficie2, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: T.titulo, fontWeight: 600 }}>
             <input type="checkbox" checked={!!form.ativo} onChange={e => set("ativo", e.target.checked)} style={{ width: 18, height: 18 }} />
             Ativo (entrar no rateio)
           </label>
-          <div style={{ fontSize: 10, color: "#888", marginTop: 4, marginLeft: 26 }}>Desmarque se ele estiver de férias ou afastado.</div>
+          <div style={{ fontSize: 10, color: T.texto2, marginTop: 4, marginLeft: 26 }}>Desmarque se ele estiver de férias ou afastado.</div>
         </div>
         {editandoId && (
-          <button onClick={() => { confirmar(`Remover ${form.nome}?`, () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: "#fef2f2", color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir</button>
+          <button onClick={() => { confirmar(`Remover ${form.nome}?`, () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir</button>
         )}
         <Btn label="💾 SALVAR" color={GREEN} onClick={salvar} />
       </Modal>
@@ -350,7 +349,7 @@ export function TelaAjuda({ empresa, onBack }) {
     {
       id: "como_inicio",
       pergunta: "Como começo a usar o KMZERO?",
-      resposta: "O KMZERO já vem com dados de exemplo. Como gestor, você acessa o Painel do Gestor pela tela inicial. Pelo menu Sistema → Empresa, configura os dados da sua empresa. Pelo menu Recursos Humanos → Equipe, cadastra trabalhadores e encarregados. Pelo menu Obras & Recursos → Obras, cadastra as obras em andamento. Os encarregados acessam pelo seu próprio cadastro (criado em Sistema → Acessos do App).",
+      resposta: "Como gestor, você acessa o Painel pela tela inicial (quer ver o sistema cheio antes de cadastrar? Abra a demonstração em kmzero.vercel.app/app/?demo=1). Pelo menu Sistema → Empresa, configura os dados da sua empresa. Pelo menu Recursos Humanos → Equipe, cadastra trabalhadores e encarregados. Pelo menu Obras & Recursos → Obras, cadastra as obras em andamento. Os encarregados acessam pelo seu próprio cadastro (criado em Sistema → Usuários e acessos).",
     },
     {
       id: "como_rdo",
@@ -380,7 +379,7 @@ export function TelaAjuda({ empresa, onBack }) {
     {
       id: "encarregado_acessar",
       pergunta: "Como os encarregados acessam o aplicativo?",
-      resposta: "O gestor cadastra o Gmail de cada encarregado em Sistema → Acessos do App, escolhendo a obra. No celular, o encarregado abre o app e toca em \"Entrar com Google\" com esse Gmail: entra direto na empresa, sem senha para decorar. Os encarregados só veem a obra à qual estão vinculados.",
+      resposta: "O gestor cadastra o Gmail de cada encarregado em Sistema → Usuários e acessos, escolhendo a obra. No celular, o encarregado abre o app e toca em \"Entrar com Google\" com esse Gmail: entra direto na empresa, sem senha para decorar. Os encarregados só veem a obra à qual estão vinculados.",
     },
     {
       id: "offline",
@@ -395,7 +394,7 @@ export function TelaAjuda({ empresa, onBack }) {
     {
       id: "backup",
       pergunta: "Como faço backup dos dados?",
-      resposta: "Em Sistema → Backup, você pode exportar todos os dados em arquivo único para guardar no seu computador. Recomendamos fazer backup pelo menos uma vez por mês. Em breve, com a sincronização na nuvem ativa, o backup será automático.",
+      resposta: "Em Sistema → Exportar dados, você pode exportar todos os dados em arquivo único para guardar no seu computador. Com a sincronização na nuvem ativa, os dados já ficam guardados no Firebase; o arquivo exportado é uma cópia extra para o seu computador, que recomendamos gerar pelo menos uma vez por mês.",
     },
     {
       id: "suporte",
@@ -409,7 +408,7 @@ export function TelaAjuda({ empresa, onBack }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ajuda & Suporte" sub="FAQ, Termos e Contato" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* CARD CONTATO RÁPIDO */}
         <div style={{
@@ -484,9 +483,9 @@ export function TelaAjuda({ empresa, onBack }) {
               style={{
                 flex: "1 1 90px",
                 padding: "10px 6px",
-                background: aba === t.k ? t.c : "#fff",
-                color: aba === t.k ? "#fff" : "#666",
-                border: aba === t.k ? "none" : "1px solid #e5e7eb",
+                background: aba === t.k ? t.c : T.superficie,
+                color: aba === t.k ? "#fff" : T.texto2,
+                border: aba === t.k ? "none" : `1px solid ${T.borda}`,
                 borderRadius: 10,
                 fontSize: 11,
                 fontWeight: 800,
@@ -499,7 +498,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
         {/* CONTEÚDO SOBRE */}
         {aba === "sobre" && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 0, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 0, overflow: "hidden", boxShadow: T.sombra }}>
             {/* Header navy com logo */}
             <div style={{
               background: "linear-gradient(135deg, #0F2151 0%, #1e3a8a 100%)",
@@ -512,9 +511,9 @@ export function TelaAjuda({ empresa, onBack }) {
               </div>
               <div style={{ fontSize: 42, fontWeight: 900, letterSpacing: -1.5 }}>
                 <span style={{ color: "#fff" }}>KM</span>
-                <span style={{ color: "#F5A623" }}>ZERO</span>
+                <span style={{ color: GOLD }}>ZERO</span>
               </div>
-              <div style={{ height: 2, width: 50, background: "#F5A623", margin: "10px auto", borderRadius: 2 }} />
+              <div style={{ height: 2, width: 50, background: GOLD, margin: "10px auto", borderRadius: 2 }} />
               <div style={{ fontSize: 13, fontStyle: "italic", opacity: 0.9 }}>
                 KM Consultoria · Engenharia Civil
               </div>
@@ -522,7 +521,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
             {/* Quem desenvolveu */}
             <div style={{ padding: "20px 18px" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.titulo, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 👨‍💼 Quem desenvolve
               </div>
               <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 14 }}>
@@ -534,24 +533,24 @@ export function TelaAjuda({ empresa, onBack }) {
                   boxShadow: "0 4px 14px rgba(245,166,35,0.4)",
                 }}>👷</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151" }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: T.titulo }}>
                     Kleber Vieira Martins
                   </div>
-                  <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: T.texto2, marginTop: 2 }}>
                     Engenheiro Civil · CREA-ES
                   </div>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 11, color: T.texto3, marginTop: 2, lineHeight: 1.5 }}>
                     Fundador da KM Consultoria, em Alegre-ES. Atua há mais de 10 anos em obras civis no sul capixaba.
                   </div>
                 </div>
               </div>
 
               <div style={{
-                background: "#FFF7E6",
-                borderLeft: "4px solid #F5A623",
+                background: T.avisoFundo,
+                borderLeft: `4px solid ${GOLD}`,
                 padding: "10px 14px",
                 fontSize: 12,
-                color: "#444",
+                color: T.texto,
                 lineHeight: 1.6,
                 borderRadius: "0 8px 8px 0",
                 marginBottom: 16,
@@ -561,49 +560,49 @@ export function TelaAjuda({ empresa, onBack }) {
             </div>
 
             {/* O que é */}
-            <div style={{ padding: "0 18px 16px", borderTop: "1px solid #f3f4f6", paddingTop: 18 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ padding: "0 18px 16px", borderTop: `1px solid ${T.borda}`, paddingTop: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.titulo, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
                 🎯 O que é o KMZERO
               </div>
-              <div style={{ fontSize: 12, color: "#444", lineHeight: 1.7 }}>
+              <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.7 }}>
                 O KMZERO é um aplicativo profissional de gestão de obras, desenvolvido em Engenharia Civil pela KM Consultoria. Centraliza em uma plataforma única o controle de equipes, materiais, custos, relatórios técnicos e comunicação entre canteiro e escritório.
               </div>
             </div>
 
             {/* Tecnologia */}
-            <div style={{ padding: "0 18px 16px", borderTop: "1px solid #f3f4f6", paddingTop: 18 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ padding: "0 18px 16px", borderTop: `1px solid ${T.borda}`, paddingTop: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.titulo, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 ⚡ Tecnologia
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11 }}>
                 {[
                   ["🔒 Firebase Auth", "Google Cloud"],
-                  ["☁️ Firestore", "Banco em São Paulo"],
+                  ["☁️ Firestore", "Banco na nuvem do Google"],
                   ["📱 React + Vite", "Frontend moderno"],
                   ["🌐 Vercel", "CDN global"],
                   ["📄 jsPDF", "Relatórios ABNT"],
                   ["🔐 LGPD", "Conformidade legal"],
                 ].map(([k, v], i) => (
                   <div key={i} style={{
-                    background: "#f9fafb",
+                    background: T.superficie2,
                     padding: "8px 10px",
                     borderRadius: 8,
-                    borderLeft: "3px solid #0F2151",
+                    borderLeft: `3px solid ${T.contorno}`, // navy no claro, ciano no escuro (navy fixo sumia sobre a superfície escura)
                   }}>
-                    <div style={{ fontWeight: 700, color: "#0F2151" }}>{k}</div>
-                    <div style={{ color: "#64748b", fontSize: 10 }}>{v}</div>
+                    <div style={{ fontWeight: 700, color: T.titulo }}>{k}</div>
+                    <div style={{ color: T.texto2, fontSize: 10 }}>{v}</div>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Contato direto */}
-            <div style={{ padding: "16px 18px", borderTop: "1px solid #f3f4f6" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0F2151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ padding: "16px 18px", borderTop: `1px solid ${T.borda}` }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.titulo, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 💬 Fale com a KM
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
-                <a href="https://wa.me/5528999258172?text=Olá! Vim do app KMZERO." target="_blank" rel="noopener noreferrer" style={{ color: "#16a34a", textDecoration: "none", fontWeight: 700 }}>
+                <a href="https://wa.me/5528999258172?text=Olá! Vim do app KMZERO." target="_blank" rel="noopener noreferrer" style={{ color: GREEN, textDecoration: "none", fontWeight: 700 }}>
                   💬 WhatsApp (28) 99925-8172
                 </a>
                 <a href="mailto:kvmprojetos@gmail.com?subject=Contato KMZERO" style={{ color: "#0891b2", textDecoration: "none", fontWeight: 700 }}>
@@ -617,14 +616,14 @@ export function TelaAjuda({ empresa, onBack }) {
 
             {/* Footer da seção Sobre */}
             <div style={{
-              background: "#f9fafb",
+              background: T.superficie2,
               padding: "12px 18px",
               textAlign: "center",
               fontSize: 10,
-              color: "#94a3b8",
-              borderTop: "1px solid #f3f4f6",
+              color: T.texto3,
+              borderTop: `1px solid ${T.borda}`,
             }}>
-              <div style={{ fontWeight: 700, color: "#475569", letterSpacing: 1 }}>KMZERO · Versão 1.0 · Maio/2026</div>
+              <div style={{ fontWeight: 700, color: T.texto2, letterSpacing: 1 }}>KMZERO · Versão 1.0 · Maio/2026</div>
               <div style={{ marginTop: 4 }}>© 2026 KM Consultoria · CNPJ 60.368.233/0001-73</div>
               <div style={{ marginTop: 4 }}>Alegre · ES · Brasil</div>
             </div>
@@ -634,17 +633,17 @@ export function TelaAjuda({ empresa, onBack }) {
         {/* CONTEÚDO FAQ */}
         {aba === "faq" && (
           <div>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 10, lineHeight: 1.5, padding: "0 4px" }}>
+            <div style={{ fontSize: 11, color: T.texto2, marginBottom: 10, lineHeight: 1.5, padding: "0 4px" }}>
               Toque em uma pergunta para ver a resposta. Se não encontrar o que precisa, fale com o suporte pelos canais acima.
             </div>
             {faqs.map(f => (
-              <div key={f.id} style={{ background: "#fff", borderRadius: 12, marginBottom: 8, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+              <div key={f.id} style={{ background: T.superficie, borderRadius: 12, marginBottom: 8, overflow: "hidden", boxShadow: T.sombra }}>
                 <button
                   onClick={() => toggleFaq(f.id)}
                   style={{
                     width: "100%",
                     padding: "12px 14px",
-                    background: abertos[f.id] ? "#f0fdf4" : "#fff",
+                    background: abertos[f.id] ? T.sucessoFundo : T.superficie,
                     border: "none",
                     cursor: "pointer",
                     textAlign: "left",
@@ -655,7 +654,7 @@ export function TelaAjuda({ empresa, onBack }) {
                   }}
                 >
                   <div style={{ fontSize: 16, color: GREEN }}>{abertos[f.id] ? "❓" : "❔"}</div>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: NAVY }}>{f.pergunta}</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: T.titulo }}>{f.pergunta}</div>
                   <div style={{
                     fontSize: 18,
                     color: GREEN,
@@ -667,10 +666,10 @@ export function TelaAjuda({ empresa, onBack }) {
                   <div style={{
                     padding: "0 14px 14px 38px",
                     fontSize: 12,
-                    color: "#444",
+                    color: T.texto,
                     lineHeight: 1.7,
-                    background: "#f9fafb",
-                    borderTop: "1px solid #e5e7eb",
+                    background: T.superficie2,
+                    borderTop: `1px solid ${T.borda}`,
                     paddingTop: 12,
                   }}>
                     {f.resposta}
@@ -683,11 +682,11 @@ export function TelaAjuda({ empresa, onBack }) {
 
         {/* CONTEÚDO TERMOS */}
         {aba === "termos" && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>📄 Termos de Uso</div>
-            <div style={{ fontSize: 10, color: "#888", marginBottom: 14 }}>Última atualização: maio de 2026</div>
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 16, boxShadow: T.sombra }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>📄 Termos de Uso</div>
+            <div style={{ fontSize: 10, color: T.texto2, marginBottom: 14 }}>Última atualização: maio de 2026</div>
 
-            <div style={{ fontSize: 12, color: "#333", lineHeight: 1.7 }}>
+            <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.7 }}>
               <p style={{ marginTop: 0 }}>
                 <b>1. Aceitação dos termos</b><br/>
                 Ao usar o KMZERO, você concorda com estes termos. Se não concordar, por favor não utilize o aplicativo.
@@ -715,12 +714,12 @@ export function TelaAjuda({ empresa, onBack }) {
 
               <p>
                 <b>6. Responsabilidades</b><br/>
-                A KM Consultoria não se responsabiliza por perdas de dados decorrentes de falha do aparelho do usuário, exclusão acidental, ou problemas de conexão. Recomendamos backup periódico em Sistema → Backup.
+                A KM Consultoria não se responsabiliza por perdas de dados decorrentes de falha do aparelho do usuário, exclusão acidental, ou problemas de conexão. Recomendamos backup periódico em Sistema → Exportar dados.
               </p>
 
               <p>
                 <b>7. Atualizações</b><br/>
-                Estes termos podem ser atualizados a qualquer momento. A versão vigente sempre estará disponível dentro do aplicativo, em Sistema → Ajuda & Suporte → Termos de Uso.
+                Estes termos podem ser atualizados a qualquer momento. A versão vigente sempre estará disponível dentro do aplicativo, em Sistema → Ajuda → Termos de Uso.
               </p>
 
               <p>
@@ -738,13 +737,13 @@ export function TelaAjuda({ empresa, onBack }) {
 
         {/* CONTEÚDO LGPD */}
         {aba === "lgpd" && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>🔒 Política de Privacidade (LGPD)</div>
-            <div style={{ fontSize: 10, color: "#888", marginBottom: 14 }}>
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 16, boxShadow: T.sombra }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.titulo, marginBottom: 8 }}>🔒 Política de Privacidade (LGPD)</div>
+            <div style={{ fontSize: 10, color: T.texto2, marginBottom: 14 }}>
               Conforme Lei nº 13.709/2018 — Lei Geral de Proteção de Dados Pessoais
             </div>
 
-            <div style={{ fontSize: 12, color: "#333", lineHeight: 1.7 }}>
+            <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.7 }}>
               <p style={{ marginTop: 0 }}>
                 <b>Controlador dos dados</b><br/>
                 KM CONSULTORIA, ASSESSORIA E SERVIÇOS DE ENGENHARIA LTDA · CNPJ 60.368.233/0001-73 · R. Pastor da Silva Colares, 148 — Guararema, Alegre-ES.
@@ -762,7 +761,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
               <p>
                 <b>Onde os dados ficam</b><br/>
-                Os dados ficam armazenados localmente no aparelho do usuário e, quando autenticado pelo Firebase, em servidores do Google Cloud (data center em São Paulo, Brasil). O aplicativo não armazena senhas: a autenticação é feita pelo Google.
+                Os dados ficam armazenados localmente no aparelho do usuário e, quando autenticado pelo Firebase, em servidores do Google Cloud. O aplicativo não armazena senhas: a autenticação é feita pelo Google.
               </p>
 
               <p>
@@ -800,7 +799,7 @@ export function TelaAjuda({ empresa, onBack }) {
 
         {/* Versão do app */}
         <div style={{ marginTop: 18, textAlign: "center" }}>
-          <div style={{ fontSize: 10, color: "#999", lineHeight: 1.6 }}>
+          <div style={{ fontSize: 10, color: T.texto3, lineHeight: 1.6 }}>
             <div><b>KMZERO</b> · Versão 1.0.0 · Atualizado em maio/2026</div>
             <div style={{ marginTop: 2 }}>© 2026 KM Consultoria · Engenharia Civil</div>
             <div style={{ marginTop: 2 }}>Alegre-ES · CNPJ 60.368.233/0001-73</div>
@@ -839,8 +838,8 @@ export function TelaConfigEmpresa({ empresa, onSave, onBack }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Empresa" sub="Dados para RDO/PDF" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra }}>
           <label style={labelS}>Razão Social</label>
           <input value={form.razaoSocial} onChange={e => set("razaoSocial", e.target.value)} style={inputS} />
           <label style={labelS}>CNPJ</label>
@@ -883,9 +882,9 @@ export function TelaConfigEmpresa({ empresa, onSave, onBack }) {
             </a>
           )}
 
-          <div style={{ marginTop: 18, paddingTop: 14, borderTop: "2px solid #f3f4f6" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 4 }}>🍽️ Preços de alimentação</div>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: `2px solid ${T.borda}` }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: T.titulo, marginBottom: 4 }}>🍽️ Preços de alimentação</div>
+            <div style={{ fontSize: 11, color: T.texto2, marginBottom: 12 }}>
               Valor por pessoa, por dia. Usado na presença do encarregado, no RDO e na ficha do trabalhador. Sem preço, o app mostra "—" e não inventa valor.
             </div>
             {CAMPOS_PRECO_ALIM.map(({ k, l }) => (
@@ -905,28 +904,28 @@ export function TelaConfigEmpresa({ empresa, onSave, onBack }) {
             ))}
           </div>
 
-          <div style={{ marginTop: 18, paddingTop: 14, borderTop: "2px solid #f3f4f6" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 4 }}>🏢 Logomarca da Empresa</div>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: `2px solid ${T.borda}` }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: T.titulo, marginBottom: 4 }}>🏢 Logomarca da Empresa</div>
+            <div style={{ fontSize: 11, color: T.texto2, marginBottom: 12 }}>
               A logo aparece nos cabeçalhos dos relatórios (RDO, pedidos, folha) ao lado da identidade KMZERO. Use uma imagem PNG ou JPG, de preferência com fundo transparente.
             </div>
 
             {form.logoBase64 ? (
               <div style={{ marginBottom: 12 }}>
-                <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+                <div style={{ background: T.superficie2, border: `1px solid ${T.borda}`, borderRadius: 10, padding: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
                   <img src={form.logoBase64} alt="Logo da empresa" style={{ maxWidth: "100%", maxHeight: 90, objectFit: "contain" }} />
                 </div>
                 <button
                   onClick={() => set("logoBase64", "")}
-                  style={{ width: "100%", padding: 10, background: "#fee2e2", color: RED, border: "1px solid " + RED + "55", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                  style={{ width: "100%", padding: 10, background: T.erroFundo, color: RED, border: "1px solid " + RED + "55", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                 >
                   🗑️ Remover logomarca
                 </button>
               </div>
             ) : (
-              <div style={{ background: "#f9fafb", border: "1px dashed #cbd5e1", borderRadius: 10, padding: 20, textAlign: "center", marginBottom: 12 }}>
+              <div style={{ background: T.superficie2, border: `1px dashed ${T.borda2}`, borderRadius: 10, padding: 20, textAlign: "center", marginBottom: 12 }}>
                 <div style={{ fontSize: 28, marginBottom: 4 }}>🖼️</div>
-                <div style={{ fontSize: 12, color: "#888" }}>Nenhuma logomarca carregada</div>
+                <div style={{ fontSize: 12, color: T.texto2 }}>Nenhuma logomarca carregada</div>
               </div>
             )}
 
@@ -952,7 +951,7 @@ export function TelaConfigEmpresa({ empresa, onSave, onBack }) {
           </div>
 
           <Btn label="💾 SALVAR" color={GREEN} onClick={() => { const f = normalizarPrecos(form); setForm(f); onSave(f); setSalvo(true); setTimeout(() => setSalvo(false), 2500); }} style={{ marginTop: 16 }} />
-          {salvo && <div style={{ background: "#f0fdf4", color: GREEN, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 8, textAlign: "center", fontWeight: 600 }}>✅ Salvo!</div>}
+          {salvo && <div style={{ background: T.sucessoFundo, color: GREEN, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 8, textAlign: "center", fontWeight: 600 }}>✅ Salvo!</div>}
         </div>
       </div>
       <KMFooter />
@@ -1023,7 +1022,7 @@ export function TelaDiagnostico({ onNav, onBack }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Diagnóstico" sub="Teste cada botão" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ background: NAVY, color: "#fff", borderRadius: 12, padding: 14, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🔍 Como usar:</div>
           <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.5 }}>
@@ -1042,7 +1041,7 @@ export function TelaDiagnostico({ onNav, onBack }) {
             <div style={{ fontSize: 22, fontWeight: 900 }}>{erroCount}</div>
             <div style={{ fontSize: 10 }}>Com problema</div>
           </div>
-          <div style={{ flex: 1, background: "#888", borderRadius: 10, padding: "10px 6px", textAlign: "center", color: "#fff" }}>
+          <div style={{ flex: 1, background: T.texto3, borderRadius: 10, padding: "10px 6px", textAlign: "center", color: "#fff" }}>
             <div style={{ fontSize: 22, fontWeight: 900 }}>{restantes}</div>
             <div style={{ fontSize: 10 }}>Não testado</div>
           </div>
@@ -1050,15 +1049,15 @@ export function TelaDiagnostico({ onNav, onBack }) {
 
         {TESTES.map(grupo => (
           <div key={grupo.grupo} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>{grupo.grupo}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: T.titulo, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>{grupo.grupo}</div>
             {grupo.itens.map(t => {
               const status = resultados[t.nav];
               return (
-                <div key={t.nav} style={{ background: status === "ok" ? "#f0fdf4" : status === "erro" ? "#fef2f2" : "#fff", borderRadius: 10, padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: NAVY }}>{t.l}</div>
+                <div key={t.nav} style={{ background: status === "ok" ? T.sucessoFundo : status === "erro" ? T.erroFundo : T.superficie, borderRadius: 10, padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: T.titulo }}>{t.l}</div>
                   <button onClick={() => onNav(t.nav)} style={{ background: BLUE, color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", marginRight: 6 }}>Abrir</button>
-                  <button onClick={() => marcar(t.nav, "ok")} style={{ background: status === "ok" ? GREEN : "#f0fdf4", color: status === "ok" ? "#fff" : GREEN, border: `1.5px solid ${GREEN}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginRight: 4 }}>✓</button>
-                  <button onClick={() => marcar(t.nav, "erro")} style={{ background: status === "erro" ? RED : "#fef2f2", color: status === "erro" ? "#fff" : RED, border: `1.5px solid ${RED}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕</button>
+                  <button onClick={() => marcar(t.nav, "ok")} style={{ background: status === "ok" ? GREEN : T.sucessoFundo, color: status === "ok" ? "#fff" : GREEN, border: `1.5px solid ${GREEN}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginRight: 4 }}>✓</button>
+                  <button onClick={() => marcar(t.nav, "erro")} style={{ background: status === "erro" ? RED : T.erroFundo, color: status === "erro" ? "#fff" : RED, border: `1.5px solid ${RED}`, borderRadius: 7, padding: "6px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✕</button>
                 </div>
               );
             })}
@@ -1066,11 +1065,11 @@ export function TelaDiagnostico({ onNav, onBack }) {
         ))}
 
         {erroCount > 0 && (
-          <div style={{ background: "#fef2f2", border: `1.5px solid ${RED}33`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+          <div style={{ background: T.erroFundo, border: `1.5px solid ${RED}33`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
             <div style={{ fontWeight: 800, color: RED, fontSize: 13, marginBottom: 8 }}>⚠️ Botões com problema:</div>
             {todosTestes.filter(t => resultados[t.nav] === "erro").map(t => {
               const grupo = TESTES.find(g => g.itens.some(i => i.nav === t.nav));
-              return <div key={t.nav} style={{ fontSize: 12, color: NAVY, padding: "3px 0" }}>• <b>{t.l}</b> ({grupo?.grupo})</div>;
+              return <div key={t.nav} style={{ fontSize: 12, color: T.titulo, padding: "3px 0" }}>• <b>{t.l}</b> ({grupo?.grupo})</div>;
             })}
             <button onClick={() => {
               const txt = "🔧 *KMZERO - Botões com problema*\n\n" + todosTestes.filter(t => resultados[t.nav] === "erro").map(t => "• " + t.l).join("\n");
@@ -1140,57 +1139,55 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="🧹 Limpar Dados" sub="Escolher o que apagar" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 18 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 18 }}>
 
         {/* ETAPA 0: ESCOLHA */}
         {etapa === 0 && (
           <>
-            <div style={{ fontSize: 13, color: "#666", marginBottom: 14, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: T.texto2, marginBottom: 14, lineHeight: 1.5 }}>
               Escolha o que deseja fazer:
             </div>
 
             {/* Opção 1: Lançamentos */}
-            <button onClick={() => setEtapa(1)} style={{ width: "100%", textAlign: "left", padding: 16, background: "#fff", border: "2px solid #f97316", borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
+            <button onClick={() => setEtapa(1)} style={{ width: "100%", textAlign: "left", padding: 16, background: T.superficie, border: `2px solid ${ORANGE}`, borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                 <div style={{ fontSize: 28 }}>🧹</div>
-                <div style={{ fontWeight: 800, color: "#9a3412", fontSize: 14 }}>Apagar Lançamentos</div>
+                <div style={{ fontWeight: 800, color: T.avisoTexto, fontSize: 14 }}>Apagar Lançamentos</div>
               </div>
-              <div style={{ fontSize: 11, color: "#7c2d12", lineHeight: 1.5, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: T.avisoTexto, lineHeight: 1.5, marginBottom: 6 }}>
                 Apaga só os dados de movimento (RDOs, pedidos, fotos, presenças, despesas, etc).<br/>
                 <b>Com a nuvem ativa, apaga também na nuvem e nos celulares de toda a equipe.</b>
               </div>
-              <div style={{ fontSize: 11, color: "#15803d", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: T.sucessoTexto, lineHeight: 1.5 }}>
                 ✅ Mantém obras, trabalhadores, acessos, empresa, fornecedores
               </div>
             </button>
 
             {/* Opção 2: Reset Total */}
-            <button onClick={() => setEtapa(3)} style={{ width: "100%", textAlign: "left", padding: 16, background: "#fff", border: "2px solid #dc2626", borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
+            <button onClick={() => setEtapa(3)} style={{ width: "100%", textAlign: "left", padding: 16, background: T.superficie, border: `2px solid ${RED}`, borderRadius: 14, cursor: "pointer", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                 <div style={{ fontSize: 28 }}>💣</div>
-                <div style={{ fontWeight: 800, color: "#991b1b", fontSize: 14 }}>Reset Total</div>
+                <div style={{ fontWeight: 800, color: T.erroTexto, fontSize: 14 }}>Reset Total</div>
               </div>
-              <div style={{ fontSize: 11, color: "#7f1d1d", lineHeight: 1.5, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: T.erroTexto, lineHeight: 1.5, marginBottom: 6 }}>
                 <b>APAGA ABSOLUTAMENTE TUDO</b> e deixa o app como se fosse a primeira instalação.
               </div>
-              <div style={{ fontSize: 11, color: "#991b1b", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: T.erroTexto, lineHeight: 1.5 }}>
                 ⚠️ Apaga: obras, trabalhadores, acessos, empresa, lançamentos, TUDO.
               </div>
             </button>
 
-            <button onClick={onBack} style={{ width: "100%", marginTop: 6, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              Cancelar
-            </button>
+            <Btn label="Cancelar" color={T.superficie2} text={T.titulo} onClick={onBack} style={{ marginTop: 6, boxShadow: "none" }} />
           </>
         )}
 
         {/* ETAPA 1: AVISO LANCAMENTOS */}
         {etapa === 1 && (
           <>
-            <div style={{ background: "#fff7ed", border: "2px solid #f97316", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+            <div style={{ background: T.avisoFundo, border: `2px solid ${ORANGE}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
               <div style={{ fontSize: 22, marginBottom: 6 }}>🧹</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#9a3412", marginBottom: 6 }}>Apagar Lançamentos</div>
-              <div style={{ fontSize: 13, color: "#7c2d12", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.avisoTexto, marginBottom: 6 }}>Apagar Lançamentos</div>
+              <div style={{ fontSize: 13, color: T.avisoTexto, lineHeight: 1.5 }}>
                 Será apagado:
                 <ul style={{ margin: "8px 0 0 20px", padding: 0, lineHeight: 1.7 }}>
                   <li>RDOs emitidos</li>
@@ -1207,37 +1204,33 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               </div>
             </div>
 
-            <div style={{ background: "#dcfce7", border: "1px solid #16a34a", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#166534", marginBottom: 6 }}>✅ NÃO será apagado:</div>
-              <ul style={{ margin: "0 0 0 20px", padding: 0, fontSize: 12, color: "#15803d", lineHeight: 1.6 }}>
+            <div style={{ background: T.sucessoFundo, border: `1px solid ${GREEN}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.sucessoTexto, marginBottom: 6 }}>✅ NÃO será apagado:</div>
+              <ul style={{ margin: "0 0 0 20px", padding: 0, fontSize: 12, color: T.sucessoTexto, lineHeight: 1.6 }}>
                 <li>Obras cadastradas</li>
                 <li>Trabalhadores (folha)</li>
-                <li>Acessos do app (logins)</li>
+                <li>Usuários e acessos (logins)</li>
                 <li>Dados da empresa</li>
                 <li>Fornecedores</li>
                 <li>Equipamentos e ativos</li>
               </ul>
             </div>
 
-            <button onClick={() => setEtapa(2)} style={{ width: "100%", padding: 14, background: "#f97316", color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 12px rgba(249,115,22,0.3)" }}>
-              🧹 PROSSEGUIR COM A LIMPEZA
-            </button>
+            <Btn label="🧹 Prosseguir com a limpeza" color="#f97316" onClick={() => setEtapa(2)} />
 
-            <button onClick={() => setEtapa(0)} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => setEtapa(0)} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 
         {/* ETAPA 2: SENHA LANCAMENTOS */}
         {etapa === 2 && (
           <>
-            <div style={{ background: "#fff7ed", border: "2px solid #f97316", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+            <div style={{ background: T.avisoFundo, border: `2px solid ${ORANGE}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
               <div style={{ fontSize: 32, marginBottom: 8, textAlign: "center" }}>🔐</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#9a3412", marginBottom: 8, textAlign: "center" }}>Confirmação</div>
-              <div style={{ fontSize: 13, color: "#7c2d12", lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.avisoTexto, marginBottom: 8, textAlign: "center" }}>Confirmação</div>
+              <div style={{ fontSize: 13, color: T.avisoTexto, lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
                 Digite a palavra<br/>
-                <b style={{ fontSize: 18, color: "#f97316", fontFamily: "monospace", letterSpacing: 2 }}>ZERAR</b>
+                <b style={{ fontSize: 18, color: ORANGE, fontFamily: "monospace", letterSpacing: 2 }}>ZERAR</b>
               </div>
 
               <input
@@ -1252,20 +1245,20 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
                   boxSizing: "border-box",
                   padding: "14px 16px",
                   borderRadius: 10,
-                  border: erro ? "2px solid #dc2626" : "2px solid #fed7aa",
+                  border: erro ? `2px solid ${RED}` : `2px solid ${T.avisoBorda}`,
                   fontSize: 18,
                   fontWeight: 700,
                   textAlign: "center",
                   letterSpacing: 2,
                   marginBottom: 8,
-                  background: "#fff",
-                  color: "#f97316",
+                  background: T.superficie,
+                  color: ORANGE,
                   textTransform: "uppercase",
                 }}
               />
 
               {erro && (
-                <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>
+                <div style={{ background: T.erroFundo, color: T.erroTexto, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>
                   {erro}
                 </div>
               )}
@@ -1279,19 +1272,17 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               ✓ CONFIRMAR E ZERAR LANÇAMENTOS
             </button>
 
-            <button onClick={() => { setEtapa(1); setSenhaDigit(""); setErro(""); }} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => { setEtapa(1); setSenhaDigit(""); setErro(""); }} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 
         {/* ETAPA 3: AVISO RESET TOTAL */}
         {etapa === 3 && (
           <>
-            <div style={{ background: "#fef2f2", border: "3px solid #dc2626", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+            <div style={{ background: T.erroFundo, border: `3px solid ${RED}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
               <div style={{ fontSize: 36, marginBottom: 8, textAlign: "center" }}>💣</div>
-              <div style={{ fontSize: 17, fontWeight: 900, color: "#7f1d1d", marginBottom: 10, textAlign: "center" }}>RESET TOTAL</div>
-              <div style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 1.6 }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: T.erroTexto, marginBottom: 10, textAlign: "center" }}>RESET TOTAL</div>
+              <div style={{ fontSize: 13, color: T.erroTexto, lineHeight: 1.6 }}>
                 <p style={{ margin: "0 0 10px 0" }}><b>⚠️ Atenção MÁXIMA!</b></p>
                 <p style={{ margin: "0 0 10px 0" }}>
                   Esta ação vai apagar <b>TUDO</b>:
@@ -1318,25 +1309,21 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               </div>
             </div>
 
-            <button onClick={() => setEtapa(4)} style={{ width: "100%", padding: 14, background: "#dc2626", color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 12px rgba(220,38,38,0.4)" }}>
-              💣 PROSSEGUIR COM RESET TOTAL
-            </button>
+            <Btn label="💣 Prosseguir com reset total" color={RED} onClick={() => setEtapa(4)} />
 
-            <button onClick={() => setEtapa(0)} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => setEtapa(0)} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 
         {/* ETAPA 4: SENHA RESET TOTAL */}
         {etapa === 4 && (
           <>
-            <div style={{ background: "#fef2f2", border: "3px solid #dc2626", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+            <div style={{ background: T.erroFundo, border: `3px solid ${RED}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
               <div style={{ fontSize: 36, marginBottom: 8, textAlign: "center" }}>🔐💣</div>
-              <div style={{ fontSize: 16, fontWeight: 900, color: "#7f1d1d", marginBottom: 8, textAlign: "center" }}>Confirmação Final</div>
-              <div style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: T.erroTexto, marginBottom: 8, textAlign: "center" }}>Confirmação Final</div>
+              <div style={{ fontSize: 13, color: T.erroTexto, lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
                 Para confirmar o reset total, digite a frase<br/>
-                <b style={{ fontSize: 18, color: "#dc2626", fontFamily: "monospace", letterSpacing: 1 }}>RESETAR TUDO</b>
+                <b style={{ fontSize: 18, color: RED, fontFamily: "monospace", letterSpacing: 1 }}>RESETAR TUDO</b>
               </div>
 
               <input
@@ -1351,20 +1338,20 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
                   boxSizing: "border-box",
                   padding: "14px 16px",
                   borderRadius: 10,
-                  border: erro ? "2px solid #dc2626" : "2px solid #fca5a5",
+                  border: erro ? `2px solid ${RED}` : `2px solid ${T.erroBorda}`,
                   fontSize: 16,
                   fontWeight: 700,
                   textAlign: "center",
                   letterSpacing: 1,
                   marginBottom: 8,
-                  background: "#fff",
-                  color: "#dc2626",
+                  background: T.superficie,
+                  color: RED,
                   textTransform: "uppercase",
                 }}
               />
 
               {erro && (
-                <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>
+                <div style={{ background: T.erroFundo, color: T.erroTexto, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>
                   {erro}
                 </div>
               )}
@@ -1379,9 +1366,7 @@ export function TelaZerarTudo({ onBack, onZerar, onResetTotal }) {
               💣 CONFIRMAR RESET TOTAL
             </button>
 
-            <button onClick={() => { setEtapa(3); setSenhaDigit(""); setErro(""); }} style={{ width: "100%", marginTop: 10, padding: 12, background: "#f3f4f6", color: NAVY, border: "none", borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ← Voltar
-            </button>
+            <Btn label="← Voltar" color={T.superficie2} text={T.titulo} onClick={() => { setEtapa(3); setSenhaDigit(""); setErro(""); }} style={{ marginTop: 10, boxShadow: "none" }} />
           </>
         )}
 

@@ -1,7 +1,7 @@
 import { CATEGORIAS_DESPESA } from "./equipamentos.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -84,7 +84,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
       <KMHeader title="Despesas Avulsas" sub={`${despesasFiltradas.length} no período`} onBack={onBack} right={
         <button onClick={abrirNovo} style={{ background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>+ Nova</button>
       } />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         {/* KPI Total */}
         <div style={{ background: `linear-gradient(135deg,${ORANGE},#dc7e00)`, color: "#fff", borderRadius: 14, padding: 14, marginBottom: 12 }}>
@@ -101,7 +101,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
         </div>
 
         {/* Filtros */}
-        <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.sombra }}>
           <label style={labelS}>🏗️ Obra</label>
           <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={selS}>
             <option value="todas">Todas as obras</option>
@@ -123,7 +123,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
 
         {/* Lista */}
         {despesasFiltradas.length === 0 ? (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 20, textAlign: "center", color: "#aaa" }}>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>
             💸 Nenhuma despesa avulsa neste período.
             <button onClick={abrirNovo} style={{ display: "block", margin: "12px auto 0", background: GOLD, color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>+ Adicionar primeira</button>
           </div>
@@ -132,16 +132,16 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
             const cat = CATEGORIAS_DESPESA.find(c => c.id === d.categoria) || { nome: d.categoria, cor: "#888" };
             const obra = obras.find(o => o.id === d.obraId);
             return (
-              <div key={d.id} style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cat.cor}` }}>
+              <div key={d.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cat.cor}` }}>
                 <div style={{ display: "flex", alignItems: "flex-start" }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                       <span style={{ background: cat.cor, color: "#fff", padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 800 }}>{cat.nome}</span>
-                      <span style={{ fontSize: 9, color: "#888" }}>{d.data}</span>
+                      <span style={{ fontSize: 9, color: T.texto2 }}>{d.data}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: NAVY, fontWeight: 700, marginTop: 2 }}>{obra?.nome || "—"}</div>
-                    {d.descricao && <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{d.descricao}</div>}
-                    {d.quemPagou && <div style={{ fontSize: 10, color: "#888", marginTop: 2, fontStyle: "italic" }}>💰 Pago por: {d.quemPagou}</div>}
+                    <div style={{ fontSize: 12, color: T.titulo, fontWeight: 700, marginTop: 2 }}>{obra?.nome || "—"}</div>
+                    {d.descricao && <div style={{ fontSize: 11, color: T.texto2, marginTop: 2 }}>{d.descricao}</div>}
+                    {d.quemPagou && <div style={{ fontSize: 10, color: T.texto2, marginTop: 2, fontStyle: "italic" }}>💰 Pago por: {d.quemPagou}</div>}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 16, fontWeight: 900, color: cat.cor }}>R$ {(parseFloat(d.valor) || 0).toFixed(2)}</div>
@@ -149,7 +149,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
                   </div>
                 </div>
                 {d.foto && (
-                  <img src={d.foto} alt="Comprovante" onClick={() => setFotoVer({ src: d.foto, legenda: `Comprovante: ${d.descricao || d.categoria}` })} style={{ width: "100%", borderRadius: 8, marginTop: 8, border: "1px solid #eee", cursor: "pointer" }} />
+                  <img src={d.foto} alt="Comprovante" onClick={() => setFotoVer({ src: d.foto, legenda: `Comprovante: ${d.descricao || d.categoria}` })} style={{ width: "100%", borderRadius: 8, marginTop: 8, border: `1px solid ${T.borda}`, cursor: "pointer" }} />
                 )}
               </div>
             );
@@ -166,7 +166,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
           {CATEGORIAS_DESPESA.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
         </select>
         {form.categoria && (
-          <div style={{ fontSize: 10, color: "#888", marginTop: -8, marginBottom: 10, fontStyle: "italic" }}>
+          <div style={{ fontSize: 10, color: T.texto2, marginTop: -8, marginBottom: 10, fontStyle: "italic" }}>
             {CATEGORIAS_DESPESA.find(c => c.id === form.categoria)?.desc}
           </div>
         )}
@@ -190,7 +190,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
         <select value={form.quemPagou} onChange={e => set("quemPagou", e.target.value)} style={selS}>
           <option value="Caixa da obra">Caixa da obra</option>
           <option value="Adiantamento empresa">Adiantamento empresa</option>
-          <option value="Kleber (reembolso)">Kleber (reembolso)</option>
+          <option value="Gestor (reembolso)">Gestor (reembolso)</option>
           <option value="Encarregado (reembolso)">Encarregado (reembolso)</option>
           <option value="Cartão da empresa">Cartão da empresa</option>
           <option value="PIX direto">PIX direto</option>
@@ -203,14 +203,14 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
             <button onClick={() => set("foto", "")} style={{ position: "absolute", top: 6, right: 6, background: RED, color: "#fff", border: "none", borderRadius: 16, width: 28, height: 28, cursor: "pointer", fontSize: 14 }}>✕</button>
           </div>
         ) : (
-          <label style={{ display: "block", textAlign: "center", padding: 12, border: "1.5px dashed #dde2ef", borderRadius: 10, color: "#666", cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+          <label style={{ display: "block", textAlign: "center", padding: 12, border: `1.5px dashed ${T.borda}`, borderRadius: 10, color: T.texto2, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
             📷 Anexar foto do recibo/cupom
             <input type="file" accept="image/*" capture="environment" onChange={tirarFoto} style={{ display: "none" }} />
           </label>
         )}
 
         {editandoId && (
-          <button onClick={() => { confirmar("Excluir esta despesa?", () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: "#fef2f2", color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir</button>
+          <button onClick={() => { confirmar("Excluir esta despesa?", () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir</button>
         )}
         <Btn label="💾 SALVAR" color={GREEN} onClick={salvar} />
       </Modal>
@@ -296,7 +296,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Custos por Obra" sub={`${meses[mes]}/${ano}`} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 8 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -316,63 +316,63 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
           {custoMateriais === null && <div style={{ fontSize: 10, opacity: 0.7 }}>Sem o custo de materiais (informe o valor nos pedidos aprovados)</div>}
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", borderLeft: `4px solid ${GREEN}` }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${GREEN}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>👷 Mão de Obra</div>
-              <div style={{ fontSize: 11, color: "#888" }}>{totalDiasTrab} dias-homem • {trabObra.length} colaborador(es)</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>👷 Mão de Obra</div>
+              <div style={{ fontSize: 11, color: T.texto2 }}>{totalDiasTrab} dias-homem • {trabObra.length} colaborador(es)</div>
             </div>
             <div style={{ fontSize: 18, fontWeight: 900, color: GREEN }}>R$ {custoMaoObra.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
           </div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", borderLeft: `4px solid ${ORANGE}` }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${ORANGE}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>⛽ Combustível</div>
-              <div style={{ fontSize: 11, color: "#888" }}>{ativosObra.length} ativo(s) • {abastObra.length} abastecimento(s)</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>⛽ Combustível</div>
+              <div style={{ fontSize: 11, color: T.texto2 }}>{ativosObra.length} ativo(s) • {abastObra.length} abastecimento(s)</div>
             </div>
             <div style={{ fontSize: 18, fontWeight: 900, color: ORANGE }}>R$ {custoCombustivel.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
           </div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", borderLeft: `4px solid ${BLUE}` }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${BLUE}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>📦 Materiais</div>
-              <div style={{ fontSize: 11, color: "#888" }}>{custoMateriais === null ? `${pedidosAprovMes.length} pedido(s) aprovado(s) — informe o valor nos pedidos aprovados` : `${pedidosComValor.length} de ${pedidosAprovMes.length} pedido(s) aprovado(s) com valor`}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>📦 Materiais</div>
+              <div style={{ fontSize: 11, color: T.texto2 }}>{custoMateriais === null ? `${pedidosAprovMes.length} pedido(s) aprovado(s) — informe o valor nos pedidos aprovados` : `${pedidosComValor.length} de ${pedidosAprovMes.length} pedido(s) aprovado(s) com valor`}</div>
             </div>
             <div style={{ fontSize: 18, fontWeight: 900, color: BLUE }}>{custoMateriais === null ? "—" : `R$ ${custoMateriais.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</div>
           </div>
         </div>
 
-        {/* DESPESAS AVULSAS */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", borderLeft: `4px solid #ea580c` }}>
+        {/* DESPESAS AVULSAS — laranja fixo #ea580c trocado por ORANGE da paleta (legível nos dois temas; mesma cor do cartão Combustível) */}
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${ORANGE}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>💸 Despesas avulsas</div>
-              <div style={{ fontSize: 11, color: "#888" }}>{despesasObra.length} despesa{despesasObra.length === 1 ? "" : "s"} (PIPA, frete, almoço motorista...)</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo }}>💸 Despesas avulsas</div>
+              <div style={{ fontSize: 11, color: T.texto2 }}>{despesasObra.length} despesa{despesasObra.length === 1 ? "" : "s"} (PIPA, frete, almoço motorista...)</div>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: "#ea580c" }}>R$ {custoDespesasAvulsas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: ORANGE }}>R$ {custoDespesasAvulsas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
           </div>
           {despesasObra.length > 0 && (
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0f0f0" }}>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.borda}` }}>
               {despesasObra.slice(0, 5).map(d => {
                 const cat = CATEGORIAS_DESPESA.find(c => c.id === d.categoria) || { nome: d.categoria, cor: "#888" };
                 return (
                   <div key={d.id} style={{ display: "flex", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
                     <span style={{ background: cat.cor, color: "#fff", padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, marginRight: 6 }}>{cat.nome}</span>
-                    <span style={{ flex: 1, color: "#666" }}>{d.descricao || cat.nome}</span>
-                    <span style={{ fontWeight: 700, color: "#ea580c" }}>R$ {(parseFloat(d.valor) || 0).toFixed(2)}</span>
+                    <span style={{ flex: 1, color: T.texto2 }}>{d.descricao || cat.nome}</span>
+                    <span style={{ fontWeight: 700, color: ORANGE }}>R$ {(parseFloat(d.valor) || 0).toFixed(2)}</span>
                   </div>
                 );
               })}
-              {despesasObra.length > 5 && <div style={{ fontSize: 10, color: "#888", marginTop: 4, textAlign: "center" }}>+ {despesasObra.length - 5} despesas...</div>}
+              {despesasObra.length > 5 && <div style={{ fontSize: 10, color: T.texto2, marginTop: 4, textAlign: "center" }}>+ {despesasObra.length - 5} despesas...</div>}
             </div>
           )}
         </div>
 
-        <div style={{ background: "#fffaeb", borderRadius: 12, padding: "10px 14px", fontSize: 11, color: "#8b6f00", marginTop: 8 }}>
+        <div style={{ background: T.avisoFundo, borderRadius: 12, padding: "10px 14px", fontSize: 11, color: T.avisoTexto, marginTop: 8 }}>
           💡 Custo de mão de obra = diária × dias trabalhados (presença + atestado). Custos de materiais estimados em R$ 100/pedido aprovado. Despesas avulsas vêm do registro manual.
         </div>
       </div>
@@ -427,7 +427,7 @@ export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Pagamentos" sub="Gestão de contratos e condições" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <label style={labelS}>Obra</label>
         <select value={obraId} onChange={e => setObraId(e.target.value ? parseInt(e.target.value) : "")} style={selS}>
           <option value="">Selecione uma obra</option>
@@ -435,7 +435,7 @@ export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
         </select>
 
         {obraId ? (
-          <div style={{ marginTop: 14, background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+          <div style={{ marginTop: 14, background: T.superficie, borderRadius: 14, padding: 14, boxShadow: T.sombra }}>
             <label style={labelS}>Cliente / Contratante</label>
             <input value={form.cliente} onChange={e => set("cliente", e.target.value)} placeholder="Nome do cliente" style={inputS} />
 
@@ -469,12 +469,10 @@ export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
             <label style={labelS}>Observações do contrato</label>
             <textarea value={form.obsContrato} onChange={e => set("obsContrato", e.target.value)} rows={3} placeholder="Cláusulas, retenções, encargos..." style={{ ...inputS, resize: "vertical", fontFamily: "inherit" }} />
 
-            <button onClick={salvar} disabled={!alterado} style={{ width: "100%", marginTop: 14, padding: 12, background: alterado ? GREEN : "#d1d5db", color: "#fff", border: "none", borderRadius: 12, fontWeight: 700, cursor: alterado ? "pointer" : "not-allowed" }}>
-              {alterado ? "Salvar alterações" : "Sem alterações"}
-            </button>
+            <Btn label={alterado ? "Salvar alterações" : "Sem alterações"} color={GREEN} disabled={!alterado} onClick={salvar} style={{ marginTop: 14 }} />
           </div>
         ) : (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 20, textAlign: "center", color: "#666", marginTop: 14 }}>
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 20, textAlign: "center", color: T.texto2, marginTop: 14 }}>
             Selecione uma obra para editar as condições de pagamento.
           </div>
         )}

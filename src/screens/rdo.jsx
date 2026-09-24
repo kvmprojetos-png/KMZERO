@@ -1,7 +1,8 @@
 import { MODELOS_CRONOGRAMA } from "./equipe.jsx";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css } from "../theme.js";
+import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
+import { useTema } from "../lib/useTema.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
@@ -128,7 +129,7 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Cronograma" sub="Etapas da obra" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <label style={labelS}>Obra</label>
         <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
@@ -146,9 +147,9 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
 
         {/* Modelos prontos */}
         {etapas.length === 0 && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontWeight: 800, color: NAVY, fontSize: 13, marginBottom: 8 }}>🚀 Começar com modelo pronto</div>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 10 }}>Aplica um modelo padrão de etapas baseado no tipo da obra (você pode editar depois).</div>
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+            <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13, marginBottom: 8 }}>🚀 Começar com modelo pronto</div>
+            <div style={{ fontSize: 11, color: T.texto2, marginBottom: 10 }}>Aplica um modelo padrão de etapas baseado no tipo da obra (você pode editar depois).</div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => aplicarModelo("Pavimentação")} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", background: ORANGE, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>🛣️ Pavimentação</button>
               <button onClick={() => aplicarModelo("Edificação")} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", background: BLUE, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>🏢 Edificação</button>
@@ -172,23 +173,24 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
             cor={ORANGE}
           />
         ) : etapas.map((e, i) => {
-          const cor = e.progresso === 100 ? GREEN : e.progresso > 0 ? ORANGE : "#aaa";
+          // Etapa não iniciada: cinza do tema (o #aaa fixo sumia no fundo escuro e era fraco no claro)
+          const cor = e.progresso === 100 ? GREEN : e.progresso > 0 ? ORANGE : T.texto3;
           const concluida = e.progresso === 100;
           return (
-            <div key={e.id} style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: `4px solid ${cor}`, opacity: concluida ? 0.75 : 1 }}>
+            <div key={e.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, opacity: concluida ? 0.75 : 1 }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                 <div style={{ width: 28, height: 28, borderRadius: 14, background: cor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, marginRight: 10 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: NAVY, fontSize: 13, textDecoration: concluida ? "line-through" : "none" }}>{e.nome}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>
+                  <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13, textDecoration: concluida ? "line-through" : "none" }}>{e.nome}</div>
+                  <div style={{ fontSize: 10, color: T.texto2 }}>
                     {e.inicio && new Date(e.inicio).toLocaleDateString("pt-BR")}
                     {e.inicio && e.fim && " → "}
                     {e.fim && new Date(e.fim).toLocaleDateString("pt-BR")}
                     {e.responsavel && ` • ${e.responsavel}`}
                   </div>
                 </div>
-                <button onClick={() => moverEtapa(e.id, -1)} disabled={i === 0} style={{ background: "none", border: "none", color: i === 0 ? "#ddd" : "#666", cursor: i === 0 ? "default" : "pointer", fontSize: 16 }}>↑</button>
-                <button onClick={() => moverEtapa(e.id, 1)} disabled={i === etapas.length - 1} style={{ background: "none", border: "none", color: i === etapas.length - 1 ? "#ddd" : "#666", cursor: i === etapas.length - 1 ? "default" : "pointer", fontSize: 16 }}>↓</button>
+                <button onClick={() => moverEtapa(e.id, -1)} disabled={i === 0} style={{ background: "none", border: "none", color: i === 0 ? T.desabilitado : T.texto2, cursor: i === 0 ? "default" : "pointer", fontSize: 16 }}>↑</button>
+                <button onClick={() => moverEtapa(e.id, 1)} disabled={i === etapas.length - 1} style={{ background: "none", border: "none", color: i === etapas.length - 1 ? T.desabilitado : T.texto2, cursor: i === etapas.length - 1 ? "default" : "pointer", fontSize: 16 }}>↓</button>
               </div>
 
               {/* Barra de progresso */}
@@ -202,11 +204,11 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar }) {
                 <span style={{ fontSize: 12, fontWeight: 800, color: cor, minWidth: 40, textAlign: "right" }}>{e.progresso || 0}%</span>
               </div>
 
-              {e.obs && <div style={{ fontSize: 11, color: "#666", fontStyle: "italic", marginTop: 4, paddingLeft: 38 }}>"{e.obs}"</div>}
+              {e.obs && <div style={{ fontSize: 11, color: T.texto2, fontStyle: "italic", marginTop: 4, paddingLeft: 38 }}>"{e.obs}"</div>}
 
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                <button onClick={() => { setEditando(e); setModal(true); }} style={{ flex: 1, padding: 6, borderRadius: 6, border: `1px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, cursor: "pointer", fontSize: 10 }}>✏️ Editar</button>
-                <button onClick={() => removerEtapa(e.id)} style={{ padding: 6, borderRadius: 6, border: `1px solid ${RED}`, background: "#fff", color: RED, fontWeight: 700, cursor: "pointer", fontSize: 10, width: 50 }}>🗑️</button>
+                <button onClick={() => { setEditando(e); setModal(true); }} style={{ flex: 1, padding: 6, borderRadius: 6, border: `1px solid ${BLUE}`, background: T.superficie, color: BLUE, fontWeight: 700, cursor: "pointer", fontSize: 10 }}>✏️ Editar</button>
+                <button onClick={() => removerEtapa(e.id)} style={{ padding: 6, borderRadius: 6, border: `1px solid ${RED}`, background: T.superficie, color: RED, fontWeight: 700, cursor: "pointer", fontSize: 10, width: 50 }}>🗑️</button>
               </div>
             </div>
           );
@@ -350,8 +352,9 @@ export function gerarPontosCurvaS(etapas, hojeIso) {
 
 
 export function CurvaSChart({ pontos }) {
+  const { paleta } = useTema(); // hex do tema atual para o SVG (var() não funciona em atributo SVG)
   if (!pontos || pontos.length === 0) {
-    return <div style={{ padding: 30, textAlign: "center", color: "#888", fontSize: 12 }}>Adicione etapas com datas pra ver a curva.</div>;
+    return <div style={{ padding: 30, textAlign: "center", color: T.texto2, fontSize: 12 }}>Adicione etapas com datas pra ver a curva.</div>;
   }
   const W = 360, H = 180, padX = 30, padY = 20;
   const innerW = W - padX * 2;
@@ -363,11 +366,11 @@ export function CurvaSChart({ pontos }) {
   const pathExec = pontosExec.map((p, idx) => `${idx === 0 ? "M" : "L"} ${px(pontos.indexOf(p))} ${py(p.executado)}`).join(" ");
   const idxHoje = pontos.findIndex(p => p.ehHoje);
   return (
-    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ background: "#fff", borderRadius: 8 }}>
+    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ background: T.superficie, borderRadius: 8 }}>
       {[0, 25, 50, 75, 100].map(v => (
         <g key={v}>
-          <line x1={padX} y1={py(v)} x2={W - padX} y2={py(v)} stroke="#e5e7eb" strokeDasharray="2 2" />
-          <text x={padX - 4} y={py(v) + 3} fontSize="9" fill="#999" textAnchor="end">{v}%</text>
+          <line x1={padX} y1={py(v)} x2={W - padX} y2={py(v)} stroke={paleta.grade} strokeDasharray="2 2" />
+          <text x={padX - 4} y={py(v) + 3} fontSize="9" fill={paleta.texto2} textAnchor="end">{v}%</text>
         </g>
       ))}
       {idxHoje >= 0 && (
@@ -382,7 +385,7 @@ export function CurvaSChart({ pontos }) {
         <circle key={i} cx={px(pontos.indexOf(p))} cy={py(p.executado)} r="3" fill={GOLD} />
       ))}
       {pontos.filter((_, i) => i % 3 === 0).map((p, i) => (
-        <text key={i} x={px(pontos.indexOf(p))} y={H - 4} fontSize="8" fill="#888" textAnchor="middle">{p.data}</text>
+        <text key={i} x={px(pontos.indexOf(p))} y={H - 4} fontSize="8" fill={paleta.texto2} textAnchor="middle">{p.data}</text>
       ))}
     </svg>
   );
@@ -433,40 +436,40 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Cronograma Pro" sub={obra?.nome || "—"} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
         <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 12 }}>
-          <div style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid ${kpis.idp >= 0.95 ? GREEN : kpis.idp >= 0.85 ? ORANGE : RED}` }}>
-            <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>IDP · Prazo</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginTop: 2 }}>{kpis.idp.toFixed(2)}</div>
+          <div style={{ background: T.superficie, borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid ${kpis.idp >= 0.95 ? GREEN : kpis.idp >= 0.85 ? ORANGE : RED}` }}>
+            <div style={{ fontSize: 9, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>IDP · Prazo</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: T.titulo, marginTop: 2 }}>{kpis.idp.toFixed(2)}</div>
             <div style={{ fontSize: 10, color: kpis.idp >= 1 ? GREEN : RED, fontWeight: 700 }}>
               {kpis.idp >= 1 ? "✓ No ritmo" : `${((1 - kpis.idp) * 100).toFixed(1)}% abaixo`}
             </div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid ${BLUE}` }}>
-            <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Avanço Físico</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginTop: 2 }}>{kpis.pctExec.toFixed(1)}%</div>
-            <div style={{ fontSize: 10, color: "#888" }}>Plan. {kpis.pctPrev.toFixed(1)}%</div>
+          <div style={{ background: T.superficie, borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid ${BLUE}` }}>
+            <div style={{ fontSize: 9, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Avanço Físico</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: T.titulo, marginTop: 2 }}>{kpis.pctExec.toFixed(1)}%</div>
+            <div style={{ fontSize: 10, color: T.texto2 }}>Plan. {kpis.pctPrev.toFixed(1)}%</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid ${kpis.atrasoCritico > 7 ? RED : kpis.atrasoCritico > 0 ? ORANGE : GREEN}` }}>
-            <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Δ Crítico</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginTop: 2 }}>
+          <div style={{ background: T.superficie, borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid ${kpis.atrasoCritico > 7 ? RED : kpis.atrasoCritico > 0 ? ORANGE : GREEN}` }}>
+            <div style={{ fontSize: 9, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Δ Crítico</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: T.titulo, marginTop: 2 }}>
               {kpis.atrasoCritico > 0 ? `+${kpis.atrasoCritico}d` : "0d"}
             </div>
             <div style={{ fontSize: 10, color: kpis.atrasoCritico > 0 ? RED : GREEN, fontWeight: 700 }}>
               {kpis.atrasoCritico > 0 ? "Atrasado" : "Em dia"}
             </div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid #7c3aed` }}>
-            <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Custo Base</div>
-            <div style={{ fontSize: 16, fontWeight: 900, color: NAVY, marginTop: 2 }}>
+          <div style={{ background: T.superficie, borderRadius: 10, padding: "10px 12px", borderLeft: `4px solid #7c3aed` }}>
+            <div style={{ fontSize: 9, color: T.texto2, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Custo Base</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: T.titulo, marginTop: 2 }}>
               R$ {(kpis.custoTotal / 1000).toFixed(2)}k
             </div>
-            <div style={{ fontSize: 10, color: "#888" }}>EV: R$ {(kpis.va / 1000).toFixed(2)}k</div>
+            <div style={{ fontSize: 10, color: T.texto2 }}>EV: R$ {(kpis.va / 1000).toFixed(2)}k</div>
           </div>
         </div>
 
@@ -478,9 +481,9 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
           ].map(t => (
             <button key={t.id} onClick={() => setAba(t.id)} style={{
               flex: 1, padding: "8px 4px", borderRadius: 8,
-              background: aba === t.id ? NAVY : "#fff",
-              color: aba === t.id ? "#fff" : NAVY,
-              border: aba === t.id ? "none" : "1px solid #ddd",
+              background: aba === t.id ? NAVY : T.superficie,
+              color: aba === t.id ? "#fff" : T.titulo,
+              border: aba === t.id ? "none" : `1px solid ${T.borda}`,
               cursor: "pointer", fontSize: 11, fontWeight: 700,
             }}>{t.label}</button>
           ))}
@@ -488,32 +491,33 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
 
         {aba === "gantt" && (
           etapas.length === 0 ? (
-            <div style={{ background: "#fff", borderRadius: 12, padding: 24, textAlign: "center" }}>
+            <div style={{ background: T.superficie, borderRadius: 12, padding: 24, textAlign: "center" }}>
               <div style={{ fontSize: 36 }}>📅</div>
-              <div style={{ color: "#888", fontSize: 13, marginTop: 8 }}>
+              <div style={{ color: T.texto2, fontSize: 13, marginTop: 8 }}>
                 Nenhuma etapa nessa obra. Crie etapas no <b>Cronograma simples</b> primeiro.
               </div>
             </div>
           ) : (
-            <div style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+            <div style={{ background: T.superficie, borderRadius: 12, padding: 12, boxShadow: T.sombra }}>
               {etapas.map(e => {
                 const def = (e.pctPrevisto || 0) - (e.progresso || 0);
                 const corBarra = e.critica ? GOLD : BLUE;
                 return (
-                  <div key={e.id} onClick={() => abrirEtapa(e)} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #eee", cursor: "pointer" }}>
+                  <div key={e.id} onClick={() => abrirEtapa(e)} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${T.borda}`, cursor: "pointer" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
                         {e.critica && <span style={{ color: GOLD, fontSize: 11 }}>●</span>}
-                        <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.nome}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: T.titulo, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.nome}</span>
                       </div>
-                      <span style={{ fontSize: 10, color: "#888", marginLeft: 6, flexShrink: 0 }}>{e.progresso || 0}%</span>
+                      <span style={{ fontSize: 10, color: T.texto2, marginLeft: 6, flexShrink: 0 }}>{e.progresso || 0}%</span>
                     </div>
-                    <div style={{ position: "relative", height: 14, background: "#f5f5f5", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ position: "relative", height: 14, background: T.superficie2, borderRadius: 4, overflow: "hidden" }}>
                       <div style={{ position: "absolute", inset: 0, background: corBarra + "22" }} />
                       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${e.progresso || 0}%`, background: corBarra }} />
-                      <div style={{ position: "absolute", left: `${e.pctPrevisto || 0}%`, top: 0, bottom: 0, width: 2, background: "#0f2151" }} title="Previsto" />
+                      {/* Marcador do previsto: T.contorno é navy no claro e ciano no escuro (NAVY fixo sumia na barra escura) */}
+                      <div style={{ position: "absolute", left: `${e.pctPrevisto || 0}%`, top: 0, bottom: 0, width: 2, background: T.contorno }} title="Previsto" />
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, fontSize: 9, color: "#888" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, fontSize: 9, color: T.texto2 }}>
                       <span>{e.inicio || "—"} → {e.fim || "—"}</span>
                       <span style={{ color: def > 12 ? RED : def > 5 ? ORANGE : GREEN, fontWeight: 700 }}>
                         {def === 0 ? "No ritmo" : def > 0 ? `${def.toFixed(0)} pts atrás` : `${Math.abs(def).toFixed(0)} pts à frente`}
@@ -522,7 +526,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
                   </div>
                 );
               })}
-              <div style={{ fontSize: 10, color: "#888", marginTop: 8, padding: "6px 8px", background: "#f9fafb", borderRadius: 6 }}>
+              <div style={{ fontSize: 10, color: T.texto2, marginTop: 8, padding: "6px 8px", background: T.superficie2, borderRadius: 6 }}>
                 ● Etapa crítica • | Linha vertical = % previsto pra hoje
               </div>
             </div>
@@ -530,10 +534,10 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
         )}
 
         {aba === "curva" && (
-          <div style={{ background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Curva S — Avanço Físico Acumulado</div>
+          <div style={{ background: T.superficie, borderRadius: 12, padding: 12, boxShadow: T.sombra }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, marginBottom: 8 }}>Curva S — Avanço Físico Acumulado</div>
             <CurvaSChart pontos={pontosCurvaS} />
-            <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: "#888" }}>
+            <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: T.texto2 }}>
               <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ width: 12, height: 2, background: "#94a3b8" }} /> Planejado
               </span>
@@ -546,22 +550,22 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
 
         {aba === "alertas" && (
           alertas.length === 0 ? (
-            <div style={{ background: "#f0fdf4", borderRadius: 12, padding: 20, textAlign: "center" }}>
+            <div style={{ background: T.sucessoFundo, borderRadius: 12, padding: 20, textAlign: "center" }}>
               <div style={{ fontSize: 36 }}>✅</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: GREEN, marginTop: 8 }}>Tudo em ordem!</div>
-              <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>Nenhuma inconsistência detectada.</div>
+              <div style={{ fontSize: 11, color: T.texto2, marginTop: 4 }}>Nenhuma inconsistência detectada.</div>
             </div>
           ) : (
             <div>
               {alertas.map((a, i) => {
                 const cor = a.severidade === "alta" ? RED : a.severidade === "media" ? ORANGE : BLUE;
                 return (
-                  <div key={i} style={{ background: "#fff", borderRadius: 10, padding: 12, marginBottom: 8, borderLeft: `4px solid ${cor}`, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                  <div key={i} style={{ background: T.superficie, borderRadius: 10, padding: 12, marginBottom: 8, borderLeft: `4px solid ${cor}`, boxShadow: T.sombra }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>{a.etapa}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.titulo }}>{a.etapa}</div>
                       <span style={{ background: cor, color: "#fff", padding: "1px 6px", borderRadius: 4, fontSize: 8, fontWeight: 800, textTransform: "uppercase" }}>{a.severidade}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#444", lineHeight: 1.4 }}>{a.msg}</div>
+                    <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.4 }}>{a.msg}</div>
                   </div>
                 );
               })}
@@ -574,7 +578,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
       <Modal show={!!etapaSel} title={etapaSel?.nome || ""} onClose={() => setEtapaSel(null)}>
         {etapaSel && (
           <>
-            <div style={{ background: "#f9fafb", borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 11, color: "#666" }}>
+            <div style={{ background: T.superficie2, borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 11, color: T.texto2 }}>
               📅 {etapaSel.inicio || "—"} → {etapaSel.fim || "—"}<br/>
               📊 Previsto pra hoje: <b>{etapaSel.pctPrevisto || 0}%</b>
             </div>
@@ -582,9 +586,9 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
             <input type="number" min="0" max="100" value={progressoInput} onChange={e => setProgressoInput(e.target.value)} style={inputS} />
             <label style={labelS}>💰 Custo Base (R$)</label>
             <input type="number" value={custoInput} onChange={e => setCustoInput(e.target.value)} placeholder="0" style={inputS} />
-            <label style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, background: criticaInput ? "#fef9e7" : "#f9fafb", borderRadius: 8, cursor: "pointer", marginBottom: 10 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, background: criticaInput ? T.avisoFundo : T.superficie2, borderRadius: 8, cursor: "pointer", marginBottom: 10 }}>
               <input type="checkbox" checked={criticaInput} onChange={e => setCriticaInput(e.target.checked)} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>⚠️ Etapa do Caminho Crítico</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.titulo }}>⚠️ Etapa do Caminho Crítico</span>
             </label>
             <Btn label="💾 SALVAR" color={GREEN} onClick={salvarEtapa} />
           </>
@@ -1421,7 +1425,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="RDO ABNT" sub="Relatório Diário Auditável" onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ background: `linear-gradient(135deg,${NAVY},${NAVY2})`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, boxShadow: "0 4px 14px rgba(15,33,81,0.3)" }}>
           <div style={{ fontSize: 11, opacity: 0.7 }}>Próximo RDO</div>
           <div style={{ fontSize: 36, fontWeight: 900, color: GOLD }}>Nº {String(proxNumero).padStart(3, "0")}</div>
@@ -1444,19 +1448,19 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         <label style={labelS}>Observações gerais (opcional)</label>
         <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} placeholder="Ex: serviço de alvenaria conforme cronograma..." style={{ ...inputS, resize: "none", fontFamily: "inherit" }} />
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📋 Conteúdo do RDO</div>
-          <div style={{ fontSize: 12, color: "#666" }}>
-            <div style={{ padding: "4px 0", borderBottom: "1px solid #f0f0f0" }}>👷 Mão de obra: <b>{trabObra.length}</b> ({presentes} presentes)</div>
-            <div style={{ padding: "4px 0", borderBottom: "1px solid #f0f0f0" }}>🚜 Ativos: <b>{ativos.filter(a => a.obraId === obraId).length}</b></div>
-            <div style={{ padding: "4px 0", borderBottom: "1px solid #f0f0f0" }}>📦 Pedidos do dia: <b>{pedidos.filter(p => p.obraId === obraId && p.data === data).length}</b></div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📋 Conteúdo do RDO</div>
+          <div style={{ fontSize: 12, color: T.texto2 }}>
+            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>👷 Mão de obra: <b>{trabObra.length}</b> ({presentes} presentes)</div>
+            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>🚜 Ativos: <b>{ativos.filter(a => a.obraId === obraId).length}</b></div>
+            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>📦 Pedidos do dia: <b>{pedidos.filter(p => p.obraId === obraId && p.data === data).length}</b></div>
             <div style={{ padding: "4px 0" }}>📌 Ocorrências: <b>{ocorrenciasDia.length}</b></div>
           </div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 8, fontSize: 14 }}>🏢 Empresa Emissora</div>
-          <div style={{ fontSize: 11, color: "#666" }}>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 8, fontSize: 14 }}>🏢 Empresa Emissora</div>
+          <div style={{ fontSize: 11, color: T.texto2 }}>
             <div><b>{empresa.razaoSocial}</b></div>
             <div>CNPJ: {empresa.cnpj}</div>
             <div>Resp. Técnico: {empresa.responsavel}</div>
@@ -1472,7 +1476,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
         {rdosEmitidos.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosEmitidos.length})</div>
+            <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosEmitidos.length})</div>
             <Grade min={320} gap={6} style={{ marginBottom: 6 }}>
             {rdosEmitidos.slice(0, 10).map(r => {
               const o = obras.find(x => x.id === r.obraId);
@@ -1498,12 +1502,12 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                 });
               };
               return (
-                <div key={r.id} style={{ background: "#fff", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 5px rgba(0,0,0,0.06)", borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
+                <div key={r.id} style={{ background: T.superficie, borderRadius: 10, padding: "10px 14px", boxShadow: T.sombra, borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                     <div style={{ fontSize: 22, marginRight: 10 }}>📄</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>RDO Nº {String(r.numero).padStart(3, "0")}{r.autoGerado && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700, marginLeft: 6 }}>⚡ AUTO</span>}</div>
-                      <div style={{ fontSize: 10, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o?.nome} • {r.data} • {r.encarregado}</div>
+                      <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>RDO Nº {String(r.numero).padStart(3, "0")}{r.autoGerado && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700, marginLeft: 6 }}>⚡ AUTO</span>}</div>
+                      <div style={{ fontSize: 10, color: T.texto2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o?.nome} • {r.data} • {r.encarregado}</div>
                     </div>
                   </div>
 
@@ -1516,10 +1520,10 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                           src={f}
                           alt={`Foto ${i + 1}`}
                           onClick={() => setFotoVer({ src: f, legenda: `RDO Nº ${String(r.numero).padStart(3, "0")} • ${o?.nome} • ${r.data}` })}
-                          style={{ width: 60, height: 60, borderRadius: 6, objectFit: "cover", flexShrink: 0, cursor: "pointer", border: "1px solid #ddd" }}
+                          style={{ width: 60, height: 60, borderRadius: 6, objectFit: "cover", flexShrink: 0, cursor: "pointer", border: `1px solid ${T.borda}` }}
                         />
                       ))}
-                      <div style={{ fontSize: 9, color: "#888", alignSelf: "center", marginLeft: 4, flexShrink: 0 }}>
+                      <div style={{ fontSize: 9, color: T.texto2, alignSelf: "center", marginLeft: 4, flexShrink: 0 }}>
                         {r.fotos.length} foto{r.fotos.length > 1 ? "s" : ""}
                       </div>
                     </div>
@@ -1528,7 +1532,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={baixar} style={{ flex: 1, background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>📄 PDF</button>
                     <button onClick={() => setEditandoRdo(r)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>✏️ Editar</button>
-                    <button onClick={() => { confirmar(`Excluir RDO Nº ${r.numero}?`, () => { onRemoveRDO(r.id); }); }} style={{ background: "#fef2f2", color: RED, border: `1px solid ${RED}33`, borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>🗑️</button>
+                    <button onClick={() => { confirmar(`Excluir RDO Nº ${r.numero}?`, () => { onRemoveRDO(r.id); }); }} style={{ background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>🗑️</button>
                   </div>
                 </div>
               );
@@ -1609,13 +1613,13 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Produtividade" sub={obra?.nome} onBack={onBack} />
-      <div style={{ flex: 1, overflowY: "auto", background: LIGHT, padding: 14 }}>
+      <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
-        <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📝 Registrar Produção</div>
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+          <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📝 Registrar Produção</div>
           <label style={labelS}>Tipo de serviço</label>
           <select value={tipo} onChange={e => { const t = TIPOS.find(x => x.nome === e.target.value); setTipo(e.target.value); if (t) setUnidade(t.unidade); }} style={selS}>
             {TIPOS.map(t => <option key={t.nome}>{t.nome}</option>)}
@@ -1633,15 +1637,15 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
         </div>
 
         {Object.keys(totais).length > 0 && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10, fontSize: 14 }}>📊 Totais Acumulados</div>
+          <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
+            <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📊 Totais Acumulados</div>
             {Object.entries(totais).map(([k, v]) => {
               const [t, u] = k.split("|");
               const cfg = TIPOS.find(x => x.nome === t);
               return (
-                <div key={k} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
+                <div key={k} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.borda}` }}>
                   <span style={{ fontSize: 22, marginRight: 10 }}>{cfg?.icon || "📦"}</span>
-                  <span style={{ flex: 1, fontSize: 13, color: NAVY }}>{t}</span>
+                  <span style={{ flex: 1, fontSize: 13, color: T.titulo }}>{t}</span>
                   <span style={{ fontSize: 16, fontWeight: 900, color: GREEN }}>{v.toFixed(2)} {u}</span>
                 </div>
               );
@@ -1649,19 +1653,19 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
           </div>
         )}
 
-        <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 13 }}>📜 Histórico</div>
-        {minhasObra.length === 0 && <div style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Nenhum registro.</div>}
+        <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 Histórico</div>
+        {minhasObra.length === 0 && <div style={{ color: T.texto3, fontSize: 13, textAlign: "center", padding: 16 }}>Nenhum registro.</div>}
         {minhasObra.map(p => {
           const cfg = TIPOS.find(x => x.nome === p.tipo);
           return (
-            <div key={p.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+            <div key={p.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
               <span style={{ fontSize: 24, marginRight: 10 }}>{cfg?.icon || "📦"}</span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: NAVY, fontSize: 13 }}>{p.tipo} — {fmtQtd(p.qtd)} {p.unidade}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>{p.autor} • {p.data}</div>
-                {p.obs && <div style={{ fontSize: 10, color: "#666", fontStyle: "italic" }}>{p.obs}</div>}
+                <div style={{ fontWeight: 700, color: T.titulo, fontSize: 13 }}>{p.tipo} — {fmtQtd(p.qtd)} {p.unidade}</div>
+                <div style={{ fontSize: 11, color: T.texto2 }}>{p.autor} • {p.data}</div>
+                {p.obs && <div style={{ fontSize: 10, color: T.texto2, fontStyle: "italic" }}>{p.obs}</div>}
               </div>
-              <button onClick={() => onRemove(p.id)} style={{ background: "#fee2e2", border: "2px solid #d63b3b", color: "#d63b3b", cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
+              <button onClick={() => onRemove(p.id)} style={{ background: T.erroFundo, border: `2px solid ${RED}`, color: RED, cursor: "pointer", padding: "6px 10px", borderRadius: 8, fontSize: 16, fontWeight: 800, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(214,59,59,0.3)" }}>🗑️</button>
             </div>
           );
         })}

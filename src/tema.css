@@ -1,0 +1,145 @@
+/* ═══════════════════════════════════════════════════════════════
+   TOKENS DE TEMA — KMZERO
+   Fonte única das cores do app. O tema é decidido por src/lib/useTema.js
+   (e pelo script anti-FOUC de app/index.html), que grava data-tema no <html>.
+   Padrão: escuro no escritório (PC >= 1024), claro no app de campo (sol no canteiro).
+   Os hex de src/theme.js (NAVY, GOLD...) continuam fixos; aqui ficam só os
+   valores que mudam entre claro e escuro, usados via T.* de theme.js.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: light;
+
+  /* Fundos e superfícies */
+  --km-fundo: #f7fbfc;
+  --km-fundo-externo: #052f3d;
+  --km-superficie: #ffffff;
+  --km-superficie2: #eef4f6;
+  --km-superficie3: #ffffff;
+
+  /* Bordas e contorno */
+  --km-borda: #e0e9ed;
+  --km-borda2: #c6d3d9;
+  --km-contorno: #052f3d;
+
+  /* Texto */
+  --km-titulo: #052f3d;
+  --km-texto: #22343b;
+  --km-texto2: #5c6b73;
+  --km-texto3: #6f7d84;
+  --km-desabilitado: #b8c2c7;
+  --km-desabilitado-fundo: #cfd8dc;
+
+  /* Formulários */
+  --km-input-fundo: #ffffff;
+  --km-input-borda: #dfe8ec;
+  --km-input-texto: #052f3d;
+  --km-placeholder: #74838a;
+  --km-seta-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234b5563' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+
+  /* Sombras */
+  --km-sombra: 0 2px 8px rgba(0,0,0,0.06);
+  --km-sombra2: 0 20px 60px rgba(0,0,0,0.30);
+
+  /* Ação e moldura (iguais nos dois temas, exceto o fundo do menu) */
+  --km-acento: #ffb830;
+  --km-barra: #052f3d;
+  --km-menu-fundo: #052f3d;
+  --km-menu-fundo2: #06384a;
+  --km-menu-borda: rgba(255,255,255,0.08);
+  --km-menu-texto: rgba(255,255,255,0.86);
+  --km-menu-texto2: rgba(255,255,255,0.62);
+  --km-menu-hover: rgba(255,255,255,0.07);
+  --km-menu-ativo: rgba(255,184,48,0.14);
+
+  /* Caixas semânticas */
+  --km-info-fundo: #eaf4ff;
+  --km-info-borda: #bfdcf7;
+  --km-info-texto: #0c4a6e;
+  --km-sucesso-fundo: #f0fdf4;
+  --km-sucesso-borda: #bbf0d2;
+  --km-sucesso-texto: #14532d;
+  --km-aviso-fundo: #fef9e7;
+  --km-aviso-borda: #f5dfa0;
+  --km-aviso-texto: #8b6f00;
+  --km-erro-fundo: #fef2f2;
+  --km-erro-borda: #f5c2c2;
+  --km-erro-texto: #991b1b;
+  --km-roxo-fundo: #f3e8ff;
+  --km-roxo-borda: #d8c4f5;
+  --km-roxo-texto: #5b21b6;
+}
+
+/* Superfícies escuras cinza-azuladas (não navy) para o menu e a barra em navy
+   continuarem se destacando. */
+:root[data-tema="escuro"] {
+  color-scheme: dark;
+
+  --km-fundo: #081a21;
+  --km-fundo-externo: #03121a;
+  --km-superficie: #0f242c;
+  --km-superficie2: #163039;
+  --km-superficie3: #1a3641;
+
+  --km-borda: rgba(255,255,255,0.10);
+  --km-borda2: rgba(255,255,255,0.22);
+  --km-contorno: #3fc1d6;
+
+  --km-titulo: #eaf3f5;
+  --km-texto: #d5e1e5;
+  --km-texto2: #9fb3bb;
+  --km-texto3: #7f939b;
+  --km-desabilitado: #5d717a;
+  --km-desabilitado-fundo: #2a4652;
+
+  --km-input-fundo: #0c1f26;
+  --km-input-borda: rgba(255,255,255,0.16);
+  --km-input-texto: #eaf3f5;
+  --km-placeholder: #6e8590;
+  --km-seta-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23c9d6db' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+
+  --km-sombra: 0 2px 8px rgba(0,0,0,0.35);
+  --km-sombra2: 0 20px 60px rgba(0,0,0,0.60);
+
+  --km-acento: #ffb830;
+  --km-barra: #052f3d;
+  --km-menu-fundo: #04161d;
+  --km-menu-fundo2: #071f28;
+  --km-menu-borda: rgba(255,255,255,0.06);
+  --km-menu-texto: rgba(255,255,255,0.86);
+  --km-menu-texto2: rgba(255,255,255,0.62);
+  --km-menu-hover: rgba(255,255,255,0.07);
+  --km-menu-ativo: rgba(255,184,48,0.14);
+
+  --km-info-fundo: rgba(32,148,255,0.14);
+  --km-info-borda: rgba(32,148,255,0.35);
+  --km-info-texto: #8fc6ff;
+  --km-sucesso-fundo: rgba(37,181,121,0.14);
+  --km-sucesso-borda: rgba(37,181,121,0.38);
+  --km-sucesso-texto: #7fe0b6;
+  --km-aviso-fundo: rgba(255,184,48,0.14);
+  --km-aviso-borda: rgba(255,184,48,0.38);
+  --km-aviso-texto: #ffd27a;
+  --km-erro-fundo: rgba(239,71,111,0.14);
+  --km-erro-borda: rgba(239,71,111,0.40);
+  --km-erro-texto: #ff9db1;
+  --km-roxo-fundo: rgba(124,58,237,0.16);
+  --km-roxo-borda: rgba(124,58,237,0.40);
+  --km-roxo-texto: #c4a6ff;
+}
+
+/* Fundo da página segue o tema antes mesmo do React (evita piscar claro e a
+   borda clara do overscroll no iOS). */
+html, body {
+  background: var(--km-fundo);
+}
+
+/* Placeholder só dentro do app: o HTML de PDF/impressão não usa var(). */
+.km-app-wrapper ::placeholder {
+  color: var(--km-placeholder);
+}
+
+/* Preview de PDF é sempre papel branco, mesmo no tema escuro. */
+#km-doc-page {
+  color-scheme: light;
+}
