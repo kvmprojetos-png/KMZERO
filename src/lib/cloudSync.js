@@ -44,7 +44,7 @@ export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
       idsAnterioresRef.current = null;
       return;
     }
-    conhecidosRef.current = new Set(lerIdsSync(colecao));
+    conhecidosRef.current = new Set(lerIdsSync(colecao).map(String)); // Set compara com tipo: ids sempre como texto
 
     const parar = observarColecaoNuvem(colecao, (docs, meta) => {
       const doServidor = !(meta && meta.fromCache);

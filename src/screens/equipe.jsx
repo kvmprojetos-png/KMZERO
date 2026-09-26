@@ -8,6 +8,7 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, Tabela, useEscritorio } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
   const [filtroObra, setFiltroObra] = useState("todas");
@@ -34,8 +35,8 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
     return { pres, falt, atest, diasPagos, diaria, total: diaria * diasPagos };
   };
 
-  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(filtroObra));
-  const dados = trabFiltro.map(t => ({ ...t, _calc: calcularDiasMes(t), _obra: obras.find(o => o.id === t.obraId) })).sort((a, b) => (b._calc.total - a._calc.total) || (a.nome || "").localeCompare(b.nome || ""));
+  const trabFiltro = filtroObra === "todas" ? trabalhadores : trabalhadores.filter(t => mesmoId(t.obraId, filtroObra));
+  const dados = trabFiltro.map(t => ({ ...t, _calc: calcularDiasMes(t), _obra: obras.find(o => mesmoId(o.id, t.obraId)) })).sort((a, b) => (b._calc.total - a._calc.total) || (a.nome || "").localeCompare(b.nome || ""));
   const totalGeral = dados.reduce((s, d) => s + d._calc.total, 0);
 
   return (
@@ -50,7 +51,7 @@ export function TabelaResumoEquipe({ obras, trabalhadores, historico, onNav }) {
 
       {!colapsada && (
         <>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: `1px solid ${T.borda}`, fontSize: 12, fontWeight: 600, color: T.titulo, background: T.superficie2 }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value))} style={{ width: "100%", padding: "8px 12px", border: "none", borderBottom: `1px solid ${T.borda}`, fontSize: 12, fontWeight: 600, color: T.titulo, background: T.superficie2 }}>
             <option value="todas">🏗️ Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -153,7 +154,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
   };
 
   const lista = trabalhadores
-    .filter(t => filtroObra === "todas" || String(t.obraId) === String(filtroObra))
+    .filter(t => filtroObra === "todas" || mesmoId(t.obraId, filtroObra))
     .filter(t => !busca || t.nome.toLowerCase().includes(busca.toLowerCase()) || (t.cargo || "").toLowerCase().includes(busca.toLowerCase()))
     .filter(t => {
       if (filtroStatus === "todos") return true;
@@ -197,7 +198,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>🔍</span>
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou cargo..." style={{ ...inputS, paddingLeft: 38, marginBottom: 0 }} />
         </div>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12, marginTop: 8 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value))} style={{ ...selS, marginBottom: 12, marginTop: 8 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -205,7 +206,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
         {lista.length > 0 && (
         <Grade min={300} gap={8} style={{ marginBottom: 8 }}>
         {lista.map(t => {
-          const obra = obras.find(o => o.id === t.obraId);
+          const obra = obras.find(o => mesmoId(o.id, t.obraId));
           const aso = checaASO(t);
           const indicadores = [];
           // Indicador: tem conta de login no sistema
@@ -285,7 +286,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId ?? ""} onChange={e => set("obraId", normId(e.target.value))} style={selS}>
           <option value="">Selecione a obra</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -296,7 +297,7 @@ export function TelaEquipe({ obras, trabalhadores, usuarios = [], onBack, onAdd,
         </div>
         <Btn label="SALVAR" color={GREEN} onClick={() => {
           if (!form.nome || !form.cargo || !form.obraId) return;
-          const novo = { id: Date.now(), nome: form.nome, cargo: form.cargo, obraId: form.obraId, cpf: form.cpf, tel: form.tel, diaria: form.diaria };
+          const novo = { id: Date.now(), nome: form.nome, cargo: form.cargo, obraId: normId(form.obraId), cpf: form.cpf, tel: form.tel, diaria: form.diaria };
           onAdd(novo, null); // sempre sem login — é só pra folha
           setModal(false);
           setForm({ nome: "", cargo: "", obraId: "", cpf: "", tel: "", diaria: "" });
@@ -398,7 +399,7 @@ export function TelaFicha({ obras, onBack, onAdd }) {
                 {CARGOS.map(c => <option key={c}>{c}</option>)}
               </select>
               <label style={labelS}>Obra Atual</label>
-              <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+              <select value={form.obraId ?? ""} onChange={e => set("obraId", normId(e.target.value))} style={selS}>
                 <option value="">Selecione a obra</option>
                 {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
               </select>
@@ -525,7 +526,7 @@ export function TelaFicha({ obras, onBack, onAdd }) {
               ))}
             </div>
 
-            <Btn label="SALVAR FICHA COMPLETA" color={GOLD} onClick={() => { if (form.nome && form.cpf) { onAdd({ id: Date.now(), ...form }); setSalvo(true); } }} style={{ marginBottom: 24 }} />
+            <Btn label="SALVAR FICHA COMPLETA" color={GOLD} onClick={() => { if (form.nome && form.cpf) { onAdd({ id: Date.now(), ...form, obraId: normId(form.obraId) }); setSalvo(true); } }} style={{ marginBottom: 24 }} />
           </>
         )}
       </div>
@@ -948,7 +949,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   if (!trabalhador) return null;
-  const obra = obras.find(o => o.id === trabalhador.obraId);
+  const obra = obras.find(o => mesmoId(o.id, trabalhador.obraId));
   const dias = ultimosDias(30);
   const stats = { Presente: 0, Falta: 0, Atestado: 0, "Sem registro": 0 };
   dias.forEach(d => {
@@ -957,7 +958,8 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
   });
   const presPct = Math.round((stats.Presente / 30) * 100);
 
-  const salvar = () => { onEditar(form); setEditando(false); };
+  // código da obra gravado canônico (sem criar o campo em quem não tem obra, ex.: escritório)
+  const salvar = () => { onEditar("obraId" in form ? { ...form, obraId: normId(form.obraId) } : form); setEditando(false); };
 
   // ASO próximo do vencimento?
   let asoStatusInfo = null;
@@ -1272,7 +1274,7 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           {CARGOS.map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={labelS}>Obra</label>
-        <select value={form.obraId || ""} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId || ""} onChange={e => set("obraId", normId(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <label style={labelS}>Data de Admissão</label>
@@ -1535,14 +1537,14 @@ export function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemo
 
   const salvar = () => {
     if (!form.trabId || !form.inicio || !form.fim) return;
-    onAdd({ id: Date.now(), trabId: parseInt(form.trabId), inicio: form.inicio, fim: form.fim, obs: form.obs });
+    onAdd({ id: Date.now(), trabId: normId(form.trabId), inicio: form.inicio, fim: form.fim, obs: form.obs });
     setModal(false);
     setForm({ trabId: "", inicio: "", fim: "", obs: "" });
   };
 
   const renderItem = (f, color) => {
-    const t = trabalhadores.find(x => x.id === f.trabId);
-    const obra = obras.find(o => o.id === t?.obraId);
+    const t = trabalhadores.find(x => mesmoId(x.id, f.trabId));
+    const obra = obras.find(o => mesmoId(o.id, t?.obraId));
     return (
       <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, borderLeft: `4px solid ${color}` }}>
         <div style={{ width: 30, height: 30, borderRadius: 15, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, marginRight: 10 }}>🌴</div>
@@ -1595,7 +1597,7 @@ export function TelaFerias({ obras, trabalhadores, ferias, onBack, onAdd, onRemo
 
       <Modal show={modal} title="Programar Férias" onClose={() => setModal(false)}>
         <label style={labelS}>Trabalhador</label>
-        <select value={form.trabId} onChange={e => set("trabId", e.target.value)} style={selS}>
+        <select value={form.trabId ?? ""} onChange={e => set("trabId", normId(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {trabalhadores.map(t => <option key={t.id} value={t.id}>{t.nome} — {t.cargo}</option>)}
         </select>
@@ -1671,7 +1673,7 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
                 Nenhum aniversariante em {meses[mesAtual]}.
               </div>
             ) : aniversariantes.map(t => {
-              const obra = obras.find(o => o.id === t.obraId);
+              const obra = obras.find(o => mesmoId(o.id, t.obraId));
               const eHoje = t.dia === hoje.getDate();
               return (
                 <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: eHoje ? T.avisoFundo : T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${eHoje ? "#f59e0b" : "#fbbf24"}` }}>
@@ -1711,7 +1713,7 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
             {epiPendente.length > 0 && <>
               <div style={{ fontWeight: 700, color: RED, marginBottom: 8, fontSize: 13 }}>⚠️ EPI Pendente de Entrega</div>
               {epiPendente.map(t => {
-                const obra = obras.find(o => o.id === t.obraId);
+                const obra = obras.find(o => mesmoId(o.id, t.obraId));
                 const tamanhos = [t.tamCamisa && `Camisa ${t.tamCamisa}`, t.tamCalca && `Calça ${t.tamCalca}`, t.tamBota && `Bota ${t.tamBota}`].filter(Boolean).join(" • ");
                 return (
                   <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${RED}` }}>
@@ -1733,7 +1735,7 @@ export function TelaRH({ obras, trabalhadores, onBack, onVerTrabalhador }) {
             {epiEntregue.length > 0 && <>
               <div style={{ fontWeight: 700, color: GREEN, marginBottom: 8, fontSize: 13, marginTop: 14 }}>✅ EPI Entregue</div>
               {epiEntregue.map(t => {
-                const obra = obras.find(o => o.id === t.obraId);
+                const obra = obras.find(o => mesmoId(o.id, t.obraId));
                 return (
                   <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${GREEN}` }}>
                     <div style={{ display: "flex", alignItems: "center" }}>
@@ -1783,7 +1785,7 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
     : usuarios.filter(u => u.perfil === "encarregado" && u.tel);
 
   const filtrados = lista.filter(p => {
-    const passaObra = filtroObra === "todas" || String(p.obraId) === String(filtroObra);
+    const passaObra = filtroObra === "todas" || mesmoId(p.obraId, filtroObra);
     const passaBusca = !busca || p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.cargo || "").toLowerCase().includes(busca.toLowerCase());
     return passaObra && passaBusca;
   });
@@ -1791,7 +1793,7 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
   // Agrupar por obra
   const grupos = {};
   filtrados.forEach(p => {
-    const obra = obras.find(o => o.id === p.obraId);
+    const obra = obras.find(o => mesmoId(o.id, p.obraId));
     const nomeObra = obra?.nome || "Sem obra";
     (grupos[nomeObra] = grupos[nomeObra] || []).push(p);
   });
@@ -1820,7 +1822,7 @@ export function TelaContatos({ obras, trabalhadores, usuarios, onBack, onVerTrab
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar por nome ou cargo..." style={inputS} />
 
         {aba === "trabalhadores" && (
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+          <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -1871,7 +1873,7 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
 
   const salvar = () => {
     if (!form.trabId || !form.valor) return;
-    onAdd({ id: Date.now(), trabId: parseInt(form.trabId), valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
+    onAdd({ id: Date.now(), trabId: normId(form.trabId), valor: parseFloat(form.valor), motivo: form.motivo, data: form.data, ts: Date.now(), descontado: false });
     setForm({ trabId: "", valor: "", motivo: "", data: new Date().toLocaleDateString("pt-BR") });
     setModal(false);
   };
@@ -1909,8 +1911,8 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
         {escritorio && adiantamentos.length > 0 && (
           <Tabela
             linhas={[...adiantamentos].sort((a, b) => b.ts - a.ts).map(a => {
-              const t = trabalhadores.find(x => x.id === a.trabId);
-              const obra = obras.find(o => o.id === t?.obraId);
+              const t = trabalhadores.find(x => mesmoId(x.id, a.trabId));
+              const obra = obras.find(o => mesmoId(o.id, t?.obraId));
               return { ...a, t, obra };
             })}
             colunas={[
@@ -1927,8 +1929,8 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
           />
         )}
         {!escritorio && [...adiantamentos].sort((a, b) => b.ts - a.ts).map(a => {
-          const t = trabalhadores.find(x => x.id === a.trabId);
-          const obra = obras.find(o => o.id === t?.obraId);
+          const t = trabalhadores.find(x => mesmoId(x.id, a.trabId));
+          const obra = obras.find(o => mesmoId(o.id, t?.obraId));
           return (
             <div key={a.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${ORANGE}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1952,7 +1954,7 @@ export function TelaAdiantamentos({ obras, trabalhadores, adiantamentos, onBack,
 
       <Modal show={modal} title="Novo Adiantamento" onClose={() => setModal(false)}>
         <label style={labelS}>Trabalhador</label>
-        <select value={form.trabId} onChange={e => set("trabId", e.target.value)} style={selS}>
+        <select value={form.trabId ?? ""} onChange={e => set("trabId", normId(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {trabalhadores.map(t => <option key={t.id} value={t.id}>{t.nome} — {t.cargo}</option>)}
         </select>
@@ -2032,7 +2034,7 @@ export function TelaExames({ obras, trabalhadores, empresa: empresaProp, onBack,
       return `<span class="selo ${st === "Apto" ? "ok" : "erro"}">${esc(st)}</span>`;
     };
     const linhas = lista.map((t, i) => {
-      const obra = obras.find(o => o.id === t.obraId);
+      const obra = obras.find(o => mesmoId(o.id, t.obraId));
       return `<tr>
             <td class="num">${i + 1}</td>
             <td><b>${esc(t.nome)}</b></td>
@@ -2119,7 +2121,7 @@ export function TelaExames({ obras, trabalhadores, empresa: empresaProp, onBack,
             {filtro === "sem_aso" && "🎉 Todos os trabalhadores têm ASO cadastrado."}
           </div>
         ) : lista.map(t => {
-          const obra = obras.find(o => o.id === t.obraId);
+          const obra = obras.find(o => mesmoId(o.id, t.obraId));
           return (
             <div key={t.id} onClick={() => onVerTrabalhador(t)} style={{ background: T.superficie, borderRadius: 12, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `4px solid ${cores[filtro].bg}` }}>
               {t.foto ? (

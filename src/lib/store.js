@@ -2,6 +2,7 @@ import { getApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
 import { usuarioAtual } from "../firebase.js";
+import { normId } from "./ids.js";
 
 let _empresaId = null;
 
@@ -149,7 +150,7 @@ export const aplicarPerfilNuvem = (u, p) => !p ? u : ({
   nome: p.nome || u.nome || "Equipe",
   perfil: p.perfil || u.perfil || "encarregado",
   cargo: p.cargo || u.cargo || "Encarregado",
-  obraId: (p.obraId !== undefined && p.obraId !== null) ? p.obraId : (u.obraId ?? null),
+  obraId: normId((p.obraId !== undefined && p.obraId !== null) ? p.obraId : u.obraId),
   tel: p.tel || u.tel || "",
 });
 
@@ -271,7 +272,7 @@ export async function aceitarConvite(userGoogle, convite) {
     foto: userGoogle.foto || "",
     perfil: convite.perfil || "encarregado",
     cargo: convite.cargo || (convite.perfil === "gestor" ? "Gestor" : "Encarregado"),
-    obraId: convite.obraId ?? null,
+    obraId: normId(convite.obraId),
     tel: convite.tel || "",
     ativo: true,
     criadoEm: Date.now(),
@@ -299,7 +300,7 @@ export async function criarConvite({ email, nome, cargo, obraId, perfil, tel, em
       empresaNome: empresaNome || "",
       nome: nome || "",
       cargo: cargo || "Encarregado",
-      obraId: obraId ?? null,
+      obraId: normId(obraId),
       perfil: perfil === "gestor" ? "gestor" : "encarregado",
       tel: tel || "",
       criadoPor: eu ? eu.uid : null,
@@ -334,7 +335,7 @@ export function observarEquipeNuvem(callback, onErro) {
       id: d.id, firebaseUid: d.id,
       nome: d.data().nome || "", email: d.data().email || "", foto: d.data().foto || "",
       perfil: d.data().perfil || "encarregado", cargo: d.data().cargo || "",
-      obraId: d.data().obraId ?? null, tel: d.data().tel || "",
+      obraId: normId(d.data().obraId), tel: d.data().tel || "",
       ativo: d.data().ativo !== false,
     })));
   }, e => { console.warn("observarEquipeNuvem:", e); onErro && onErro(e); });
@@ -350,7 +351,7 @@ export function observarConvitesNuvem(callback, onErro) {
       id: "convite:" + d.id, convite: true,
       nome: d.data().nome || "", email: d.data().email || d.id,
       perfil: d.data().perfil || "encarregado", cargo: d.data().cargo || "",
-      obraId: d.data().obraId ?? null, tel: d.data().tel || "",
+      obraId: normId(d.data().obraId), tel: d.data().tel || "",
     })));
   }, e => { console.warn("observarConvitesNuvem:", e); onErro && onErro(e); });
 }
@@ -371,7 +372,7 @@ export async function resolverEntradaGoogle(userGoogle) {
     nome: perfil.nome || userGoogle.nome || "Equipe",
     perfil: perfil.perfil || "encarregado",
     cargo: perfil.cargo || (perfil.perfil === "gestor" ? "Gestor" : "Encarregado"),
-    obraId: perfil.obraId ?? null,
+    obraId: normId(perfil.obraId),
     tel: perfil.tel || "",
     empresaId: perfil.empresaId,
     ultimoLogin: Date.now(),

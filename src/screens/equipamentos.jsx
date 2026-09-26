@@ -9,12 +9,13 @@ import { reduzirImagem } from "../lib/imagem.js";
 import { useTema } from "../lib/useTema.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export function TelaEquip({ obra, equips, onBack, onSaveEquips }) {
-  const obraEquips = equips.filter(e => e.obraId === obra.id);
+  const obraEquips = equips.filter(e => mesmoId(e.obraId, obra.id));
   const [local, setLocal] = useState(obraEquips);
   const ciclo = { "Em Uso": "Disponível", "Disponível": "Em Uso", "Quebrada": "Disponível" };
-  const toggle = (id) => setLocal(es => es.map(e => e.id === id ? { ...e, status: ciclo[e.status] } : e));
+  const toggle = (id) => setLocal(es => es.map(e => mesmoId(e.id, id) ? { ...e, status: ciclo[e.status] } : e));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
@@ -51,14 +52,14 @@ export function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar,
   const [filtroObra, setFiltroObra] = useState("todas");
   const [form, setForm] = useState({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const lista = filtroObra === "todas" ? equips : equips.filter(e => String(e.obraId) === String(filtroObra));
+  const lista = filtroObra === "todas" ? equips : equips.filter(e => mesmoId(e.obraId, filtroObra));
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", codigo: "", obraId: "", status: "Disponível", icon: "🔧" }); setModal(true); };
   const abrirEdit = (eq) => { setEditandoId(eq.id); setForm(eq); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.codigo || !form.obraId) return;
-    if (editandoId) onEditar({ ...form, id: editandoId });
-    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId) });
+    if (editandoId) onEditar({ ...form, id: editandoId, obraId: normId(form.obraId) });
+    else onAdd({ ...form, id: Date.now(), obraId: normId(form.obraId) });
     setModal(false);
   };
 
@@ -68,12 +69,12 @@ export function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar,
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Equipamentos" sub="Gestão completa" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value) ?? "todas")} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         {lista.map(eq => {
-          const obra = obras.find(o => o.id === eq.obraId);
+          const obra = obras.find(o => mesmoId(o.id, eq.obraId));
           return (
             <div key={eq.id} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
               <div style={{ fontSize: 30, marginRight: 12 }}>{eq.icon}</div>
@@ -113,7 +114,7 @@ export function TelaEquipamentosGestao({ obras, equips, onBack, onAdd, onEditar,
         <label style={labelS}>Código</label>
         <input value={form.codigo} onChange={e => set("codigo", e.target.value)} placeholder="Ex: EQ045" style={inputS} />
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", normId(e.target.value) ?? "")} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -158,22 +159,22 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
     reduzirImagem(file).then(dataUrl => setAB("fotoCupom", dataUrl)).catch(() => alert("Não foi possível ler a foto. Tente outra."));
   };
 
-  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => String(a.obraId) === String(filtroObra));
+  const lista = filtroObra === "todas" ? ativos : ativos.filter(a => mesmoId(a.obraId, filtroObra));
   const TIPOS = ["Retroescavadeira", "Caminhão", "Betoneira Móvel", "Empilhadeira", "Caminhão Pipa", "Caminhonete", "Outro"];
 
   const abrirNovo = () => { setEditandoId(null); setForm({ tipo: "Retroescavadeira", nome: "", placa: "", obraId: "", horimetro: 0, valorHora: 80, status: "Ativo" }); setModal(true); };
   const abrirEdit = (a) => { setEditandoId(a.id); setForm(a); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.placa || !form.obraId) return;
-    if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
-    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
+    if (editandoId) onEditar({ ...form, id: editandoId, obraId: normId(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
+    else onAdd({ ...form, id: Date.now(), obraId: normId(form.obraId), horimetro: parseFloat(form.horimetro) || 0, valorHora: parseFloat(form.valorHora) || 0 });
     setModal(false);
   };
 
   const abastecer = () => {
     if (!formAbast.litros || !formAbast.valor) return;
     onAbastecer({
-      id: Date.now(), ativoId: modalAbast.id, obraId: modalAbast.obraId,
+      id: Date.now(), ativoId: normId(modalAbast.id), obraId: normId(modalAbast.obraId),
       litros: parseFloat(formAbast.litros), valor: parseFloat(formAbast.valor),
       horimetro: parseFloat(formAbast.horimetro) || 0, combustivel: formAbast.combustivel,
       fotoCupom: formAbast.fotoCupom,
@@ -189,7 +190,7 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ativos & Frota" sub="Veículos e maquinário" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value) ?? "todas")} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -197,8 +198,8 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
         {lista.length > 0 && (
         <Grade min={300} gap={8} style={{ marginBottom: 8 }}>
         {lista.map(a => {
-          const obra = obras.find(o => o.id === a.obraId);
-          const meusAbast = abastecimentos.filter(x => x.ativoId === a.id);
+          const obra = obras.find(o => mesmoId(o.id, a.obraId));
+          const meusAbast = abastecimentos.filter(x => mesmoId(x.ativoId, a.id));
           const totalAbast = meusAbast.reduce((s, x) => s + x.valor, 0);
           return (
             <div key={a.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, boxShadow: T.sombra }}>
@@ -265,7 +266,7 @@ export function TelaAtivos({ obras, ativos, abastecimentos, onBack, onAdd, onEdi
         <label style={labelS}>Placa</label>
         <input value={form.placa} onChange={e => set("placa", e.target.value)} placeholder="ABC-1234" style={inputS} />
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value === "" ? "" : parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value === "" ? "" : normId(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -340,7 +341,7 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
     const d = dataDeStr(a.data);
     if (!d) return false;
     if (d < dataInicio || d > hoje) return false;
-    if (filtroAtivo !== "todos" && String(a.ativoId) !== String(filtroAtivo)) return false;
+    if (filtroAtivo !== "todos" && !mesmoId(a.ativoId, filtroAtivo)) return false;
     return true;
   });
 
@@ -352,7 +353,7 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
 
   // Por veículo
   const porVeiculo = (ativos || []).map(a => {
-    const abasts = abastFiltrados.filter(x => x.ativoId === a.id);
+    const abasts = abastFiltrados.filter(x => mesmoId(x.ativoId, a.id));
     const gasto = abasts.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0);
     const litros = abasts.reduce((s, x) => s + (parseFloat(x.litros) || 0), 0);
     return { ativo: a, gasto, litros, qtd: abasts.length };
@@ -360,7 +361,7 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
 
   // Por obra
   const porObra = obras.map(o => {
-    const abasts = abastFiltrados.filter(x => x.obraId === o.id);
+    const abasts = abastFiltrados.filter(x => mesmoId(x.obraId, o.id));
     const gasto = abasts.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0);
     return { obra: o, gasto, qtd: abasts.length };
   }).filter(o => o.gasto > 0).sort((a, b) => b.gasto - a.gasto);
@@ -407,7 +408,7 @@ export function TelaFrota({ obras, ativos, abastecimentos, onBack, onNav }) {
             ))}
           </div>
           <label style={labelS}>🚗 Veículo</label>
-          <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)} style={selS}>
+          <select value={filtroAtivo} onChange={e => setFiltroAtivo(normId(e.target.value) ?? "todos")} style={selS}>
             <option value="todos">Todos os veículos</option>
             {(ativos || []).map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
           </select>
@@ -550,17 +551,17 @@ export function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSoli
   const [ok, setOk] = useState(false);
 
   // Encarregado vê todos os trabalhadores (banco geral)
-  const obraAtual = obras.find(o => o.id === usuario?.obraId);
+  const obraAtual = obras.find(o => mesmoId(o.id, usuario?.obraId));
 
   const enviar = () => {
     if (!trabId || !obraDestino) return;
-    const t = trabalhadores.find(x => String(x.id) === String(trabId));
+    const t = trabalhadores.find(x => mesmoId(x.id, trabId));
     onSolicitar({
       id: Date.now(),
-      trabId: trabId,
+      trabId: normId(trabId),
       trabNome: t?.nome,
-      obraOrigem: t?.obraId,
-      obraDestino: obraDestino,
+      obraOrigem: normId(t?.obraId),
+      obraDestino: normId(obraDestino),
       tipo, motivo,
       solicitante: usuario?.nome,
       status: "Aguardando",
@@ -591,16 +592,16 @@ export function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSoli
 
             <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
               <label style={labelS}>Trabalhador (banco geral)</label>
-              <select value={trabId} onChange={e => setTrabId(e.target.value)} style={selS}>
+              <select value={trabId} onChange={e => setTrabId(normId(e.target.value) ?? "")} style={selS}>
                 <option value="">Selecione</option>
                 {[...trabalhadores].sort((a, b) => (a.nome || "").localeCompare(b.nome || "")).map(t => {
-                  const o = obras.find(x => x.id === t.obraId);
+                  const o = obras.find(x => mesmoId(x.id, t.obraId));
                   return <option key={t.id} value={t.id}>{t.nome} — {t.cargo} ({o?.nome || "sem obra"})</option>;
                 })}
               </select>
 
               <label style={labelS}>Obra de destino</label>
-              <select value={obraDestino} onChange={e => setObraDestino(e.target.value)} style={selS}>
+              <select value={obraDestino} onChange={e => setObraDestino(normId(e.target.value) ?? "")} style={selS}>
                 <option value="">Selecione</option>
                 {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
               </select>
@@ -641,11 +642,11 @@ export function TelaSolicitarMov({ obras, trabalhadores, usuario, onBack, onSoli
 
 export function TelaMovEquipDetalhe({ mov, obras, equips, ferramentas, usuario, onBack, onAprovar, onNegar, onDevolver }) {
   if (!mov) return null;
-  const obraOrigem = obras.find(o => o.id === mov.obraOrigemId);
-  const obraDestino = obras.find(o => o.id === mov.obraDestinoId);
+  const obraOrigem = obras.find(o => mesmoId(o.id, mov.obraOrigemId));
+  const obraDestino = obras.find(o => mesmoId(o.id, mov.obraDestinoId));
   const item = mov.tipoItem === "equipamento"
-    ? (equips || []).find(x => x.id === mov.itemId)
-    : (ferramentas || []).find(x => x.id === mov.itemId);
+    ? (equips || []).find(x => mesmoId(x.id, mov.itemId))
+    : (ferramentas || []).find(x => mesmoId(x.id, mov.itemId));
 
   const cor = mov.status === "Aguardando" ? ORANGE : mov.status === "Aprovado" ? GREEN : mov.status === "Devolvido" ? BLUE : RED;
   const statusLabel = mov.status === "Aguardando" ? "⏳ Aguardando" : mov.status === "Aprovado" ? "✓ Aprovado" : mov.status === "Devolvido" ? "↩️ Devolvido" : "✕ Negado";
@@ -791,8 +792,8 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const itens = form.tipoItem === "equipamento" ? (equips || []) : (ferramentas || []);
-  const itemEscolhido = itens.find(x => x.id === parseInt(form.itemId));
-  const obraOrigem = itemEscolhido ? obras.find(o => o.id === itemEscolhido.obraId) : null;
+  const itemEscolhido = itens.find(x => mesmoId(x.id, form.itemId));
+  const obraOrigem = itemEscolhido ? obras.find(o => mesmoId(o.id, itemEscolhido.obraId)) : null;
 
   const enviar = () => {
     if (!form.itemId || !form.obraDestino) { alert("Selecione o item e a obra destino"); return; }
@@ -800,13 +801,13 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
     onSolicitar({
       id: Date.now(),
       tipoItem: form.tipoItem,
-      itemId: parseInt(form.itemId),
+      itemId: normId(form.itemId),
       itemNome: itemEscolhido.nome,
       itemCodigo: itemEscolhido.codigo || "",
-      obraOrigemId: itemEscolhido.obraId,
+      obraOrigemId: normId(itemEscolhido.obraId),
       obraOrigemNome: obraOrigem?.nome,
-      obraDestinoId: parseInt(form.obraDestino),
-      obraDestinoNome: obras.find(o => o.id === parseInt(form.obraDestino))?.nome,
+      obraDestinoId: normId(form.obraDestino),
+      obraDestinoNome: obras.find(o => mesmoId(o.id, form.obraDestino))?.nome,
       tipo: form.tipo,
       prazo: form.prazo,
       motivo: form.motivo,
@@ -823,7 +824,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
   const lista = (movEquip || []).filter(m => {
     if (aba === "ativas") return m.status === "Aguardando" || m.status === "Aprovado" || m.status === "Em trânsito";
     return m.status === "Devolvido" || m.status === "Concluído" || m.status === "Negado";
-  }).filter(m => filtroObra === "todas" || String(m.obraOrigemId) === String(filtroObra) || String(m.obraDestinoId) === String(filtroObra));
+  }).filter(m => filtroObra === "todas" || mesmoId(m.obraOrigemId, filtroObra) || mesmoId(m.obraDestinoId, filtroObra));
 
   const aguardando = (movEquip || []).filter(m => m.status === "Aguardando").length;
   const aprovadas = (movEquip || []).filter(m => m.status === "Aprovado").length;
@@ -868,7 +869,7 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 10 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value) ?? "todas")} style={{ ...selS, marginBottom: 10 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -949,10 +950,10 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
         </div>
 
         <label style={labelS}>Selecione o item</label>
-        <select value={form.itemId} onChange={e => set("itemId", e.target.value)} style={selS}>
+        <select value={form.itemId} onChange={e => set("itemId", normId(e.target.value) ?? "")} style={selS}>
           <option value="">— Selecione —</option>
           {itens.map(i => {
-            const o = obras.find(x => x.id === i.obraId);
+            const o = obras.find(x => mesmoId(x.id, i.obraId));
             return <option key={i.id} value={i.id}>{i.nome} {i.codigo ? "(" + i.codigo + ")" : ""} • {o?.nome?.substring(0, 25) || "?"}</option>;
           })}
         </select>
@@ -964,9 +965,9 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
         )}
 
         <label style={labelS}>Obra de destino</label>
-        <select value={form.obraDestino} onChange={e => set("obraDestino", e.target.value)} style={selS}>
+        <select value={form.obraDestino} onChange={e => set("obraDestino", normId(e.target.value) ?? "")} style={selS}>
           <option value="">— Selecione —</option>
-          {obras.filter(o => itemEscolhido ? o.id !== itemEscolhido.obraId : true).map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+          {obras.filter(o => itemEscolhido ? !mesmoId(o.id, itemEscolhido.obraId) : true).map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
         <label style={labelS}>Tipo de movimentação</label>
@@ -1015,9 +1016,9 @@ export function TelaMovEquip({ obras, equips, ferramentas, movEquip, usuario, on
 
 export function TelaMovPessoalDetalhe({ mov, obras, trabalhadores, onBack, onAprovar, onNegar }) {
   if (!mov) return null;
-  const trab = trabalhadores.find(t => t.id === mov.trabId);
-  const oOrigem = obras.find(o => o.id === mov.obraOrigem);
-  const oDestino = obras.find(o => o.id === mov.obraDestino);
+  const trab = trabalhadores.find(t => mesmoId(t.id, mov.trabId));
+  const oOrigem = obras.find(o => mesmoId(o.id, mov.obraOrigem));
+  const oDestino = obras.find(o => mesmoId(o.id, mov.obraDestino));
   const cor = mov.status === "Aprovado" ? GREEN : mov.status === "Negado" ? RED : ORANGE;
   const statusLabel = mov.status === "Aguardando" ? "⏳ Aguardando" : mov.status === "Aprovado" ? "✓ Aprovado" : "✕ Negado";
 
@@ -1134,8 +1135,8 @@ export function TelaAprovarMov({ obras, trabalhadores, movimentacoes, onBack, on
         {lista.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhuma solicitação.</div>}
 
         {lista.map(m => {
-          const oOrigem = obras.find(o => o.id === m.obraOrigem);
-          const oDestino = obras.find(o => o.id === m.obraDestino);
+          const oOrigem = obras.find(o => mesmoId(o.id, m.obraOrigem));
+          const oDestino = obras.find(o => mesmoId(o.id, m.obraDestino));
           const cor = m.status === "Aprovado" ? GREEN : m.status === "Negado" ? RED : ORANGE;
           return (
             <div key={m.id} onClick={() => onVerDetalhe && onVerDetalhe(m)} style={{ background: T.superficie, borderRadius: 12, padding: 14, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, cursor: "pointer" }}>
@@ -1192,14 +1193,14 @@ export function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, o
   const ICONS = ["🔨", "🪓", "⛏️", "🧰", "🪛", "🚿", "🛒", "🪣", "🧱", "📐", "🪜", "🔗"];
   const SUGEST = ["Inchada", "Enxadão", "Carrinho de mão", "Pá", "Picareta", "Marreta", "Martelo", "Talhadeira", "Trena", "Nível", "Prumo", "Linha", "Colher de pedreiro", "Desempenadeira", "Régua"];
 
-  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => String(f.obraId) === String(filtroObra));
+  const lista = filtroObra === "todas" ? ferramentas : ferramentas.filter(f => mesmoId(f.obraId, filtroObra));
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", quantidade: 1, obraId: "", estado: "Bom", icon: "🔨" }); setModal(true); };
   const abrirEdit = (f) => { setEditandoId(f.id); setForm(f); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.obraId) return;
-    if (editandoId) onEditar({ ...form, id: editandoId, obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
-    else onAdd({ ...form, id: Date.now(), obraId: parseInt(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
+    if (editandoId) onEditar({ ...form, id: editandoId, obraId: normId(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
+    else onAdd({ ...form, id: Date.now(), obraId: normId(form.obraId), quantidade: parseInt(form.quantidade) || 1 });
     setModal(false);
   };
 
@@ -1209,13 +1210,13 @@ export function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, o
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Ferramentas" sub="Manuais e elétricas" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 12 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value) ?? "todas")} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
         {lista.map(f => {
-          const obra = obras.find(o => o.id === f.obraId);
+          const obra = obras.find(o => mesmoId(o.id, f.obraId));
           return (
             <div key={f.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra }}>
               <div style={{ fontSize: 28, marginRight: 12 }}>{f.icon}</div>
@@ -1243,7 +1244,7 @@ export function TelaFerramentas({ obras, ferramentas, onBack, onAdd, onEditar, o
         <input value={form.quantidade} onChange={e => set("quantidade", e.target.value)} type="number" min="1" style={inputS} />
 
         <label style={labelS}>Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value === "" ? "" : parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", e.target.value === "" ? "" : normId(e.target.value))} style={selS}>
           <option value="">Selecione</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -1280,16 +1281,16 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
 
   const salvar = () => {
     if (!form.itemId || !form.proxData) return;
-    onAdd({ id: Date.now(), ...form, ts: Date.now(), realizada: false });
+    onAdd({ id: Date.now(), ...form, itemId: normId(form.itemId), obraId: normId(form.obraId), ts: Date.now(), realizada: false });
     setForm({ tipoItem: "ativo", itemId: "", tipo: "Troca de óleo", proxData: "", observacao: "", obraId: "" });
     setModal(false);
   };
 
   const marcarRealizada = (id) => {
-    const m = manutencoes.find(x => x.id === id);
+    const m = manutencoes.find(x => mesmoId(x.id, id));
     if (!m) return;
     if (!confirm(`Marcar "${m.tipo}" como realizada?`)) return;
-    onAdd({ ...m, realizada: true, dataRealizada: new Date().toLocaleDateString("pt-BR"), id: m.id });
+    onAdd({ ...m, itemId: normId(m.itemId), obraId: normId(m.obraId), realizada: true, dataRealizada: new Date().toLocaleDateString("pt-BR"), id: m.id });
   };
 
   // Análise de status
@@ -1310,9 +1311,9 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
   const ordenada = [...lista].map(m => ({ ...m, _s: checaStatus(m) })).sort((a, b) => a._s.prio - b._s.prio);
 
   const getNomeItem = (m) => {
-    if (m.tipoItem === "ativo") return ativos.find(x => x.id === parseInt(m.itemId))?.nome || "—";
-    if (m.tipoItem === "ferramenta") return ferramentas.find(x => x.id === parseInt(m.itemId))?.nome || "—";
-    if (m.tipoItem === "equipamento") return equips.find(x => x.id === parseInt(m.itemId))?.nome || "—";
+    if (m.tipoItem === "ativo") return ativos.find(x => mesmoId(x.id, m.itemId))?.nome || "—";
+    if (m.tipoItem === "ferramenta") return ferramentas.find(x => mesmoId(x.id, m.itemId))?.nome || "—";
+    if (m.tipoItem === "equipamento") return equips.find(x => mesmoId(x.id, m.itemId))?.nome || "—";
     return "—";
   };
 
@@ -1368,7 +1369,7 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
         )}
 
         {ordenada.map(m => {
-          const obra = obras.find(o => o.id === parseInt(m.obraId));
+          const obra = obras.find(o => mesmoId(o.id, m.obraId));
           return (
             <div key={m.id} style={{ background: T.superficie, borderRadius: 12, padding: "10px 14px", marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${m._s.cor}` }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
@@ -1410,7 +1411,7 @@ export function TelaManutencao({ obras, ativos, ferramentas, equips, manutencoes
         </div>
 
         <label style={labelS}>Selecione o item</label>
-        <select value={form.itemId} onChange={e => set("itemId", e.target.value)} style={selS}>
+        <select value={form.itemId} onChange={e => set("itemId", normId(e.target.value) ?? "")} style={selS}>
           <option value="">—</option>
           {form.tipoItem === "ativo" && ativos.map(a => <option key={a.id} value={a.id}>{a.nome} ({a.placa})</option>)}
           {form.tipoItem === "ferramenta" && ferramentas.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}

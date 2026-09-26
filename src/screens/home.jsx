@@ -14,6 +14,7 @@ import { useTema } from "../lib/useTema.js";
 import { SinoAvisos } from "./avisos.jsx";
 // Nomes das telas iguais aos do menu lateral ("Indicadores", "Alertas", "Avisos"…) e e-mail do desenvolvedor
 import { EMAIL_DEV, labelDaTela } from "../components/menuGrupos.js";
+import { normId, mesmoId } from "../lib/ids.js";
 
 /* ── Documentos de saída (PDF/impressão) desta tela: padrão do núcleo (src/lib/pdf.js) ──
    Regras: só dados da EMPRESA CLIENTE (Sistema → Empresa), cores só em hex fixo, classes
@@ -47,7 +48,7 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
   const presentes = Object.values(presencasHoje).filter(v => v === "Presente").length;
   const faltas    = Object.values(presencasHoje).filter(v => v === "Falta").length;
   const atestados = Object.values(presencasHoje).filter(v => v === "Atestado").length;
-  const novasMsgs = (mensagens || []).filter(m => m.para === usuario?.id && !m.lida).length;
+  const novasMsgs = (mensagens || []).filter(m => mesmoId(m.para, usuario?.id) && !m.lida).length;
   // Saudação inteligente por horário
   const h = new Date().getHours();
   const saudacao = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
@@ -231,7 +232,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const pedidosFiltrados = filtroStatus === "todos" ? pedidos : pedidos.filter(p => p.status === filtroStatus);
   const totalAlertas = gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos }).length;
-  const novasMsgs = mensagens?.filter(m => !m.lida && m.para === usuario?.id).length || 0;
+  const novasMsgs = mensagens?.filter(m => !m.lida && mesmoId(m.para, usuario?.id)).length || 0;
 
   // Modal de aprovação com forma pagamento + prazo
   const [pedidoAprovando, setPedidoAprovando] = useState(null);
@@ -246,7 +247,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
 
   const confirmarAprovacao = () => {
     if (!pedidoAprovando) return;
-    const obraDoPedido = obras.find(o => o.id === pedidoAprovando.obraId);
+    const obraDoPedido = obras.find(o => mesmoId(o.id, pedidoAprovando.obraId));
     const pedidoCompleto = { ...pedidoAprovando, formaPagamento: formaPag, prazoEntrega: prazo, status: "Aprovado" };
     onAprovar(pedidoAprovando.id, { formaPagamento: formaPag, prazoEntrega: prazo });
     // Gera PDF DIRETO (sem confirm — o usuário pode fechar se não quiser)
@@ -364,7 +365,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
     <Modal show={!!pedidoAprovando} title="✓ Aprovar Pedido" onClose={() => setPedidoAprovando(null)}>
       {pedidoAprovando && (() => {
         const itens = pedidoAprovando.itens || [{ material: pedidoAprovando.material, qtd: pedidoAprovando.qtd }];
-        const obraDoPedido = obras.find(o => o.id === pedidoAprovando.obraId);
+        const obraDoPedido = obras.find(o => mesmoId(o.id, pedidoAprovando.obraId));
         return (
           <>
             <div style={{ background: T.sucessoFundo, borderRadius: 10, padding: "10px 12px", marginBottom: 12, borderLeft: `3px solid ${GREEN}` }}>
@@ -424,7 +425,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
     const rdosRecentes = maisRecentes(rdosEmitidos, 8);
     const fotosRecentes = maisRecentes(fotosObras, 8);
     const limite7d = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const nomeObra = (obraId, alternativa) => obras.find(o => String(o.id) === String(obraId))?.nome || alternativa || "Obra";
+    const nomeObra = (obraId, alternativa) => obras.find(o => mesmoId(o.id, obraId))?.nome || alternativa || "Obra";
     const nomeEmpresa = empresa?.nomeFantasia || empresa?.razaoSocial || "";
     const dataExtenso = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
     const cartaoS = { background: T.superficie, borderRadius: 14, padding: 16, boxShadow: T.sombra };
@@ -479,10 +480,10 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                 ) : (
                   <Grade min={300} gap={12}>
                     {obrasAtivas.map(o => {
-                      const trabObra = trabalhadores.filter(t => String(t.obraId) === String(o.id));
+                      const trabObra = trabalhadores.filter(t => mesmoId(t.obraId, o.id));
                       const presentesObra = trabObra.filter(t => presHoje[t.id] === "Presente").length;
-                      const ultimoRdo = maisRecentes((rdosEmitidos || []).filter(r => String(r.obraId) === String(o.id)), 1)[0];
-                      const fotos7d = (fotosObras || []).filter(f => String(f.obraId) === String(o.id) && tsLancamento(f) >= limite7d).length;
+                      const ultimoRdo = maisRecentes((rdosEmitidos || []).filter(r => mesmoId(r.obraId, o.id)), 1)[0];
+                      const fotos7d = (fotosObras || []).filter(f => mesmoId(f.obraId, o.id) && tsLancamento(f) >= limite7d).length;
                       const local = [o.cliente, o.endereco || o.local].filter(Boolean).join(" · ");
                       return (
                         <div key={o.id} onClick={() => onNav("obras")} style={{ ...cartaoS, cursor: "pointer", borderTop: `4px solid ${BLUE}` }}>
@@ -878,10 +879,10 @@ export function CategoriaCard({ categoria, onNav }) {
 
 export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, empresa, onBack }) {
   const [obraId, setObraId] = useState(obras[0]?.id);
-  const obra = obras.find(o => o.id === obraId) || obras[0];
-  const equips = DEFAULT_EQUIPS.filter(e => e.obraId === obraId);
-  const trab = trabalhadores.filter(t => t.obraId === obraId);
-  const pedidosObra = pedidos.filter(p => p.obraId === obraId);
+  const obra = obras.find(o => mesmoId(o.id, obraId)) || obras[0];
+  const equips = DEFAULT_EQUIPS.filter(e => mesmoId(e.obraId, obraId));
+  const trab = trabalhadores.filter(t => mesmoId(t.obraId, obraId));
+  const pedidosObra = pedidos.filter(p => mesmoId(p.obraId, obraId));
   const hoje = new Date().toLocaleDateString("pt-BR");
 
   const presentes = trab.filter(t => presencasHoje[t.id] === "Presente").length;
@@ -891,7 +892,7 @@ export function TelaRelatorio({ obras, trabalhadores, pedidos, presencasHoje, em
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Relatório Diário" sub={`${obra?.nome || ""} — ${hoje}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 14 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -993,7 +994,7 @@ export function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack
   const { paleta } = useTema(); // hex do tema atual para o Recharts (var() não funciona em atributo SVG)
   const [obraId, setObraId] = useState("todas");
   const dias = ultimosDias(7);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => mesmoId(t.obraId, obraId));
 
   const dadosPresenca = dias.map(d => {
     const pres = historico[d] || {};
@@ -1007,7 +1008,7 @@ export function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack
     return { dia: fmtData(d), Presentes: p, Faltas: f, Atestados: a };
   });
 
-  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => String(p.obraId) === String(obraId));
+  const totalPedidos = obraId === "todas" ? pedidos : pedidos.filter(p => mesmoId(p.obraId, obraId));
   const dadosPedidos = [
     { name: "Aprovados",  value: totalPedidos.filter(p => p.status === "Aprovado").length,  color: GREEN },
     { name: "Aguardando", value: totalPedidos.filter(p => p.status === "Aguardando").length, color: ORANGE },
@@ -1022,7 +1023,7 @@ export function TelaDashboard({ obras, trabalhadores, pedidos, historico, onBack
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title={labelDaTela("dashboard", "Indicadores")} sub="Números e gráficos" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 14 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value) ?? "todas")} style={{ ...selS, marginBottom: 14 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -1102,7 +1103,7 @@ export function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico,
 
   // 1) Equipamentos quebrados há muito tempo
   equips.filter(e => e.status === "Quebrada").forEach(e => {
-    const obra = obras.find(o => o.id === e.obraId);
+    const obra = obras.find(o => mesmoId(o.id, e.obraId));
     alertas.push({ id: `eq-${e.id}`, tipo: "Equipamento", icone: "🔧", titulo: `${e.nome} quebrada`, detalhe: `${obra?.nome || ""} • Cód: ${e.codigo}`, prio: "alta", color: RED, navegarPara: "equip_gestao" });
   });
 
@@ -1124,7 +1125,7 @@ export function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico,
     let faltas = 0;
     dias7.forEach(d => { if ((historico[d] || {})[t.id] === "Falta") faltas++; });
     if (faltas >= 3) {
-      const obra = obras.find(o => o.id === t.obraId);
+      const obra = obras.find(o => mesmoId(o.id, t.obraId));
       alertas.push({ id: `falta-${t.id}`, tipo: "Frequência", icone: "⚠️", titulo: `${t.nome}: ${faltas} faltas em 7 dias`, detalhe: `${t.cargo} • ${obra?.nome || ""}`, prio: "alta", color: RED, navegarPara: "equipe", contextoId: t.id });
     }
   });
@@ -1146,13 +1147,13 @@ export function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico,
 
   // 5) Trabalhadores Inaptos
   trabalhadores.filter(t => t.asoStatus === "Inapto").forEach(t => {
-    const obra = obras.find(o => o.id === t.obraId);
+    const obra = obras.find(o => mesmoId(o.id, t.obraId));
     alertas.push({ id: `inapto-${t.id}`, tipo: "ASO", icone: "❌", titulo: `${t.nome} está INAPTO`, detalhe: `${t.cargo} • ${obra?.nome || ""}`, prio: "alta", color: RED, navegarPara: "aso", contextoId: t.id });
   });
 
   // 6) Obras sem trabalhadores
   obras.filter(o => o.status === "Ativa").forEach(o => {
-    const n = trabalhadores.filter(t => t.obraId === o.id).length;
+    const n = trabalhadores.filter(t => mesmoId(t.obraId, o.id)).length;
     if (n === 0) alertas.push({ id: `obra-${o.id}`, tipo: "Obra", icone: "🏗️", titulo: `${o.nome} sem equipe`, detalhe: o.local, prio: "media", color: ORANGE, navegarPara: "obras", contextoId: o.id });
   });
 
@@ -1178,7 +1179,7 @@ export function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico,
 
   // 9) Etapas do cronograma atrasadas
   Object.entries(cronogramas || {}).forEach(([obraId, etapas]) => {
-    const obra = obras.find(o => String(o.id) === String(obraId));
+    const obra = obras.find(o => mesmoId(o.id, obraId));
     if (!obra) return;
     (etapas || []).forEach(e => {
       if (e.progresso === 100) return;
@@ -1216,7 +1217,7 @@ export function gerarAlertas({ obras, trabalhadores, equips, pedidos, historico,
 
   // 12) Veículos sem abastecer há muito tempo (>30 dias se está ativo)
   (ativos || []).filter(a => a.status === "Ativo" && a.tipo !== "Ferramenta").forEach(ativo => {
-    const abasts = (abastecimentos || []).filter(x => x.ativoId === ativo.id);
+    const abasts = (abastecimentos || []).filter(x => mesmoId(x.ativoId, ativo.id));
     if (abasts.length === 0) return;
     const ultimaData = abasts
       .map(x => { try { const [d, m, y] = (x.data || "").split("/"); return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)); } catch { return null; } })
@@ -1321,11 +1322,11 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
   const [obraId, setObraId] = useState("todas");
 
   const dias = ultimosDias(periodo === "semana" ? 7 : 30);
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => mesmoId(t.obraId, obraId));
   // Pedidos do período: só as solicitações ABERTAS dentro dos mesmos dias da frequência (pela data do pedido),
   // para tela e PDF contarem a mesma coisa. A situação (aprovado / aguardando / negado) é a atual de cada uma.
   const diasSet = new Set(dias);
-  const pedidosObra = obraId === "todas" ? pedidos : pedidos.filter(p => String(p.obraId) === String(obraId));
+  const pedidosObra = obraId === "todas" ? pedidos : pedidos.filter(p => mesmoId(p.obraId, obraId));
   const pedidosFiltro = pedidosObra.filter(p => diasSet.has(diaDoPedido(p)));
 
   let totalP = 0, totalF = 0, totalA = 0;
@@ -1355,7 +1356,7 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
   const semChamada = ranking.filter(t => t.taxa == null).length;
 
   const tituloPeriodo = periodo === "semana" ? "Últimos 7 dias" : "Últimos 30 dias";
-  const nomeObra = obraId === "todas" ? "Todas as obras" : (obras.find(o => String(o.id) === String(obraId))?.nome || "");
+  const nomeObra = obraId === "todas" ? "Todas as obras" : (obras.find(o => mesmoId(o.id, obraId))?.nome || "");
   // Frequência média do período: presenças ÷ chamadas registradas (presenças + faltas + atestados);
   // quem não teve nenhuma chamada no período não entra na conta.
   const totalRegistros = totalP + totalF + totalA;
@@ -1364,7 +1365,7 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
   const exportar = async () => {
     const emp = await empresaDoDocumento(empresa);
     const periodoTxt = dias.length ? `${tituloPeriodo} · ${fmtDiaMesAno(dias[0])} a ${fmtDiaMesAno(dias[dias.length - 1])}` : tituloPeriodo;
-    const nomeDaObra = id => obras.find(o => String(o.id) === String(id))?.nome || "";
+    const nomeDaObra = id => obras.find(o => mesmoId(o.id, id))?.nome || "";
     // Cor da taxa: verde a partir de 80%, âmbar a partir de 50%, vermelho abaixo; cinza quando não houve chamada.
     const tomTaxa = taxa => (taxa == null ? "txt-cinza" : taxa >= 80 ? "txt-ok" : taxa >= 50 ? "txt-alerta" : "txt-erro");
     const txtTaxa = taxa => (taxa == null ? "—" : `${taxa}%`);
@@ -1430,7 +1431,7 @@ export function TelaRelatorioConsolidado({ obras, trabalhadores, pedidos, histor
             <option value="semana">Última semana</option>
             <option value="mes">Último mês</option>
           </select>
-          <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, flex: 1, marginBottom: 0 }}>
+          <select value={obraId} onChange={e => setObraId(normId(e.target.value) ?? "todas")} style={{ ...selS, flex: 1, marginBottom: 0 }}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>

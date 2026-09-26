@@ -9,6 +9,7 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, useEscritorio } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 }) {
   const [fotos, setFotos] = useState([]);
@@ -50,7 +51,7 @@ export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 
         onSalvar({
           id: agora + i,
           numero: numeroSequencial,
-          obraId: obra.id,
+          obraId: normId(obra.id),
           obraNome: obra.nome,
           foto: fotoCarimbada,
           legenda,
@@ -148,7 +149,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const escritorio = !!useEscritorio(); // celular: 3 miniaturas por linha (como sempre); escritório: quantas couberem de 160 px
 
   const fotosFiltradas = fotos
-    .filter(f => filtroObra === "todas" || String(f.obraId) === String(filtroObra))
+    .filter(f => filtroObra === "todas" || mesmoId(f.obraId, filtroObra))
     .filter(f => !filtroData || f.data === filtroData)
     .sort((a, b) => b.id - a.id);
 
@@ -191,7 +192,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
         {/* Filtros */}
         <div style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.sombra }}>
           <label style={labelS}>🏗️ Obra</label>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={selS}>
+          <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value) ?? "todas")} style={selS}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -275,16 +276,16 @@ export function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, 
   const [texto, setTexto] = useState("");
   const isGestor = usuario.perfil === "gestor";
   const minhasMsgs = mensagens
-    .filter(m => m.para === usuario.id || m.de === usuario.id)
+    .filter(m => mesmoId(m.para, usuario.id) || mesmoId(m.de, usuario.id))
     .sort((a, b) => b.ts - a.ts);
 
   useEffect(() => {
-    mensagens.forEach(m => { if (m.para === usuario.id && !m.lida) onMarcarLida(m.id); });
+    mensagens.forEach(m => { if (mesmoId(m.para, usuario.id) && !m.lida) onMarcarLida(m.id); });
   }, []);
 
   const enviar = () => {
     if (!destinatario || !texto.trim()) return;
-    onEnviar({ id: Date.now(), de: usuario.id, para: destinatario, texto: texto.trim(), ts: Date.now(), lida: false });
+    onEnviar({ id: Date.now(), de: normId(usuario.id), para: normId(destinatario), texto: texto.trim(), ts: Date.now(), lida: false });
     setTexto(""); setDestinatario(""); setComposicao(false);
   };
 
@@ -299,7 +300,7 @@ export function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, 
         {composicao ? (
           <>
             <label style={labelS}>Para</label>
-            <select value={destinatario} onChange={e => setDestinatario(e.target.value)} style={selS}>
+            <select value={destinatario} onChange={e => setDestinatario(normId(e.target.value) ?? "")} style={selS}>
               <option value="">Selecione</option>
               {contatos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
@@ -315,8 +316,8 @@ export function TelaMensagens({ usuario, usuarios, mensagens, onBack, onEnviar, 
             {isGestor && <Btn label="✏️ Nova Mensagem" color={NAVY} onClick={() => setComposicao(true)} style={{ marginBottom: 12 }} />}
             {minhasMsgs.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>📭 Nenhuma mensagem.</div>}
             {minhasMsgs.map(m => {
-              const enviada = m.de === usuario.id;
-              const outro = usuarios.find(u => u.id === (enviada ? m.para : m.de));
+              const enviada = mesmoId(m.de, usuario.id);
+              const outro = usuarios.find(u => mesmoId(u.id, enviada ? m.para : m.de));
               return (
                 <div key={m.id} style={{ background: enviada ? T.infoFundo : T.superficie /* balão enviado: tom informativo; recebido: cartão comum */, borderRadius: 12, padding: "10px 14px", marginBottom: 8, marginLeft: enviada ? 30 : 0, marginRight: enviada ? 0 : 30, boxShadow: T.sombra }}>
                   <div style={{ fontSize: 11, color: T.texto2, marginBottom: 4 }}>
@@ -471,7 +472,14 @@ export function TelaAnexosObra({ obra, usuario, onBack }) {
   const carregarArquivos = async () => {
     setCarregando(true);
     try {
-      const lista = await fileStore.listByObra(obra.id);
+      // O índice obraId do IndexedDB separa número de texto: busca o código nas duas formas (anexos antigos podem estar em qualquer uma)
+      const lista = [];
+      const vistos = new Set();
+      for (const chave of (normId(obra.id) === null ? [obra.id] : [normId(obra.id), String(obra.id)])) {
+        for (const a of await fileStore.listByObra(chave)) {
+          if (!vistos.has(String(a.id))) { vistos.add(String(a.id)); lista.push(a); }
+        }
+      }
       lista.sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
       setArquivos(lista);
       const q = await fileStore.getQuotaInfo();
@@ -514,7 +522,7 @@ export function TelaAnexosObra({ obra, usuario, onBack }) {
       setProgresso({ atual: 70, total: 100, fase: "Salvando..." });
       const novoAnexo = {
         id: Date.now() + "_" + Math.random().toString(36).substring(2, 9),
-        obraId: obra.id,
+        obraId: normId(obra.id),
         obraNome: obra.nome,
         categoria: categoriaUpload,
         descricao: descricaoUpload.trim() || arquivoSelecionado.name,

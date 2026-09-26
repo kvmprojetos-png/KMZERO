@@ -9,6 +9,7 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEditar, onRemover }) {
   const [modal, setModal] = useState(false);
@@ -45,7 +46,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
       ...form,
       id: editandoId || Date.now(),
       valor: parseFloat(form.valor) || 0,
-      obraId: parseInt(form.obraId),
+      obraId: normId(form.obraId),
     };
     if (editandoId) onEditar(dados);
     else onAdd(dados);
@@ -60,7 +61,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
 
   // Filtrar despesas
   const despesasFiltradas = (despesas || []).filter(d => {
-    if (filtroObra !== "todas" && String(d.obraId) !== String(filtroObra)) return false;
+    if (filtroObra !== "todas" && !mesmoId(d.obraId, filtroObra)) return false;
     try {
       const [dia, mes, ano] = (d.data || "").split("/");
       if (parseInt(mes) - 1 !== filtroMes) return false;
@@ -103,7 +104,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
         {/* Filtros */}
         <div style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.sombra }}>
           <label style={labelS}>🏗️ Obra</label>
-          <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={selS}>
+          <select value={filtroObra} onChange={e => setFiltroObra(normId(e.target.value) ?? "todas")} style={selS}>
             <option value="todas">Todas as obras</option>
             {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
           </select>
@@ -130,7 +131,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
         ) : (
           despesasFiltradas.sort((a, b) => b.id - a.id).map(d => {
             const cat = CATEGORIAS_DESPESA.find(c => c.id === d.categoria) || { nome: d.categoria, cor: "#888" };
-            const obra = obras.find(o => o.id === d.obraId);
+            const obra = obras.find(o => mesmoId(o.id, d.obraId));
             return (
               <div key={d.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cat.cor}` }}>
                 <div style={{ display: "flex", alignItems: "flex-start" }}>
@@ -172,7 +173,7 @@ export function TelaDespesasAvulsas({ obras, despesas = [], onBack, onAdd, onEdi
         )}
 
         <label style={labelS}>🏗️ Obra</label>
-        <select value={form.obraId} onChange={e => set("obraId", e.target.value === "" ? "" : parseInt(e.target.value))} style={selS}>
+        <select value={form.obraId} onChange={e => set("obraId", normId(e.target.value) ?? "")} style={selS}>
           <option value="">— Selecione —</option>
           {obras.filter(o => o.status === "Ativa").map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -226,10 +227,10 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
   const [mes, setMes] = useState(hoje.getMonth());
   const [ano, setAno] = useState(hoje.getFullYear());
 
-  const obra = obras.find(o => o.id === obraId);
-  const trabObra = trabalhadores.filter(t => t.obraId === obraId);
-  const ativosObra = ativos.filter(a => a.obraId === obraId);
-  const abastObra = abastecimentos.filter(a => a.obraId === obraId);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
+  const trabObra = trabalhadores.filter(t => mesmoId(t.obraId, obraId));
+  const ativosObra = ativos.filter(a => mesmoId(a.obraId, obraId));
+  const abastObra = abastecimentos.filter(a => mesmoId(a.obraId, obraId));
 
   // Calcular custo de mão de obra: diária × dias trabalhados (presença + atestado)
   const totalDias = new Date(ano, mes + 1, 0).getDate();
@@ -265,7 +266,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
 
   // Custo de materiais aprovados — só soma valor REAL informado no pedido; sem valor, mostra "—" (nada inventado)
   const pedidosAprovMes = pedidos
-    .filter(p => p.obraId === obraId && p.status === "Aprovado")
+    .filter(p => mesmoId(p.obraId, obraId) && p.status === "Aprovado")
     .filter(p => {
       if (!p.data) return false;
       try {
@@ -280,7 +281,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
 
   // 💸 Despesas avulsas (PIPA, frete, almoço motorista, etc)
   const despesasObra = (despesasAvulsas || []).filter(d => {
-    if (d.obraId !== obraId) return false;
+    if (!mesmoId(d.obraId, obraId)) return false;
     if (!d.data) return false;
     try {
       const partes = d.data.split("/");
@@ -297,7 +298,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Custos por Obra" sub={`${meses[mes]}/${ano}`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 8 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 8 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -383,7 +384,7 @@ export function TelaCustos({ obras, trabalhadores, historico, ativos, abastecime
 
 export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
-  const obra = obras.find(o => o.id === obraId) || {};
+  const obra = obras.find(o => mesmoId(o.id, obraId)) || {};
   const [form, setForm] = useState({
     cliente: obra.cliente || "",
     clienteDoc: obra.clienteDoc || "",
@@ -400,7 +401,7 @@ export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
   };
 
   useEffect(() => {
-    const atual = obras.find(o => o.id === obraId) || {};
+    const atual = obras.find(o => mesmoId(o.id, obraId)) || {};
     setForm({
       cliente: atual.cliente || "",
       clienteDoc: atual.clienteDoc || "",
@@ -429,7 +430,7 @@ export function TelaPagamentos({ obras = [], onBack, onEditarObra }) {
       <KMHeader title="Pagamentos" sub="Gestão de contratos e condições" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(e.target.value ? parseInt(e.target.value) : "")} style={selS}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value) ?? "")} style={selS}>
           <option value="">Selecione uma obra</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>

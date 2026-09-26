@@ -9,6 +9,7 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
   const [itens, setItens] = useState([]); // CESTA: lista de itens do pedido
@@ -126,7 +127,7 @@ export function TelaMaterial({ obra, usuario, onBack, onAddPedido }) {
     onAddPedido({
       id: Date.now(),
       obra: obra.nome,
-      obraId: obra.id,
+      obraId: normId(obra.id),
       itens, // múltiplos itens!
       // Compatibilidade com pedidos antigos (1 item):
       material: itens.length === 1 ? itens[0].material : `${itens.length} itens`,
@@ -594,7 +595,7 @@ export function TelaPedidoDetalhe({ pedido, obras, empresa, onBack, onAprovar, o
     alert("✅ Pedido atualizado!");
   };
 
-  const obra = obras.find(o => o.id === pedido.obraId);
+  const obra = obras.find(o => mesmoId(o.id, pedido.obraId));
   const itens = pedido.itens || [{ material: pedido.material, qtd: pedido.qtd, obs: pedido.obs }];
   const numeroPedido = String(pedido.id).slice(-6);
   const cor = pedido.status === "Aprovado" ? GREEN : pedido.status === "Negado" ? RED : ORANGE;
@@ -833,16 +834,16 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
     if (!novoObraId) { alert("Selecione uma obra."); return; }
     const itensValidos = novoItens.filter(i => i.material && i.material.trim());
     if (itensValidos.length === 0) { alert("Adicione pelo menos um item com nome."); return; }
-    const fornecedor = fornecedores.find(f => String(f.id) === String(novoFornecedorId));
-    const obraSelecionada = obras.find(o => String(o.id) === String(novoObraId));
+    const fornecedor = fornecedores.find(f => mesmoId(f.id, novoFornecedorId));
+    const obraSelecionada = obras.find(o => mesmoId(o.id, novoObraId));
     const novoPedido = {
       id: Date.now(),
-      obraId: novoObraId,
+      obraId: normId(novoObraId),
       obraNome: obraSelecionada?.nome || "",
       itens: itensValidos,
       material: itensValidos[0].material, // compatibilidade legado
       qtd: itensValidos[0].qtd,
-      fornecedorId: fornecedor ? fornecedor.id : null,
+      fornecedorId: fornecedor ? normId(fornecedor.id) : null,
       fornecedorNome: fornecedor ? fornecedor.nome : "",
       observacaoGeral: novoObs,
       prioridade: novoPrioridade,
@@ -859,7 +860,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
 
   const aprovar = () => {
     if (!pedidoEdit) return;
-    const obraDoPedido = obras.find(o => o.id === pedidoEdit.obraId);
+    const obraDoPedido = obras.find(o => mesmoId(o.id, pedidoEdit.obraId));
     const pedidoCompleto = { ...pedidoEdit, formaPagamento: formaPag, prazoEntrega: prazo, status: "Aprovado" };
     onAprovar(pedidoEdit.id, { formaPagamento: formaPag, prazoEntrega: prazo });
     setTimeout(() => {
@@ -872,7 +873,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
   };
 
   const baixar = (p) => {
-    const obraDoPedido = obras.find(o => o.id === p.obraId);
+    const obraDoPedido = obras.find(o => mesmoId(o.id, p.obraId));
     try {
       gerarSolicitacaoPedidoPDF(p, obraDoPedido, empresa);
     } catch (e) {
@@ -996,7 +997,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
       <Modal show={!!pedidoEdit} title="✓ Aprovar Pedido" onClose={() => setPedidoEdit(null)}>
         {pedidoEdit && (() => {
           const itens = pedidoEdit.itens || [{ material: pedidoEdit.material, qtd: pedidoEdit.qtd }];
-          const obraDoPedido = obras.find(o => o.id === pedidoEdit.obraId);
+          const obraDoPedido = obras.find(o => mesmoId(o.id, pedidoEdit.obraId));
           return (
             <>
               <div style={{ background: T.sucessoFundo, borderRadius: 10, padding: 10, marginBottom: 10, borderLeft: `3px solid ${GREEN}` }}>
@@ -1050,7 +1051,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
         </div>
 
         <label style={labelS}>🏗️ Obra</label>
-        <select value={novoObraId} onChange={e => setNovoObraId(e.target.value)} style={selS}>
+        <select value={novoObraId} onChange={e => setNovoObraId(normId(e.target.value) ?? "")} style={selS}>
           <option value="">Selecione a obra...</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -1058,7 +1059,7 @@ export function TelaPedidos({ obras, pedidos, empresa, onBack, onVerDetalhe, onA
         {fornecedores.length > 0 && (
           <>
             <label style={labelS}>🏪 Fornecedor (opcional)</label>
-            <select value={novoFornecedorId} onChange={e => setNovoFornecedorId(e.target.value)} style={selS}>
+            <select value={novoFornecedorId} onChange={e => setNovoFornecedorId(normId(e.target.value) ?? "")} style={selS}>
               <option value="">Não definir fornecedor agora</option>
               {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
             </select>
@@ -1289,8 +1290,8 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
   const [conformidade, setConformidade] = useState("Conforme");
 
   const ehGestor = usuario?.perfil === "gestor";
-  const aprovados = pedidos.filter(p => p.status === "Aprovado" && (ehGestor || (usuario?.obraId && p.obraId === usuario.obraId)));
-  const meusReceb = recebimentos.filter(r => ehGestor || (usuario?.obraId && r.obraId === usuario.obraId));
+  const aprovados = pedidos.filter(p => p.status === "Aprovado" && (ehGestor || (usuario?.obraId && mesmoId(p.obraId, usuario.obraId))));
+  const meusReceb = recebimentos.filter(r => ehGestor || (usuario?.obraId && mesmoId(r.obraId, usuario.obraId)));
 
   const handleFoto = (e) => {
     const f = e.target.files?.[0];
@@ -1302,7 +1303,7 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
 
   const confirmar = () => {
     onAdd({
-      id: Date.now(), pedidoId: pedidoSel.id, obraId: pedidoSel.obraId,
+      id: Date.now(), pedidoId: normId(pedidoSel.id), obraId: normId(pedidoSel.obraId),
       material: pedidoSel.material, qtd: pedidoSel.qtd, foto, obs, conformidade,
       autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR"),
     });
@@ -1389,7 +1390,7 @@ export function TelaRecebimento({ obras, pedidos, usuario, recebimentos, onBack,
         {meusReceb.length === 0 && <div style={{ background: T.superficie, borderRadius: 12, padding: 20, textAlign: "center", color: T.texto3 }}>Nenhum recebimento ainda.</div>}
         {meusReceb.map(r => {
           const cor = r.conformidade === "Conforme" ? GREEN : r.conformidade === "Divergência" ? ORANGE : RED;
-          const obra = obras.find(o => o.id === r.obraId);
+          const obra = obras.find(o => mesmoId(o.id, r.obraId));
           return (
             <div key={r.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}` }}>
               <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>

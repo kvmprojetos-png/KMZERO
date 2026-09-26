@@ -9,6 +9,7 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: empresaProp }) {
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
@@ -24,7 +25,7 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
 
-  const obra = obras.find(o => o.id === obraId);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
   const etapas = cronogramas[obraId] || [];
   const obraTipo = obra?.tipo || "Edificação";
 
@@ -53,10 +54,10 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
   };
 
   const salvarEtapa = (etapa) => {
-    const ja = etapas.find(e => e.id === etapa.id);
+    const ja = etapas.find(e => mesmoId(e.id, etapa.id));
     let novas;
     if (ja) {
-      novas = etapas.map(e => e.id === etapa.id ? etapa : e);
+      novas = etapas.map(e => mesmoId(e.id, etapa.id) ? etapa : e);
     } else {
       novas = [...etapas, { ...etapa, ordem: etapas.length, id: Date.now() }];
     }
@@ -67,11 +68,11 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
 
   const removerEtapa = (id) => {
     if (!confirm("Remover esta etapa?")) return;
-    onSalvar(obraId, etapas.filter(e => e.id !== id));
+    onSalvar(obraId, etapas.filter(e => !mesmoId(e.id, id)));
   };
 
   const moverEtapa = (id, direcao) => {
-    const idx = etapas.findIndex(e => e.id === id);
+    const idx = etapas.findIndex(e => mesmoId(e.id, id));
     if (idx < 0) return;
     const novoIdx = idx + direcao;
     if (novoIdx < 0 || novoIdx >= etapas.length) return;
@@ -81,7 +82,7 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
   };
 
   const setProgresso = (id, valor) => {
-    onSalvar(obraId, etapas.map(e => e.id === id ? { ...e, progresso: valor } : e));
+    onSalvar(obraId, etapas.map(e => mesmoId(e.id, id) ? { ...e, progresso: valor } : e));
   };
 
   const progressoGeral = etapas.length > 0
@@ -137,7 +138,7 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
       <KMHeader title="Cronograma" sub="Etapas da obra" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -406,7 +407,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
   const [criticaInput, setCriticaInput] = useState(false);
   const [progressoInput, setProgressoInput] = useState(0);
 
-  const obra = obras.find(o => o.id === obraId);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
   const hojeIso = dataLocalIso();
   const etapasRaw = cronogramas[obraId] || [];
 
@@ -429,7 +430,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
   };
 
   const salvarEtapa = () => {
-    const novas = etapasRaw.map(et => et.id === etapaSel.id ? {
+    const novas = etapasRaw.map(et => mesmoId(et.id, etapaSel.id) ? {
       ...et,
       custoBase: parseFloat(custoInput) || 0,
       critica: criticaInput,
@@ -444,7 +445,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma Pro" sub={obra?.nome || "—"} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -627,7 +628,7 @@ const _clsSituacao = st => st === "Presente" ? "txt-ok" : st === "Falta" ? "txt-
 const _diarioDoDia = (diario, obraId, dataBR) => {
   const iso = _isoDeBR(dataBR);
   if (!iso) return [];
-  return (diario || []).filter(d => d.obraId === obraId && (d.data ? _isoDeBR(d.data) === iso : d.ts ? dataLocalIso(new Date(d.ts)) === iso : false));
+  return (diario || []).filter(d => mesmoId(d.obraId, obraId) && (d.data ? _isoDeBR(d.data) === iso : d.ts ? dataLocalIso(new Date(d.ts)) === iso : false));
 };
 /* Foto guardada como SVG em data-URI SEM width/height (ex.: placeholders da demonstração): o html2canvas do PDF usa como
    recorte da origem o tamanho natural que o navegador dá a um SVG só com viewBox (200×150) e a foto sai como um retângulo
@@ -671,7 +672,7 @@ const _fotosGaleriaDoDia = (fotosObras, obraId, dataBR) => {
   const iso = _isoDeBR(dataBR);
   if (!iso) return [];
   return (fotosObras || [])
-    .filter(f => f && (f.foto || f.fotoUrl) && String(f.obraId) === String(obraId) && _isoFotoGaleria(f) === iso)
+    .filter(f => f && (f.foto || f.fotoUrl) && mesmoId(f.obraId, obraId) && _isoFotoGaleria(f) === iso)
     .sort((a, b) => _minutosDoc(a.hora) - _minutosDoc(b.hora) || (Number(a.numero) || 0) - (Number(b.numero) || 0));
 };
 /* Legenda da foto da galeria: número · data hora · legenda (sem emoji) */
@@ -692,13 +693,19 @@ const _inteiroSe = (curto, html) => curto ? `<div class="km-quadro-inteiro">${ht
    e o bloco de assinatura já diz "Responsável técnico". */
 const _registroSemRotulo = reg => String(reg || "").replace(/^\s*(resp(\.|ons[áa]vel)?\s*t[ée]c(\.|nico)?|r\.?\s?t\.?)\s*[:\-–—]\s*/i, "").trim();
 
+/* ── RDOs por obra: a lista e a numeração são de cada obra (antes contavam os RDOs de todas as obras).
+   Próximo Nº = maior número já emitido NA OBRA + 1 (com a numeração antiga, que era única para todas as obras,
+   "quantidade + 1" repetiria um número que a obra já tem). Os RDOs já emitidos mantêm o número que têm. ── */
+export const rdosDaObra = (rdos, obraId) => (rdos || []).filter(r => r && mesmoId(r.obraId, obraId));
+export const proximoNumeroRDO = (rdos, obraId) => rdosDaObra(rdos, obraId).reduce((m, r) => Math.max(m, Number(r.numero) || 0), 0) + 1;
+
 export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias, encarregado, empresa, horasTrabalhadas, horimetros, fotos, alimentacao, totalAlimentacao, recebimentos, fotosObras }) {
   presencas = presencas || {};
   empresa = empresa || {};
-  const trabObra = (trabalhadores || []).filter(t => t.obraId === obra.id);
-  const ativosObra = (ativos || []).filter(a => a.obraId === obra.id);
-  const abastDia = (abastecimentos || []).filter(a => a.obraId === obra.id && a.data === data);
-  const pedidosDia = (pedidos || []).filter(p => p.obraId === obra.id && p.data === data);
+  const trabObra = (trabalhadores || []).filter(t => mesmoId(t.obraId, obra.id));
+  const ativosObra = (ativos || []).filter(a => mesmoId(a.obraId, obra.id));
+  const abastDia = (abastecimentos || []).filter(a => mesmoId(a.obraId, obra.id) && a.data === data);
+  const pedidosDia = (pedidos || []).filter(p => mesmoId(p.obraId, obra.id) && p.data === data);
 
   const presentes = trabObra.filter(t => presencas[t.id] === "Presente").length;
   const faltas    = trabObra.filter(t => presencas[t.id] === "Falta").length;
@@ -717,7 +724,7 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
   const numeroTxt = String(numero ?? "").padStart(3, "0");
   const temAlim = !!(alimentacao && Object.keys(alimentacao).length > 0);
   // Presentes da obra (presencas pode vir do histórico do dia inteiro, com trabalhadores de outras obras)
-  const trabAlim = (trabalhadores || []).filter(t => presencas[t.id] === "Presente" && (t.obraId === obra.id || !!alimentacao?.[t.id]));
+  const trabAlim = (trabalhadores || []).filter(t => presencas[t.id] === "Presente" && (mesmoId(t.obraId, obra.id) || !!alimentacao?.[t.id]));
   const totalAlimDia = trabAlim.reduce((s, t) => s + somaAlim(empresa, alimentacao?.[t.id]), 0);
   // Com algum preço configurado: valores em R$ (refeição sem preço sai "✓", fora do total).
   // Sem nenhum preço: tabela de QUANTIDADES (✓ / —, refeições por trabalhador e por tipo), sem "R$ 0,00".
@@ -747,11 +754,11 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
   }
   abastDia.forEach(a => {
     if (!a.fotoCupom) return;
-    const ativo = (ativos || []).find(x => x.id === a.ativoId);
+    const ativo = (ativos || []).find(x => mesmoId(x.id, a.ativoId));
     todasFotos.push({ src: a.fotoCupom, tipo: "Combustível", legenda: `${ativo?.nome || "Veículo"} — ${_brl(a.valor)} (${a.posto || "posto"})` });
   });
   if (Array.isArray(recebimentos)) {
-    recebimentos.filter(r => r.obraId === obra.id && r.data === data && r.foto).forEach(r => {
+    recebimentos.filter(r => mesmoId(r.obraId, obra.id) && r.data === data && r.foto).forEach(r => {
       todasFotos.push({ src: r.foto, tipo: "Recebimento", legenda: `${r.material} — ${r.qtd} (${r.conformidade || "Conforme"})` });
     });
   }
@@ -858,7 +865,7 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
       <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:24%">Identificação</th><th style="width:12%">Placa</th><th style="width:17%">Tipo</th><th style="width:11%;text-align:right">Horímetro início</th><th style="width:11%;text-align:right">Horímetro fim</th><th style="width:8%" class="num">Horas</th><th style="width:12%" class="num">Combustível</th></tr></thead>
       <tbody>
       ${ativosObra.length === 0 ? '<tr><td colspan="8" class="vazio">Sem ativos nesta obra</td></tr>' : ativosObra.map((a, i) => {
-        const abastA = abastDia.filter(x => x.ativoId === a.id);
+        const abastA = abastDia.filter(x => mesmoId(x.ativoId, a.id));
         const totalAbast = abastA.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0);
         const horim = horimetros?.[a.id] || null;
         const inicioH = horim ? _numDoc(horim.inicio, 1) : "—";
@@ -877,7 +884,7 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
       <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:25%">Veículo</th><th style="width:20%">Posto</th><th style="width:10%" class="num">Litros</th><th style="width:12%" class="num">R$/litro</th><th style="width:14%" class="num">Valor</th><th style="width:14%;text-align:right">Km ou horímetro</th></tr></thead>
       <tbody>
       ${abastDia.map((a, i) => {
-        const ativo = (ativos || []).find(x => x.id === a.ativoId);
+        const ativo = (ativos || []).find(x => mesmoId(x.id, a.ativoId));
         const litros = parseFloat(a.litros) || 0, valor = parseFloat(a.valor) || 0;
         return `<tr><td class="num">${i + 1}</td><td><b>${_escDoc(ativo?.nome) || "—"}</b>${ativo?.placa ? `<br/><span class="txt-cinza">${_escDoc(ativo.placa)}</span>` : ""}</td><td>${_escDoc(a.posto) || "—"}</td><td class="num">${_numDoc(litros, 1)}</td><td class="num">${litros > 0 ? _brl(valor / litros) : "—"}</td><td class="num"><b>${_brl(valor)}</b></td><td class="num">${_escDoc(a.km || a.horimetro) || "—"}</td></tr>`;
       }).join("")}
@@ -925,23 +932,25 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
   const [editandoRdo, setEditandoRdo] = useState(null);
   const [fotoVer, setFotoVer] = useState(null); // foto fullscreen
 
-  const obra = obras.find(o => o.id === obraId);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
   const isoData = (() => { const [d, m, a] = data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; })();
   const presencasDia = historico[isoData] || {};
   const ocorrenciasDia = _diarioDoDia(diario, obraId, data); // só o dia do RDO (antes entrava o diário inteiro da obra)
 
-  const proxNumero = rdosEmitidos.length + 1;
+  // Só os RDOs da obra selecionada; a numeração é por obra
+  const rdosObra = rdosDaObra(rdosEmitidos, obraId);
+  const proxNumero = proximoNumeroRDO(rdosEmitidos, obraId);
 
   const emitir = () => {
     const numero = proxNumero;
-    onEmitirRDO({ id: Date.now(), numero, obraId, data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
+    onEmitirRDO({ id: Date.now(), numero, obraId: normId(obraId), data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
     gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas: presencasDia, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias: ocorrenciasDia, encarregado: usuario?.nome, empresa, recebimentos, fotosObras });
   };
 
   // RDO Semanal Consolidado: junta todos os RDOs da semana atual da obra selecionada
   const emitirSemanal = (oId) => {
     try {
-      const obraSel = obras.find(o => o.id === oId);
+      const obraSel = obras.find(o => mesmoId(o.id, oId));
       if (!obraSel) {
         alert("⚠️ Obra não encontrada");
         return;
@@ -954,12 +963,12 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       const isoDe = r => r.dataIso || _isoDeBR(r.data); // "YYYY-MM-DD" do RDO (dataIso ou a data DD/MM/AAAA)
       let rdosSem = (rdosEmitidos || []).filter(r => {
         const dt = _dataLocalDoc(isoDe(r)); // local: new Date("YYYY-MM-DD") lia em UTC e jogava a segunda-feira no domingo
-        return r.obraId === oId && dt && dt >= seg && dt <= sex;
+        return mesmoId(r.obraId, oId) && dt && dt >= seg && dt <= sex;
       });
 
       let modoFallback = false;
       if (rdosSem.length === 0) {
-        const todosObra = (rdosEmitidos || []).filter(r => r.obraId === oId);
+        const todosObra = (rdosEmitidos || []).filter(r => mesmoId(r.obraId, oId));
         if (todosObra.length === 0) {
           alert("⚠️ Sem RDOs para esta obra ainda.\n\nObra: " + obraSel.nome + "\n\nFinalize pelo menos 1 dia de obra (RDO) para gerar o relatório semanal.");
           return;
@@ -1007,7 +1016,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // ⛽ Combustível do período
     const abastSemana = (abastecimentos || []).filter(a => {
-      if (a.obraId !== oId) return false;
+      if (!mesmoId(a.obraId, oId)) return false;
       try {
         const [d, m, y] = (a.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
@@ -1018,9 +1027,9 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     const totalLitros = abastSemana.reduce((s, a) => s + (parseFloat(a.litros) || 0), 0);
 
     // Por veículo
-    const ativosObraSel = (ativos || []).filter(a => a.obraId === oId);
+    const ativosObraSel = (ativos || []).filter(a => mesmoId(a.obraId, oId));
     const combPorVeic = ativosObraSel.map(a => {
-      const aa = abastSemana.filter(x => x.ativoId === a.id);
+      const aa = abastSemana.filter(x => mesmoId(x.ativoId, a.id));
       return {
         ativo: a,
         gasto: aa.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0),
@@ -1035,7 +1044,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // 📷 FOTOS do período
     const fotosSem = (fotosObras || []).filter(f => {
-      if (f.obraId !== oId) return false;
+      if (!mesmoId(f.obraId, oId)) return false;
       try {
         const [d, m, y] = (f.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
@@ -1045,7 +1054,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // 📦 PEDIDOS do período
     const pedidosSem = (pedidos || []).filter(p => {
-      if (p.obraId !== oId) return false;
+      if (!mesmoId(p.obraId, oId)) return false;
       try {
         const [d, m, y] = (p.dataSolicitacao || p.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
@@ -1058,7 +1067,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // 💸 DESPESAS avulsas do período
     const despesasSem = (despesasAvulsas || []).filter(d => {
-      if (d.obraId !== oId) return false;
+      if (!mesmoId(d.obraId, oId)) return false;
       try {
         const [dia, m, y] = (d.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(dia));
@@ -1069,7 +1078,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // 📋 DIÁRIO do período
     const diarioSem = (diario || []).filter(d => {
-      if (d.obraId !== oId) return false;
+      if (!mesmoId(d.obraId, oId)) return false;
       const dt = new Date(d.ts || 0);
       return dt >= segReal && dt <= sexReal;
     });
@@ -1077,18 +1086,18 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     // 🔄 MOVIMENTAÇÕES do período (pessoal e equipamento)
     const movPessSem = (movimentacoes || []).filter(m => {
       const dt = new Date(m.ts || 0);
-      const envolvida = m.obraOrigem === oId || m.obraDestino === oId;
+      const envolvida = mesmoId(m.obraOrigem, oId) || mesmoId(m.obraDestino, oId);
       return envolvida && dt >= segReal && dt <= sexReal;
     });
     const movEquipSem = (movEquip || []).filter(m => {
       const dt = new Date(m.ts || 0);
-      const envolvida = m.obraOrigemId === oId || m.obraDestinoId === oId;
+      const envolvida = mesmoId(m.obraOrigemId, oId) || mesmoId(m.obraDestinoId, oId);
       return envolvida && dt >= segReal && dt <= sexReal;
     });
 
     // 📈 PRODUTIVIDADE do período
     const prodSem = (produtividade || []).filter(p => {
-      if (p.obraId !== oId) return false;
+      if (!mesmoId(p.obraId, oId)) return false;
       const dt = new Date(p.ts || 0);
       return dt >= segReal && dt <= sexReal;
     });
@@ -1102,15 +1111,15 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     var totalRdosObra = 0;
     var totalPedidosObra = 0;
     for (var i = 0; i < (rdosEmitidos || []).length; i++) {
-      if (rdosEmitidos[i].obraId === oId) totalRdosObra++;
+      if (mesmoId(rdosEmitidos[i].obraId, oId)) totalRdosObra++;
     }
     for (var i = 0; i < (pedidos || []).length; i++) {
-      if (pedidos[i].obraId === oId) totalPedidosObra++;
+      if (mesmoId(pedidos[i].obraId, oId)) totalPedidosObra++;
     }
 
     // Linhas da tabela de frequência (só trabalhadores ainda cadastrados) e os totais que fecham com elas
     const linhasFreq = Object.entries(trabPres).map(([tid, st]) => {
-      const t = trabalhadores.find(x => String(x.id) === String(tid));
+      const t = trabalhadores.find(x => mesmoId(x.id, tid));
       if (!t) return null;
       const diaria = parseFloat(t.diaria) || 0;
       return { t, st, aPagar: (st.p + st.a) * diaria };
@@ -1191,7 +1200,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       <div class="sec">Movimentações de pessoal <small>${movPessSem.length} no período</small></div>
       <table class="quadro">
         <thead><tr><th style="width:12%">Data</th><th style="width:22%">Trabalhador</th><th style="width:28%">Origem → Destino</th><th style="width:24%">Motivo</th><th style="width:14%" class="centro">Situação</th></tr></thead>
-        <tbody>${movPessSem.map(m => { const oOrig = obras.find(o => o.id === m.obraOrigem)?.nome || "—"; const oDest = obras.find(o => o.id === m.obraDestino)?.nome || "—"; return `<tr><td>${_escDoc(m.data) || "—"}</td><td><b>${_escDoc(m.trabNome) || "—"}</b></td><td>${_escDoc(oOrig)} → ${_escDoc(oDest)}</td><td>${_escDoc(m.motivo) || "—"}</td><td class="centro">${_escDoc(m.status) || "—"}</td></tr>`; }).join("")}</tbody>
+        <tbody>${movPessSem.map(m => { const oOrig = obras.find(o => mesmoId(o.id, m.obraOrigem))?.nome || "—"; const oDest = obras.find(o => mesmoId(o.id, m.obraDestino))?.nome || "—"; return `<tr><td>${_escDoc(m.data) || "—"}</td><td><b>${_escDoc(m.trabNome) || "—"}</b></td><td>${_escDoc(oOrig)} → ${_escDoc(oDest)}</td><td>${_escDoc(m.motivo) || "—"}</td><td class="centro">${_escDoc(m.status) || "—"}</td></tr>`; }).join("")}</tbody>
       </table>
       `) : ""}
       ${movEquipSem.length > 0 ? _inteiroSe(movEquipSem.length <= 6, `
@@ -1258,7 +1267,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     }
   };
 
-  const trabObra = trabalhadores.filter(t => t.obraId === obraId);
+  const trabObra = trabalhadores.filter(t => mesmoId(t.obraId, obraId));
   const presentes = trabObra.filter(t => presencasDia[t.id] === "Presente").length;
 
   return (
@@ -1268,11 +1277,11 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         <div style={{ background: `linear-gradient(135deg,${NAVY},${NAVY2})`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, boxShadow: "0 4px 14px rgba(15,33,81,0.3)" }}>
           <div style={{ fontSize: 11, opacity: 0.7 }}>Próximo RDO</div>
           <div style={{ fontSize: 36, fontWeight: 900, color: GOLD }}>Nº {String(proxNumero).padStart(3, "0")}</div>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>{rdosEmitidos.length} RDO(s) já emitidos</div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>{rdosObra.length} RDO(s) já emitidos nesta obra</div>
         </div>
 
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -1291,8 +1300,8 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📋 Conteúdo do RDO</div>
           <div style={{ fontSize: 12, color: T.texto2 }}>
             <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>👷 Mão de obra: <b>{trabObra.length}</b> ({presentes} presentes)</div>
-            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>🚜 Ativos: <b>{ativos.filter(a => a.obraId === obraId).length}</b></div>
-            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>📦 Pedidos do dia: <b>{pedidos.filter(p => p.obraId === obraId && p.data === data).length}</b></div>
+            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>🚜 Ativos: <b>{ativos.filter(a => mesmoId(a.obraId, obraId)).length}</b></div>
+            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>📦 Pedidos do dia: <b>{pedidos.filter(p => mesmoId(p.obraId, obraId) && p.data === data).length}</b></div>
             <div style={{ padding: "4px 0" }}>📌 Ocorrências: <b>{ocorrenciasDia.length}</b></div>
           </div>
         </div>
@@ -1313,12 +1322,12 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
           <button onClick={() => emitirSemanal(obraId)} style={{ flex: 1, background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "10px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>📅 RDO Semanal Consolidado</button>
         </div>
 
-        {rdosEmitidos.length > 0 && (
+        {rdosObra.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosEmitidos.length})</div>
+            <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosObra.length})</div>
             <Grade min={320} gap={6} style={{ marginBottom: 6 }}>
-            {rdosEmitidos.slice(0, 10).map(r => {
-              const o = obras.find(x => x.id === r.obraId);
+            {rdosObra.slice(0, 10).map(r => {
+              const o = obras.find(x => mesmoId(x.id, r.obraId));
               const baixar = () => {
                 const isoDt = r.dataIso || (() => { const [d, m, a] = r.data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; })();
                 gerarPDFRDORabnt({
@@ -1395,7 +1404,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
             <label style={labelS}>Encarregado</label>
             <input value={editandoRdo.encarregado || ""} onChange={e => setEditandoRdo(r => ({ ...r, encarregado: e.target.value }))} style={inputS} />
             <Btn label="💾 SALVAR ALTERAÇÕES" color={GREEN} onClick={() => {
-              onUpdateRDO(editandoRdo);
+              onUpdateRDO({ ...editandoRdo, obraId: normId(editandoRdo.obraId) });
               setEditandoRdo(null);
             }} />
           </Modal>
@@ -1436,12 +1445,12 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
 
   const adicionar = () => {
     if (!qtd) return;
-    onAdd({ id: Date.now(), obraId, tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
+    onAdd({ id: Date.now(), obraId: normId(obraId), tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
     setQtd(""); setObs("");
   };
 
-  const minhasObra = produtividade.filter(p => p.obraId === obraId).sort((a, b) => b.ts - a.ts);
-  const obra = obras.find(o => o.id === obraId);
+  const minhasObra = produtividade.filter(p => mesmoId(p.obraId, obraId)).sort((a, b) => b.ts - a.ts);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
 
   // Totais por tipo
   const totais = {};
@@ -1454,7 +1463,7 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Produtividade" sub={obra?.nome} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
