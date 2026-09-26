@@ -4,7 +4,12 @@ import { getFirestore, initializeFirestore, persistentLocalCache, persistentMult
 
 const firebaseConfig = {
      apiKey: "AIzaSyDzyxMJHHktgj8NLg4Rg_FaYv6KevBhtkE",
-     authDomain: "kmzero-aca24.firebaseapp.com",
+     /* authDomain: no site publicado (kmzero.vercel.app) o retorno do login do Google passa pelo PRÓPRIO
+        domínio (vercel.json redireciona /__/auth/* para o Firebase). Sem isso, o Safari do iPhone isola o
+        armazenamento entre kmzero.vercel.app e firebaseapp.com e o login por redirecionamento falha com
+        "missing initial state". Em localhost e nas prévias da Vercel continua o domínio do Firebase.
+        Exige, no Google Cloud (Credenciais → cliente OAuth Web), o URI https://kmzero.vercel.app/__/auth/handler. */
+     authDomain: (typeof location !== "undefined" && location.hostname === "kmzero.vercel.app") ? "kmzero.vercel.app" : "kmzero-aca24.firebaseapp.com",
      projectId: "kmzero-aca24",
      storageBucket: "kmzero-aca24.firebasestorage.app",
      messagingSenderId: "448320016035",
