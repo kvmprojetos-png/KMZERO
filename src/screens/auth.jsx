@@ -6,6 +6,7 @@ import { Btn, KMHeader, KMFooter, Modal, LogoKM, AvatarUsuario } from "../compon
 import { Icone } from "../components/Icones.jsx";
 import { useTema, OPCOES_TEMA } from "../lib/useTema.js";
 import { useModoEscritorio } from "../lib/useLargura.js";
+import { GRUPOS_MENU, AREAS_ACESSO, AREA_FIXA, PRESETS_ACESSOS, normalizarAcessos, presetDosAcessos, resumoAcessos } from "../components/menuGrupos.js";
 
 // Versão do package.json (define do Vite); vazio se o build não injetar
 const VERSAO_APP = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "";
@@ -403,25 +404,86 @@ export function TelaPrimeiroAcesso({ usuarioGoogle, onCriarEmpresa, onVerificar,
 ════════════════════════════════════════════════════════════════════════ */
 const CARGOS_ACESSO = ["Encarregado", "Apontador", "Mestre de Obras", "Técnico", "Supervisor", "Engenheiro", "Administrativo", "Outro"];
 
+/* ── Áreas do escritório ──
+   Perfil "gestor" = escritório. O campo `acessos` do perfil/convite limita o que a
+   pessoa abre: ids de GRUPO do menu; ausente/null = Tudo (os gestores de antes seguem
+   iguais). O encarregado ignora o campo. Pacotes, normalização e resumo vêm de
+   menuGrupos.js (fonte única: menu, guarda de navegação e &acessos= da demo usam os
+   mesmos). Caixas e nomes saem de GRUPOS_MENU: grupo novo no menu aparece aqui sozinho. */
+const GRUPOS_ACESSO = GRUPOS_MENU.filter(g => AREAS_ACESSO.includes(g.id));
+const TITULO_AREA = Object.fromEntries(GRUPOS_ACESSO.map(g => [g.id, g.titulo]));
+// Texto só para leitor de tela (o .km-sr-only vem do CSS do menu, que não existe no celular)
+const SO_LEITOR = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 };
+const NOTA_PRESET = { financeiro: "Equipe e Suprimentos entram porque folha, adiantamentos e pedidos são custo." };
+
+// O que vai para a nuvem: null = Tudo (também com todas marcadas, para um grupo novo entrar sozinho)
+const acessosParaGravar = acessos => {
+  const a = normalizarAcessos(acessos);
+  return !a || a.length === AREAS_ACESSO.length ? null : a;
+};
+
+// "Visão geral, Financeiro e Equipe" (null = todas)
+const nomesDasAreas = acessos => {
+  const nomes = (acessosParaGravar(acessos) || AREAS_ACESSO).map(id => TITULO_AREA[id]);
+  return nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}` : (nomes[0] || "");
+};
+
+// Opção marcada na tela para estas áreas: id do pacote pronto ou "personalizado"
+const presetDaTela = acessos => acessosParaGravar(acessos) === null ? "tudo" : (presetDosAcessos(acessos)?.id || "personalizado");
+
+const OPCOES_AREAS = [...PRESETS_ACESSOS, { id: "personalizado", titulo: "Personalizado" }];
+const detalheOpcao = p =>
+  p.id === "tudo" ? "Todas as áreas, inclusive Sistema (empresa, usuários e backup)."
+  : p.id === "personalizado" ? "Você marca as áreas uma a uma."
+  : `${nomesDasAreas(p.acessos)}.`;
+
 /* `demo`: modo demonstração — a lista é ilustrativa (sem nuvem não há convite nem
-   perfil para gravar), então some o adicionar/editar/desativar e entra um aviso. */
-export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, demo = false, onBack }) {
+   perfil para gravar). Adicionar e Editar abrem o formulário de verdade, mas o salvar só
+   SIMULA (mostra como o acesso ficaria e fecha, sem chamar a nuvem); desativar some.
+   `donoUid`: uid de quem criou a empresa (empresas/{id}.gestorUid; na demo, o visitante).
+   O cartão do dono e o da própria pessoa ficam com tipo e áreas travados: ninguém limita,
+   rebaixa nem desativa o dono, e ninguém mexe no próprio acesso (as regras também recusam). */
+export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, demo = false, donoUid = null, onBack }) {
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
   const [salvando, setSalvando] = useState(false);
-  const formVazio = { nome: "", email: "", cargo: "Encarregado", obraId: "", perfil: "encarregado", tel: "" };
+  // acessos: null = Tudo; preset: atalho marcado na tela (só vale para o escritório)
+  const formVazio = { nome: "", email: "", cargo: "Encarregado", obraId: "", perfil: "encarregado", tel: "", acessos: null, preset: "tudo" };
   const [form, setForm] = useState(formVazio);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const meuUid = usuario?.firebaseUid || usuario?.id;
-  const lista = usuarios.filter(u => !(u.firebaseUid && u.firebaseUid === meuUid));
+  const meuEmail = (usuario?.email || "").toLowerCase();
+  // A pessoa não aparece na própria lista (nem o convite do próprio e-mail): ninguém mexe no próprio acesso
+  const lista = usuarios.filter(u => !(u.firebaseUid && u.firebaseUid === meuUid) && !(u.convite && meuEmail && (u.email || "").toLowerCase() === meuEmail));
+  const ehDono = u => !!u && !!donoUid && !u.convite && (u.firebaseUid || u.id) === donoUid;
+  const ehEu = u => !!u && !!meuUid && !u.convite && (u.firebaseUid || u.id) === meuUid;
+  const travado = u => ehDono(u) || ehEu(u); // tipo e áreas não mudam (ver o comentário acima)
+  // Convite de quem já entrou: o perfil com o mesmo e-mail é o que vale
+  const perfilDoEmail = email => usuarios.find(u => u.firebaseUid && email && (u.email || "").toLowerCase() === String(email).toLowerCase());
+  const editandoTravado = !!editando && travado(editando.firebaseUid ? editando : (perfilDoEmail(editando.email) || editando));
 
   const abrirNovo = () => { setEditando(null); setForm(formVazio); setModal(true); };
-  const abrirEdicao = (u) => {
+  const abrirEdicao = (u0) => {
+    // Convite de quem já entrou: abre (e grava) o PERFIL, que é o que vale — nunca as áreas velhas do convite
+    const u = (!u0.firebaseUid && u0.convite && perfilDoEmail(u0.email)) || u0;
     setEditando(u);
-    setForm({ nome: u.nome || "", email: u.email || "", cargo: u.cargo || "Encarregado", obraId: u.obraId ?? "", perfil: u.perfil || "encarregado", tel: u.tel || "" });
+    setForm({ nome: u.nome || "", email: u.email || "", cargo: u.cargo || "Encarregado", obraId: u.obraId ?? "", perfil: u.perfil || "encarregado", tel: u.tel || "", acessos: acessosParaGravar(u.acessos), preset: presetDaTela(u.acessos) });
     setModal(true);
   };
+  // Atalho copia as áreas dele; Personalizado parte do que já estava marcado (Tudo = todas marcadas).
+  // A Visão geral (AREA_FIXA, o Painel) vem sempre: no celular é por ela que se chega às outras áreas.
+  const escolherPreset = (id) => setForm(f => {
+    if (id === "personalizado") return { ...f, preset: id, acessos: f.acessos === null ? [...AREAS_ACESSO] : normalizarAcessos(f.acessos) };
+    const p = PRESETS_ACESSOS.find(x => x.id === id);
+    return { ...f, preset: id, acessos: p.acessos ? normalizarAcessos(p.acessos) : null };
+  });
+  const alternarArea = (id) => setForm(f => {
+    if (id === AREA_FIXA) return f; // travada (ver acima)
+    const atual = f.acessos === null ? AREAS_ACESSO : f.acessos;
+    const novo = atual.includes(id) ? atual.filter(x => x !== id) : [...atual, id];
+    return { ...f, acessos: normalizarAcessos(novo) };
+  });
 
   const salvar = async () => {
     if (salvando) return;
@@ -429,22 +491,44 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
     if (!form.nome.trim()) { alert("⚠️ Informe o nome"); return; }
     if (!editando && (!emailNorm.includes("@") || emailNorm.length < 6)) { alert("⚠️ Informe o Gmail da pessoa (é com ele que ela vai entrar)."); return; }
     if (form.perfil !== "gestor" && form.obraId === "") { alert("⚠️ Selecione a obra deste acesso.\n\nSem obra vinculada, o encarregado não vê a equipe nem os pedidos certos."); return; }
+    const ehGestor = form.perfil === "gestor";
+    if (ehGestor && Array.isArray(form.acessos) && form.acessos.length === 0) { alert("⚠️ Marque pelo menos uma área do escritório para este acesso."); return; }
     const obraId = form.obraId === "" ? null : (isNaN(Number(form.obraId)) ? form.obraId : Number(form.obraId));
-    const dados = { nome: form.nome.trim(), cargo: form.cargo, obraId, perfil: form.perfil, tel: form.tel.trim() };
+    // acessos: null = Tudo (e sempre null na equipe de campo, que não usa o campo)
+    const acessos = ehGestor ? acessosParaGravar(form.acessos) : null;
+    const areasTxt = ehGestor && !editandoTravado ? `\nEscritório · ${resumoAcessos(acessos)}` : "";
+    const dados = { nome: form.nome.trim(), cargo: form.cargo, obraId, perfil: form.perfil, tel: form.tel.trim(), acessos };
+    // Dono ou a própria pessoa: grava só nome, cargo, obra e telefone (tipo e áreas ficam como estão)
+    if (editandoTravado) { delete dados.perfil; delete dados.acessos; }
+
+    // Demonstração: nada vai para a nuvem; mostra como o acesso ficaria e fecha
+    if (demo) {
+      const obraNome = obras.find(o => String(o.id) === String(obraId))?.nome;
+      const resumo = editandoTravado && ehDono(editando) ? "Dono da empresa · acesso total"
+        : ehGestor ? `Escritório · ${resumoAcessos(acessos)}`
+        : `Equipe de campo${obraNome ? " · " + obraNome : ""}`;
+      alert(`Na demonstração nada é gravado. Na sua empresa, este acesso ficaria: ${resumo}`);
+      setModal(false);
+      return;
+    }
+
+    // Convite de quem já entrou (há perfil com o mesmo e-mail): grava no PERFIL, que é o que vale;
+    // atualizarPerfilNuvem leva o tipo e as áreas também para o convite (alinha os dois)
+    const uidPerfil = editando ? (editando.firebaseUid || perfilDoEmail(editando.email)?.firebaseUid || null) : null;
 
     setSalvando(true);
     try {
-      if (editando && editando.firebaseUid) {
+      if (uidPerfil) {
         // Já entrou pelo menos uma vez: edita o perfil da nuvem
-        const ok = await atualizarPerfilNuvem(editando.firebaseUid, dados);
+        const ok = await atualizarPerfilNuvem(uidPerfil, dados);
         if (!ok) { alert("❌ Não deu para atualizar o perfil na nuvem. Verifique a conexão e tente de novo."); return; }
-        alert(`✅ Acesso atualizado!\n\n${dados.nome}${obraId !== null ? "\n🏗️ " + (obras.find(o => String(o.id) === String(obraId))?.nome || "") : ""}`);
+        alert(`✅ Acesso atualizado!\n\n${dados.nome}${areasTxt}${obraId !== null ? "\n🏗️ " + (obras.find(o => String(o.id) === String(obraId))?.nome || "") : ""}`);
       } else {
         // Convite novo ou convite ainda pendente (a chave é o e-mail)
         if (!editando && usuarios.some(u => (u.email || "").toLowerCase() === emailNorm)) { alert("⚠️ Já existe um acesso ou convite com esse e-mail."); return; }
         const r = await criarConvite({ email: editando ? editando.email : emailNorm, ...dados, empresaNome: empresa?.nomeFantasia || empresa?.razaoSocial || "" });
         if (!r.ok) { alert("❌ Não foi possível salvar o convite:\n\n" + r.erro); return; }
-        alert(`✅ Convite registrado!\n\n👤 ${dados.nome}\n📧 ${editando ? editando.email : emailNorm}\n\nNo celular da pessoa: abrir o app → "Entrar com Google" com este Gmail. Ela entra direto na sua empresa.`);
+        alert(`✅ Convite registrado!\n\n👤 ${dados.nome}\n📧 ${editando ? editando.email : emailNorm}${areasTxt}\n\nNo celular da pessoa: abrir o app → "Entrar com Google" com este Gmail. Ela entra direto na sua empresa.`);
       }
       setModal(false);
     } finally {
@@ -472,17 +556,17 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Usuários e acessos" sub="Quem entra na sua empresa" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <div style={{ background: "#f0f9ff", borderRadius: 12, padding: 12, marginBottom: 12, border: `1px solid ${T.infoBorda}`, fontSize: 11, color: T.infoTexto, lineHeight: 1.6 }}>
+        <div style={{ background: T.infoFundo, borderRadius: 12, padding: 12, marginBottom: 12, border: `1px solid ${T.infoBorda}`, fontSize: 11, color: T.infoTexto, lineHeight: 1.6 }}>
           Cadastre o <b>Gmail</b> de cada pessoa. Ela entra no app com "Entrar com Google" usando esse Gmail e já cai na sua empresa, na obra escolhida. Sem senha para passar.
+          {" "}Para quem é do escritório, escolha as <b>áreas</b> que a pessoa abre (ex.: só o Financeiro).
         </div>
 
-        {demo ? (
+        {demo && (
           <div style={{ background: T.avisoFundo, borderRadius: 12, padding: 12, marginBottom: 12, border: `1px solid ${T.avisoBorda}`, fontSize: 12, color: T.avisoTexto, lineHeight: 1.6, fontWeight: 600 }}>
-            Na demonstração os acessos são ilustrativos. Na sua empresa, cada pessoa entra com o próprio Gmail.
+            Na demonstração os acessos são ilustrativos: dá para abrir e preencher, mas nada é gravado. Na sua empresa, cada pessoa entra com o próprio Gmail.
           </div>
-        ) : (
-          <Btn label="➕ ADICIONAR ACESSO" color={GREEN} onClick={abrirNovo} />
         )}
+        <Btn label="➕ ADICIONAR ACESSO" color={GREEN} onClick={abrirNovo} />
 
         {lista.length === 0 ? (
           <div style={{ textAlign: "center", padding: 30, color: T.texto2, fontSize: 13 }}>Nenhum acesso cadastrado ainda.</div>
@@ -492,6 +576,11 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
             const iniciais = (u.nome || "?").split(" ").filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
             const inativo = u.ativo === false;
             const cor = u.convite ? "#b45309" : inativo ? "#9ca3af" : u.perfil === "gestor" ? GOLD : BLUE;
+            const dono = ehDono(u);
+            const fixo = travado(u); // dono ou a própria pessoa: sem desativar, tipo e áreas travados
+            const tipoTxt = dono ? "👔 Dono da empresa · acesso total"
+              : u.perfil === "gestor" ? `👔 Gestor · ${ehEu(u) ? "você" : resumoAcessos(u.acessos)}`
+              : `👷 ${u.cargo || "Encarregado"}`;
             return (
               <div key={u.id} style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${cor}`, opacity: inativo ? 0.75 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
@@ -500,13 +589,14 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
                     : <div style={{ width: 42, height: 42, borderRadius: 21, background: cor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{iniciais}</div>}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: T.titulo, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.nome}</div>
-                    <div style={{ fontSize: 10, color: T.texto2, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {u.perfil === "gestor" ? "👔 Gestor" : `👷 ${u.cargo || "Encarregado"}`}{obra ? ` · ${obra.nome}` : u.perfil === "gestor" ? "" : " · sem obra"}
+                    <div title={u.perfil === "gestor" ? `Áreas: ${dono ? nomesDasAreas(null) : nomesDasAreas(u.acessos)}` : undefined} style={{ fontSize: 10, color: T.texto2, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {tipoTxt}{obra ? ` · ${obra.nome}` : u.perfil === "gestor" ? "" : " · sem obra"}
                     </div>
                   </div>
                 </div>
-                <div style={{ background: T.superficie2, borderRadius: 8, padding: 8, marginBottom: demo ? 0 : 8, fontSize: 10, color: T.texto2 }}>
+                <div style={{ background: T.superficie2, borderRadius: 8, padding: 8, marginBottom: 8, fontSize: 10, color: T.texto2 }}>
                   📧 {demo ? "exemplo (sem e-mail na demonstração)" : u.email}<br />
+                  {u.perfil === "gestor" && !dono && acessosParaGravar(u.acessos) !== null && <>Abre: {nomesDasAreas(u.acessos)}<br /></>}
                   {demo
                     ? <span style={{ color: T.texto2 }}>Acesso ilustrativo</span>
                     : u.convite
@@ -515,14 +605,13 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
                       ? <span style={{ color: T.texto2 }}>⛔ Acesso desativado</span>
                       : <span style={{ color: T.sucessoTexto }}>☁️ Ativo — entra em qualquer celular com o Google</span>}
                 </div>
-                {!demo && (
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {inativo
-                      ? <button onClick={() => reativar(u)} style={{ flex: 1, background: GREEN, color: "#fff", border: "none", borderRadius: 8, padding: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✅ Reativar</button>
-                      : <button onClick={() => abrirEdicao(u)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 8, padding: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✏️ Editar</button>}
-                    {!inativo && <button onClick={() => remover(u)} style={{ background: T.erroFundo, color: RED, border: `2px solid ${RED}`, borderRadius: 8, padding: "8px 14px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{u.convite ? "✖ Cancelar" : "⛔ Desativar"}</button>}
-                  </div>
-                )}
+                {/* Na demo: só Editar (o salvar simula). Dono e a própria pessoa: sem Desativar */}
+                <div style={{ display: "flex", gap: 6 }}>
+                  {inativo && !demo
+                    ? <button onClick={() => reativar(u)} style={{ flex: 1, background: GREEN, color: "#fff", border: "none", borderRadius: 8, padding: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✅ Reativar</button>
+                    : <button onClick={() => abrirEdicao(u)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 8, padding: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✏️ Editar</button>}
+                  {!inativo && !demo && !fixo && <button onClick={() => remover(u)} style={{ background: T.erroFundo, color: RED, border: `2px solid ${RED}`, borderRadius: 8, padding: "8px 14px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{u.convite ? "✖ Cancelar" : "⛔ Desativar"}</button>}
+                </div>
               </div>
             );
           })
@@ -538,10 +627,80 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
         <input value={form.nome} onChange={e => set("nome", e.target.value)} placeholder="Nome da pessoa" style={inputS} />
 
         <label style={labelS}>🔑 Tipo de acesso</label>
-        <select value={form.perfil} onChange={e => set("perfil", e.target.value)} style={selS}>
+        <select value={form.perfil} onChange={e => set("perfil", e.target.value)} disabled={editandoTravado} style={{ ...selS, marginBottom: 6, opacity: editandoTravado ? 0.6 : 1 }}>
           <option value="encarregado">Equipe de campo (encarregado / apontador)</option>
-          <option value="gestor">Gestor (vê e edita tudo)</option>
+          <option value="gestor">Escritório (gestor)</option>
         </select>
+        <div style={{ fontSize: 11, color: T.texto2, lineHeight: 1.5, marginBottom: 12 }}>
+          {editandoTravado
+            ? "Aqui dá para mudar nome e telefone. O tipo de acesso e as áreas deste cartão não mudam."
+            : form.perfil === "gestor"
+            ? "Usa o sistema do escritório. As áreas abaixo definem o que a pessoa vê no menu e consegue abrir."
+            : "Usa o app no canteiro e lança só na obra escolhida abaixo."}
+        </div>
+
+        {/* Dono da empresa (acesso total, sempre) ou a própria pessoa (ninguém muda o próprio acesso) */}
+        {editandoTravado && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: T.superficie2, border: `1px solid ${T.borda}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+            <Icone nome="lock" tamanho={16} cor={T.texto2} style={{ flex: "none", marginTop: 1 }} />
+            <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.5 }}>
+              {ehDono(editando) || ehDono(perfilDoEmail(editando?.email))
+                ? <><b>Dono da empresa · acesso total.</b> Quem criou a empresa sempre abre tudo: ninguém limita, rebaixa nem desativa o dono.</>
+                : <><b>Este é o seu acesso.</b> Ninguém muda o próprio acesso: peça a outra pessoa que cuide de Sistema.</>}
+            </div>
+          </div>
+        )}
+
+        {form.perfil === "gestor" && !editandoTravado && (
+          <>
+            <label style={labelS} id="km-areas-rotulo">🗂️ Áreas do escritório</label>
+            <div role="radiogroup" aria-labelledby="km-areas-rotulo" style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+              {OPCOES_AREAS.map(p => {
+                const ativo = form.preset === p.id;
+                return (
+                  <button key={p.id} type="button" role="radio" aria-checked={ativo} onClick={() => escolherPreset(p.id)}
+                    style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%", boxSizing: "border-box", textAlign: "left", padding: "10px 12px", borderRadius: 12, border: `1.5px solid ${ativo ? GOLD : T.inputBorda}`, background: ativo ? "rgba(255,184,48,0.12)" : T.inputFundo, color: T.texto, cursor: "pointer", fontFamily: "inherit" }}>
+                    <span aria-hidden="true" style={{ width: 18, height: 18, flex: "none", marginTop: 1, boxSizing: "border-box", borderRadius: "50%", border: `2px solid ${ativo ? GOLD : T.texto3}`, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                      {ativo && <span style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD }} />}
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: T.titulo }}>{p.titulo}</span>
+                      <span style={{ display: "block", fontSize: 11, color: T.texto2, lineHeight: 1.45, marginTop: 1 }}>{detalheOpcao(p)}</span>
+                      {ativo && NOTA_PRESET[p.id] && <span style={{ display: "block", fontSize: 11, color: T.texto2, lineHeight: 1.45, marginTop: 4, fontStyle: "italic" }}>{NOTA_PRESET[p.id]}</span>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {form.preset === "personalizado" && (
+              <fieldset style={{ border: `1px solid ${T.borda}`, borderRadius: 12, padding: "2px 12px", margin: "0 0 12px", background: T.superficie }}>
+                <legend style={SO_LEITOR}>Marque as áreas que a pessoa abre</legend>
+                {GRUPOS_ACESSO.map((g, i) => {
+                  const fixa = g.id === AREA_FIXA; // Visão geral: sempre marcada (o Painel)
+                  const marcado = fixa || (form.acessos === null ? AREAS_ACESSO : form.acessos).includes(g.id);
+                  return (
+                    <label key={g.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderTop: i ? `1px solid ${T.borda}` : "none", cursor: fixa ? "default" : "pointer" }}>
+                      <input type="checkbox" checked={marcado} disabled={fixa} onChange={() => alternarArea(g.id)} style={{ width: 18, height: 18, margin: "1px 0 0", flex: "none", accentColor: GOLD, cursor: fixa ? "default" : "pointer" }} />
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: T.titulo }}>{g.titulo}{fixa && <span style={{ fontWeight: 600, color: T.texto2 }}> · sempre</span>}</span>
+                        {/* Ajuda e Links úteis (livre) abrem para todo o escritório: não entram na lista da área */}
+                        <span style={{ display: "block", fontSize: 11, color: T.texto2, lineHeight: 1.45 }}>{g.itens.filter(it => !it.livre).map(it => it.label).join(", ")}</span>
+                        {fixa && <span style={{ display: "block", fontSize: 11, color: T.texto2, lineHeight: 1.45, marginTop: 2, fontStyle: "italic" }}>O Painel é a porta de entrada no celular.</span>}
+                      </span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            )}
+
+            {/* Aviso honesto: as áreas escondem telas e menus, não trancam os dados da empresa */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: T.avisoFundo, border: `1px solid ${T.avisoBorda}`, borderRadius: 10, padding: "8px 10px", marginBottom: 12, fontSize: 11, color: T.avisoTexto, lineHeight: 1.5 }}>
+              <Icone nome="info" tamanho={15} cor={T.avisoTexto} style={{ flex: "none", marginTop: 1 }} />
+              <span>As áreas definem o que a pessoa abre no sistema. Dê acesso de escritório só a quem é de confiança.</span>
+            </div>
+          </>
+        )}
 
         {form.perfil !== "gestor" && (
           <>
@@ -575,6 +734,8 @@ export function TelaAcessosApp({ usuario, usuarios = [], obras = [], empresa, de
 export function TelaMinhaConta({ usuario, empresa, demo = false, onBack, onLogout }) {
   const [modalSair, setModalSair] = useState(false);
   const { preferencia, setPreferencia } = useTema(); // mesmo alternador do menu lateral (grava _kmzero_tema)
+  const ehGestor = usuario?.perfil === "gestor";
+  const minhasAreas = ehGestor ? acessosParaGravar(usuario?.acessos) : null; // null = tudo
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
@@ -596,9 +757,39 @@ export function TelaMinhaConta({ usuario, empresa, demo = false, onBack, onLogou
               ? <div style={{ background: GOLD, color: NAVY, borderRadius: 14, padding: "4px 10px", fontSize: 11, fontWeight: 800 }}>Modo demonstração</div>
               : <div style={{ background: "rgba(34,197,94,0.25)", border: "1px solid rgba(34,197,94,0.5)", borderRadius: 14, padding: "4px 10px", fontSize: 11, fontWeight: 700 }}>🔒 Conta Google</div>}
             <div style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 14, padding: "4px 10px", fontSize: 11, fontWeight: 700 }}>
-              {usuario?.perfil === "gestor" ? "👔 Gestor" : `👷 ${usuario?.cargo || "Equipe"}`}
+              {ehGestor ? `👔 Gestor · ${resumoAcessos(minhasAreas)}` : `👷 ${usuario?.cargo || "Equipe"}`}
             </div>
           </div>
+        </div>
+
+        {/* O que esta conta abre (só leitura: quem muda é quem cuida de Sistema → Usuários e acessos) */}
+        <div style={{ background: T.superficie, borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: T.sombra }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.titulo, marginBottom: 4 }}>🗂️ Suas áreas</div>
+          {!ehGestor ? (
+            <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.6 }}>
+              <b>Equipe de campo.</b> Você lança na obra em que o gestor vinculou você.
+            </div>
+          ) : minhasAreas === null ? (
+            <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.6 }}>
+              <b>Escritório · acesso total.</b> Todas as áreas do menu, inclusive Sistema (empresa, usuários e backup).
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: T.texto, lineHeight: 1.6, marginBottom: 8 }}>
+                <b>Escritório · {resumoAcessos(minhasAreas)}.</b> {minhasAreas.length ? "Você abre:" : "Nenhuma área liberada ainda."}
+              </div>
+              {minhasAreas.length > 0 && (
+                <ul aria-label="Áreas liberadas" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {minhasAreas.map(id => (
+                    <li key={id} style={{ fontSize: 11, fontWeight: 700, color: T.texto, background: T.superficie2, border: `1px solid ${T.borda}`, borderRadius: 999, padding: "4px 10px" }}>{TITULO_AREA[id]}</li>
+                  ))}
+                </ul>
+              )}
+              <div style={{ fontSize: 11, color: T.texto2, lineHeight: 1.5, marginTop: 10 }}>
+                Precisa de outra área? Peça a quem cuida de Sistema → Usuários e acessos.
+              </div>
+            </>
+          )}
         </div>
 
         <div style={{ background: T.superficie, borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: T.sombra }}>

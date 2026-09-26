@@ -6,13 +6,14 @@ import { logoutFirebase, resultadoRedirecionamento, aguardarSessao } from "./fir
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T, DEFAULT_FONT, ESCURO } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
-import { setEmpresaId, getEmpresaId, setModoDemo, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
+import { setEmpresaId, getEmpresaId, setModoDemo, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store, lerAcessos, carregarDonoEmpresa, restaurarDonoNuvem } from "./lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, gerarDadosDemo, gerarAvisosDemo, DEMO_ID, DEMO_USUARIO, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, UsuarioContext, EscritorioContext } from "./components/ui.jsx";
 import { MenuLateral } from "./components/MenuLateral.jsx";
-import { TODAS_TELAS_MENU } from "./components/menuGrupos.js";
+import { TODAS_TELAS_MENU, PRESETS_ACESSOS, normalizarAcessos, telaPermitida, telaInicialPermitida } from "./components/menuGrupos.js";
+import { Icone } from "./components/Icones.jsx";
 import { useModoEscritorio } from "./lib/useLargura.js";
 import { CHAVE_TEMA, aplicarTema } from "./lib/useTema.js";
 import { LARGURA_POR_TELA, tipoDaTela } from "./lib/layoutEscritorio.js";
@@ -45,7 +46,10 @@ import { TelaConfigEmpresa, TelaEscritorio, TelaAjuda, TelaBackup, TelaGerarSimu
    3) o boot pula aguardarSessao/resultadoRedirecionamento/verificarAcessoNuvem e nunca
       grava _kmzero_empresaId nem _kmzero_sessao: a conta Google real não é tocada.
    Os dados vivem em localStorage com prefixo demo_ (empresaId "demo") e no IndexedDB
-   demo_files; "Sair" apaga tudo isso e volta para a vitrine. */
+   demo_files; "Sair" apaga tudo isso e volta para a vitrine.
+   Parâmetros (só na demo): &tema=claro|escuro · &tela=<nav do menu> · &acessos=financeiro|
+   administrativo|obras|tudo (pacotes da tela Usuários e acessos) ou lista de áreas com vírgula
+   (ex.: &acessos=obras,campo — "obras," é só a área Obras). Ex.: /app/?demo=1&acessos=financeiro */
 const CHAVE_SEMENTE_DEMO = "demo__semente";
 const detectarDemo = () => {
   try {
@@ -60,12 +64,30 @@ const aplicarTemaDaDemo = () => {
     if (t === "claro" || t === "escuro") { localStorage.setItem(CHAVE_TEMA, t); aplicarTema(t); }
   } catch {}
 };
-// Tela inicial da demo: ?tela=<nav do menu> abre direto nela (links da vitrine e capturas); senão, o Painel
-const telaInicialDemo = () => {
+// Tela inicial da demo: ?tela=<nav do menu> abre direto nela (links da vitrine e capturas); senão, a
+// tela inicial do visitante (o Painel, ou a primeira área liberada por &acessos=). Tela fora das
+// áreas liberadas: a guarda de navegação devolve para a inicial, com o aviso — a mesma regra do login real.
+const telaInicialDemo = (u) => {
   try {
     const t = new URLSearchParams(window.location.search).get("tela");
-    return t && TODAS_TELAS_MENU.has(t) ? t : "gestor";
-  } catch { return "gestor"; }
+    return t && TODAS_TELAS_MENU.has(t) ? t : telaInicialPermitida(u);
+  } catch { return telaInicialPermitida(u); }
+};
+// Áreas do visitante da demo (&acessos=, ver o comentário do modo demonstração): lista de áreas,
+// null para "tudo", ou undefined quando não veio nada válido (visitante com acesso total, como sempre)
+const acessosDaDemo = () => {
+  try {
+    const v = (new URLSearchParams(window.location.search).get("acessos") || "").trim().toLowerCase();
+    if (!v) return undefined;
+    if (!v.includes(",")) { const p = PRESETS_ACESSOS.find(x => x.id === v); return p ? p.acessos : undefined; }
+    const lista = normalizarAcessos(v.split(","));
+    return lista.length ? lista : undefined;
+  } catch { return undefined; }
+};
+// Usuário com as áreas que vieram da nuvem (null = tudo); devolve o MESMO objeto se nada mudou
+const comAcessos = (u, acessos) => {
+  const novo = normalizarAcessos(acessos);
+  return JSON.stringify(novo) === JSON.stringify(normalizarAcessos(u.acessos)) ? u : { ...u, acessos: novo };
 };
 // Limpeza oportunista: em todo login real, apaga o que a demo deixou (chaves demo_* e o banco demo_files)
 const limparRestosDemo = () => {
@@ -116,10 +138,8 @@ export default function App() {
         setTelaRaw(anterior);
         return novaPilha;
       }
-      // Sem histórico: vai pra tela raiz baseado no perfil
-      if (usuario?.perfil === "gestor") setTelaRaw("gestor");
-      else if (usuario) setTelaRaw("home");
-      else setTelaRaw("login");
+      // Sem histórico: vai pra tela raiz da pessoa (Painel, a primeira área liberada, home ou login)
+      setTelaRaw(telaInicialPermitida(usuario));
       return [];
     });
   };
@@ -208,6 +228,9 @@ export default function App() {
   const [avisos, setAvisos] = useState([]);
   const [ultimaLeituraAvisos, setUltimaLeituraAvisos] = useState(0);
   const [avisoNaTela, setAvisoNaTela] = useState(null); // faixa no topo quando o push não está ligado
+  const [avisoAcesso, setAvisoAcesso] = useState(null); // "Sua conta não tem acesso a esta área" (guarda das áreas)
+  const [donoUid, setDonoUid] = useState(null); // uid de quem criou a empresa (empresas/{id}.gestorUid); null = ainda não sabe
+  const donoUidRef = useRef(null); donoUidRef.current = donoUid;
   const enviarAviso = useCallback(async parcial => {
     const u = usuarioRef.current;
     if (!u) return { ok: false, erro: "Sem login." };
@@ -392,6 +415,36 @@ export default function App() {
         setUsuario(atualizado);
         store.set("usuarioLogado", atualizado);
       }
+    } else {
+      // Escritório. O dono da empresa nunca fica trancado para fora: se o perfil dele aparecer
+      // limitado (áreas) ou rebaixado, volta sozinho para acesso total (as regras só deixam o
+      // próprio dono fazer isso). Para os outros, restaurarDonoNuvem só confere e devolve null.
+      let perfilNuvem = p.perfil;
+      if (perfilNuvem.perfil !== "gestor" || lerAcessos(perfilNuvem) !== null) {
+        perfilNuvem = (await restaurarDonoNuvem(u.firebaseUid, perfilNuvem)) || perfilNuvem;
+      }
+      aplicarPerfilDoEscritorio(u, perfilNuvem);
+    }
+  };
+  // Sessão aberta de quem está no escritório diante do perfil da nuvem (usuarios/{uid}) — a nuvem manda:
+  //  - continua "gestor": só as áreas (acessos) podem ter mudado em Usuários e acessos;
+  //  - deixou de ser "gestor" (rebaixado para a equipe de campo): vira encarregado JÁ nesta sessão
+  //    e vai para o Início do app de campo. Nunca vira "Tudo" (na dúvida, menos acesso).
+  const aplicarPerfilDoEscritorio = (u, perfilNuvem) => {
+    if (perfilNuvem.perfil !== "gestor") {
+      const campo = { ...aplicarPerfilNuvem(u, perfilNuvem), perfil: "encarregado", acessos: null };
+      setUsuarios(us => us.map(x => String(x.id) === String(u.id) ? { ...x, ...campo } : x));
+      setUsuario(campo);
+      store.set("usuarioLogado", campo);
+      setHistoricoTelas([]);
+      setTelaRaw("home");
+      return;
+    }
+    // lerAcessos: valor estranho vira "só Visão geral", nunca "Tudo"
+    const atualizado = comAcessos(u, lerAcessos(perfilNuvem));
+    if (atualizado !== u) {
+      setUsuario(atualizado);
+      store.set("usuarioLogado", atualizado);
     }
   };
 
@@ -502,9 +555,12 @@ export default function App() {
       if (modoDemo) {
         // Visitante gestor, sem conta Google: nunca chama aguardarSessao/resultadoRedirecionamento/
         // verificarAcessoNuvem (restaurariam a conta real do navegador) e nunca grava _kmzero_sessao.
-        setUsuario(DEMO_USUARIO);
+        // &acessos= aplica um pacote de áreas ao visitante (testar os perfis do escritório)
+        const acessosDemo = acessosDaDemo();
+        const visitante = acessosDemo === undefined ? DEMO_USUARIO : { ...DEMO_USUARIO, acessos: acessosDemo };
+        setUsuario(visitante);
         setAvisos(gerarAvisosDemo()); // avisos só existem na nuvem; na demo ficam em memória
-        setTelaRaw(telaInicialDemo());
+        setTelaRaw(telaInicialDemo(visitante));
       } else if (userLogado) {
         limparRestosDemo(); // login real: o que a demo deixou neste navegador sai
         if (userLogado.empresaId) {
@@ -512,7 +568,7 @@ export default function App() {
           setEmpresaIdState(userLogado.empresaId);
         }
         setUsuario(userLogado);
-        setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
+        setTela(telaInicialPermitida(userLogado));
         localStorage.setItem("_kmzero_sessao", "1"); // a vitrine (/) manda direto para /app/
         verificarAcessoNuvem(userLogado); // em segundo plano
       } else {
@@ -576,13 +632,48 @@ export default function App() {
   useSyncColecao("obras",           obras,           setObras,           syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("trabalhadores",   trabalhadores,   setTrab,            syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("equips",          equips,          setEquips,          syncAtivo, { ordenar: porIdAsc });
+  // Dono da empresa (empresas/{id}.gestorUid): o cartão dele fica travado em Usuários e acessos
+  // e a sessão dele nunca fica limitada (ver verificarAcessoNuvem)
+  useEffect(() => {
+    if (!syncAtivo || usuario?.perfil !== "gestor") return;
+    let vivo = true;
+    carregarDonoEmpresa().then(uid => {
+      if (!vivo) return;
+      setDonoUid(uid);
+      const u = usuarioRef.current;
+      if (uid && u?.firebaseUid === uid && u.acessos != null) verificarAcessoNuvem(u); // dono limitado: se restaura
+    });
+    return () => { vivo = false; };
+  }, [syncAtivo, usuario?.perfil, empresaIdState]);
+  // O perfil da própria pessoa mudou na nuvem (alguém ajustou em Usuários e acessos): vale na
+  // hora, sem sair e entrar — áreas novas, ou rebaixado para a equipe de campo (vira encarregado
+  // já nesta sessão, nunca "Tudo"). O dono, se aparecer limitado, confere e se restaura.
+  const aplicarAcessosDaNuvem = (perfis) => {
+    const u = usuarioRef.current;
+    if (!u?.firebaseUid || u.perfil !== "gestor") return;
+    const eu = (perfis || []).find(p => p.firebaseUid === u.firebaseUid);
+    if (!eu || !("acessos" in eu)) return;
+    const limitado = eu.perfil !== "gestor" || eu.acessos !== null;
+    if (limitado && donoUidRef.current === u.firebaseUid) { verificarAcessoNuvem(u); return; }
+    aplicarPerfilDoEscritorio(u, eu);
+  };
   // Equipe com acesso ao app = perfis da nuvem (usuarios/) + convites pendentes (só o gestor vê).
   // Substitui a lista local: quem entra é quem tem conta Google com perfil na empresa.
+  // O convite continua na nuvem depois do 1º login: convite de e-mail que já tem perfil NÃO entra
+  // na lista (a pessoa já aparece pelo perfil; editar o convite não mudaria o acesso dela, e o
+  // cartão "Convite pendente" seria falso). Isso também tira da lista o convite da própria pessoa.
+  // O convite escondido não é uma porta dos fundos: ele acompanha o perfil (tipo, áreas e ativo,
+  // em alinharConviteAoPerfil), as regras exigem que o perfil refeito por ele tenha o e-mail da
+  // própria conta e quem foi desativado não apaga o próprio perfil para refazê-lo.
   useEffect(() => {
     if (!syncAtivo) return;
     let perfis = null, convites = [];
-    const publicar = () => { if (perfis) setUsuarios([...perfis, ...convites]); };
-    const paradas = [observarEquipeNuvem(ps => { perfis = ps; publicar(); })];
+    const publicar = () => {
+      if (!perfis) return;
+      const comPerfil = new Set(perfis.map(p => (p.email || "").toLowerCase()).filter(Boolean));
+      setUsuarios([...perfis, ...convites.filter(c => !comPerfil.has((c.email || "").toLowerCase()))]);
+    };
+    const paradas = [observarEquipeNuvem(ps => { perfis = ps; publicar(); aplicarAcessosDaNuvem(ps); })];
     if (usuario?.perfil === "gestor") paradas.push(observarConvitesNuvem(cs => { convites = cs; publicar(); }));
     return () => paradas.forEach(p => { try { p && p(); } catch {} });
   }, [syncAtivo, usuario?.perfil, empresaIdState]);
@@ -735,7 +826,7 @@ export default function App() {
   // Depois de "Entrar com Google": perfil → entra; convite → cria o perfil e entra; nada → primeiro acesso
   const concluirLoginGoogle = async (userGoogle) => {
     const r = await resolverEntradaGoogle(userGoogle);
-    if (r.tipo === "perfil") { await login(r.usuario); return { ok: true }; }
+    if (r.tipo === "perfil") { await login(r.usuario); return { ok: true }; } // r.usuario já traz acessos (store.js)
     if (r.tipo === "sem_convite") { setUsuarioGoogle(userGoogle); setTelaRaw("primeiro_acesso"); return { ok: true, semConvite: true }; }
     if (r.desativado) { try { await logoutFirebase(); } catch {} }
     return { ok: false, erro: r.erro, codigo: r.codigo || "", email: r.email || "" };
@@ -768,16 +859,11 @@ export default function App() {
     // Guarda/atualiza o perfil na lista deste aparelho (pra próxima vez entrar por PIN / "Continuar como")
     setUsuarios(us => upsertUsuarioLista(us, u));
     store.set("usuarioLogado", u);
-    if (u.perfil === "gestor") setTela("gestor");
-    else setTela("home");
+    setTela(telaInicialPermitida(u)); // Painel, a primeira área liberada (escritório) ou home (campo)
   };
 
-  // Helper: pra onde voltar baseado no perfil
-  const telaInicial = () => {
-    if (!usuario) return "login";
-    if (usuario.perfil === "gestor") return "gestor";
-    return "home";
-  };
+  // Helper: pra onde voltar baseado no perfil (e nas áreas liberadas do escritório)
+  const telaInicial = () => telaInicialPermitida(usuario);
   const sairDaConta = async () => {
     try { await Promise.race([desligarNotificacoes(), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
     try { await logoutFirebase(); } catch (e) {}
@@ -932,6 +1018,22 @@ export default function App() {
     return () => clearTimeout(t);
   }, [carregando]);
 
+  // 🔒 ÁREAS DE ACESSO (usuario.acessos; regras em menuGrupos.js): gestor com áreas limitadas que
+  // cair numa tela fora delas (atalho, ?tela= da demo, voltar, notificação) vai para a tela inicial
+  // dele e vê um aviso curto. O menu, a busca e o Painel já escondem o que não é dele.
+  const telaBloqueada = !carregando && usuario?.perfil === "gestor" && !telaPermitida(usuario, tela);
+  useEffect(() => {
+    if (!telaBloqueada) return;
+    setHistoricoTelas([]);
+    setTelaRaw(telaInicialPermitida(usuario));
+    setAvisoAcesso(Date.now());
+  }, [telaBloqueada, usuario, tela]);
+  useEffect(() => {
+    if (!avisoAcesso) return;
+    const t = setTimeout(() => setAvisoAcesso(null), 5000);
+    return () => clearTimeout(t);
+  }, [avisoAcesso]);
+
   if (carregando) return null; // o splash do index.html ainda está na frente
 
   // 🔒 SEGURANÇA: telas restritas ao gestor (encarregado não tem acesso).
@@ -969,6 +1071,7 @@ export default function App() {
   // 🏗️ Telas de campo precisam de obra: equipe sem obra vinculada vê aviso em vez de tela branca
   const TELAS_COM_OBRA = new Set(["fluxo", "material", "fotos_solo", "equip_solo", "diario"]);
   const render = () => {
+    if (telaBloqueada) return null; // a guarda das áreas já está trocando de tela (sem piscar a proibida)
     if (usuario && !usuarioEhGestor && !obraAtual && TELAS_COM_OBRA.has(tela)) {
       return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
@@ -1050,7 +1153,7 @@ export default function App() {
       case "empresa":    return <TelaConfigEmpresa empresa={empresa} onSave={setEmpresa} onBack={voltar} />;
       case "minha_conta": return <TelaMinhaConta usuario={usuario} empresa={empresa} demo={modoDemo} onBack={voltar} onLogout={logout} />;
       case "ajuda":      return <TelaAjuda empresa={empresa} onBack={voltar} />;
-      case "acessos":    return <TelaAcessosApp usuario={usuario} usuarios={usuarios} obras={obras} empresa={empresa} demo={modoDemo} onBack={voltar} />;
+      case "acessos":    return <TelaAcessosApp usuario={usuario} usuarios={usuarios} obras={obras} empresa={empresa} demo={modoDemo} donoUid={modoDemo ? DEMO_USUARIO.id : donoUid} onBack={voltar} />;
       case "produtividade": return <TelaProdutividade obras={obras} usuario={usuario} produtividade={produtividade} onBack={voltar} onAdd={p => setProd(ps => [p, ...ps])} onRemove={id => setProd(ps => ps.filter(p => p.id !== id))} />;
       case "recebimento":   return <TelaRecebimento obras={obras} pedidos={pedidos} usuario={usuario} recebimentos={recebimentos} onBack={voltar} onAdd={r => setReceb(rs => [r, ...rs])} />;
       case "folha": // alias antigo ("Folha Mensal"): o menu e os tiles apontam para folha_quinzenal
@@ -1202,6 +1305,20 @@ export default function App() {
         }
       `}</style>
       {modoDemo && <FaixaDemo onSair={sairDemo} />}
+      {avisoAcesso && (
+        <div key={avisoAcesso} className="km-aviso-acesso" role="status" onClick={() => setAvisoAcesso(null)} style={{
+          position: "fixed", top: `calc(env(safe-area-inset-top, 0px) + ${modoDemo ? 44 : 12}px)`, left: "50%", transform: "translateX(-50%)", zIndex: 10001,
+          width: "max-content", maxWidth: "min(92vw, 440px)", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 12,
+          background: NAVY, color: "#fff", border: `2px solid ${GOLD}`, borderRadius: 14, padding: "10px 16px",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.25)", fontFamily: DEFAULT_FONT, cursor: "pointer", textAlign: "left",
+        }}>
+          <Icone nome="lock" tamanho={18} cor={GOLD} />
+          <span>
+            <span style={{ display: "block", fontWeight: 800, fontSize: 13 }}>Sua conta não tem acesso a esta área</span>
+            <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>Se precisar, peça a quem cuida dos acessos da empresa.</span>
+          </span>
+        </div>
+      )}
       {avisoNaTela && tela !== "avisos" && (
         <button onClick={() => { setAvisoNaTela(null); setTela("avisos"); }} style={{
           position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 10px)", left: "50%", transform: "translateX(-50%)", zIndex: 9999,

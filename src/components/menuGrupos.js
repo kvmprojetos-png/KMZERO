@@ -2,12 +2,16 @@ import { NAVY, GOLD, RED } from "../theme.js";
 
 /* FONTE ÚNICA do menu do escritório: grupos, itens, ícones, badges e os nomes finais das telas.
    Quem lê daqui: MenuLateral.jsx (desenha), layoutEscritorio.js (barra de página sabe quais
-   telas estão no menu), KMZeroApp.jsx (TELAS_GESTOR) e home.jsx (tiles do Painel usam os
-   MESMOS nomes: "Indicadores", "Alertas", "Avisos").
+   telas estão no menu), KMZeroApp.jsx (TELAS_GESTOR e a guarda das áreas) e home.jsx (tiles do
+   Painel usam os MESMOS nomes: "Indicadores", "Alertas", "Avisos").
+   Os ids dos grupos também são as ÁREAS de acesso (usuario.acessos) — ver o fim do arquivo:
+   renomear um id tira a área de quem já a tinha.
    nav = nome exato da tela no switch de KMZeroApp.jsx — confira lá antes de acrescentar.
    icone = nome do Lucide em src/components/Icones.jsx (NOMES_ICONES).
    badge = { chave (em badgesMenu de KMZeroApp.jsx), tipo: 'pendencia' | 'alerta' | 'info' }.
-   busca = termos extras para o "Ir para…" (sinônimos, nomes antigos). */
+   busca = termos extras para o "Ir para…" (sinônimos, nomes antigos).
+   livre = true: item aberto a qualquer pessoa do escritório, mesmo sem a área do grupo
+   (Ajuda e Links úteis; ver ÁREAS DE ACESSO no fim do arquivo). */
 
 // E-mail do desenvolvedor: só ele vê o grupo "Desenvolvedor" (e os tiles equivalentes no Painel)
 export const EMAIL_DEV = "kvmprojetos@gmail.com";
@@ -81,9 +85,9 @@ export const GRUPOS_MENU = [
   { id: "sistema", titulo: "Sistema", itens: [
     { nav: "acessos", label: "Usuários e acessos", icone: "key-round",  busca: "convites permissões encarregado" },
     { nav: "empresa", label: "Empresa",            icone: "building-2", busca: "cadastro cnpj logo" },
-    { nav: "links",   label: "Links úteis",        icone: "link",       busca: "sites sinapi preços referência" },
+    { nav: "links",   label: "Links úteis",        icone: "link",       livre: true, busca: "sites sinapi preços referência" },
     { nav: "backup",  label: "Exportar dados",     icone: "database",   busca: "backup restaurar" },
-    { nav: "ajuda",   label: "Ajuda",              icone: "life-buoy",  busca: "suporte termos privacidade" },
+    { nav: "ajuda",   label: "Ajuda",              icone: "life-buoy",  livre: true, busca: "suporte termos privacidade" },
   ] },
   { id: "dev", titulo: "Desenvolvedor", somenteEmail: EMAIL_DEV, itens: [
     { nav: "diagnostico",     label: "Painel técnico", icone: "activity",      busca: "diagnóstico" },
@@ -129,4 +133,107 @@ export function grupoDaTela(tela) {
 // Grupos que este usuário vê (o do desenvolvedor só para EMAIL_DEV)
 export function gruposVisiveis(email) {
   return GRUPOS_MENU.filter(g => !g.somenteEmail || g.somenteEmail === email);
+}
+
+/* ── ÁREAS DE ACESSO (quem trabalha no escritório) ───────────────────────────
+   Perfil continua "gestor" ou "encarregado". O gestor pode ter usuario.acessos = lista de ids
+   de grupo acima (visao, obras, equipe, campo, suprimentos, equipamentos, financeiro, sistema);
+   ausente ou null = acesso total (todos os gestores de antes). O grupo do desenvolvedor nunca
+   entra na lista: continua decidido só pelo e-mail. Encarregado ignora acessos (app de campo,
+   guarda TELAS_GESTOR em KMZeroApp.jsx).
+   Itens com livre: true (Ajuda, Links úteis) abrem para todo gestor: suporte, termos e a consulta
+   SINAPI não são área restrita. Na área "Sistema" o que conta é Empresa, Usuários e acessos e
+   Exportar dados.
+   "Visão geral" (AREA_FIXA) entra SEMPRE que houver lista: o Painel é a porta de entrada do
+   escritório e, no celular (sem menu lateral), é por ele que a pessoa chega às outras áreas.
+   normalizarAcessos já a devolve, então lista antiga ou gravada sem ela também a recebe.
+   Quem usa: MenuLateral (menu e busca Ctrl+K), KMZeroApp (guarda de navegação, tela inicial,
+   ?acessos= da demo), home.jsx (atalhos do Painel) e a tela Usuários e acessos (auth.jsx).
+   As áreas só escondem menus e telas: não trancam os dados da empresa (firestore.rules). */
+
+// Áreas que podem ser liberadas: todos os grupos, menos os de e-mail fixo (desenvolvedor)
+export const AREAS_ACESSO = GRUPOS_MENU.filter(g => !g.somenteEmail).map(g => g.id);
+
+// Área que todo acesso do escritório tem (o Painel; ver o comentário acima)
+export const AREA_FIXA = "visao";
+
+/* Pacotes prontos (tela Usuários e acessos e o &acessos= da demo). Financeiro leva Equipe e
+   Suprimentos porque folha, adiantamentos e pedidos são custo. "Sistema" (Empresa, Usuários
+   e acessos, Exportar dados) só vem no "Tudo" ou marcado à mão. */
+export const PRESETS_ACESSOS = [
+  { id: "tudo",           titulo: "Tudo",                acessos: null },
+  { id: "financeiro",     titulo: "Financeiro",          acessos: ["visao", "financeiro", "suprimentos", "equipe"] },
+  { id: "administrativo", titulo: "Administrativo / RH", acessos: ["visao", "equipe", "obras"] },
+  { id: "obras",          titulo: "Obras e campo",       acessos: ["visao", "obras", "campo", "suprimentos", "equipamentos"] },
+];
+
+// Lista limpa (só áreas conhecidas, sem repetir, na ordem do menu, sempre com a Visão geral)
+// ou null (= tudo)
+export function normalizarAcessos(acessos) {
+  if (!Array.isArray(acessos)) return null;
+  const marcadas = new Set([AREA_FIXA, ...acessos.map(a => String(a).trim())]);
+  return AREAS_ACESSO.filter(id => marcadas.has(id));
+}
+
+// Pacote pronto que bate exatamente com a lista (null → "Tudo"), ou null se for personalizado
+export function presetDosAcessos(acessos) {
+  const a = normalizarAcessos(acessos);
+  return PRESETS_ACESSOS.find(p => (p.acessos === null ? a === null : !!a && normalizarAcessos(p.acessos).join() === a.join())) || null;
+}
+
+// Resumo curto para cartões e rodapés: "Tudo", "Financeiro", "3 áreas", "Só Visão geral"
+export function resumoAcessos(acessos) {
+  const a = normalizarAcessos(acessos);
+  if (!a || a.length === AREAS_ACESSO.length) return "Tudo";
+  const p = presetDosAcessos(a);
+  if (p) return p.titulo;
+  if (a.length === 1) return `Só ${GRUPOS_MENU.find(g => g.id === a[0])?.titulo || "1 área"}`;
+  return `${a.length} áreas`;
+}
+
+/* ids dos grupos do escritório que esta pessoa abre: gestor sem acessos → todos os que vê;
+   gestor com acessos → só esses (o do desenvolvedor segue o e-mail); encarregado → nenhum
+   (é o de hoje: o menu do escritório não existe para ele). */
+export function gruposPermitidos(usuario) {
+  if (!usuario || usuario.perfil !== "gestor") return [];
+  const visiveis = gruposVisiveis(usuario.email);
+  const a = normalizarAcessos(usuario.acessos);
+  if (!a) return visiveis.map(g => g.id);
+  return visiveis.filter(g => g.somenteEmail || a.includes(g.id)).map(g => g.id);
+}
+
+/* A pessoa pode abrir esta tela? Tela do menu (ou de detalhe dele, via TELA_PAI) segue o grupo;
+   item livre (Ajuda, Links úteis) e tela sem grupo (minha_conta, login, registro,
+   primeiro_acesso, telas de campo…) são sempre permitidos ao gestor. Encarregado: igual a
+   TELAS_GESTOR (nada do menu, nem Minha conta). */
+export function telaPermitida(usuario, tela) {
+  if (!usuario) return true; // sem sessão só existem as telas de entrada
+  const g = grupoDaTela(tela);
+  if (usuario.perfil !== "gestor") return !g && tela !== "minha_conta";
+  if (!g || itemDaTela(tela)?.livre) return true;
+  return gruposPermitidos(usuario).includes(g);
+}
+
+/* Grupos do menu lateral (e da busca Ctrl+K) desta pessoa: os que o e-mail vê, só nas áreas
+   liberadas; grupo fora das áreas que tenha item livre aparece só com esse item
+   (ex.: "Sistema" com Links úteis e Ajuda para quem não tem a área Sistema). */
+export function gruposDoMenu(usuario) {
+  const permitidos = new Set(gruposPermitidos(usuario));
+  return gruposVisiveis(usuario?.email).flatMap(g => {
+    if (permitidos.has(g.id)) return [g];
+    if (usuario?.perfil !== "gestor") return [];
+    const livres = g.itens.filter(i => i.livre);
+    return livres.length ? [{ ...g, itens: livres }] : [];
+  });
+}
+
+// Primeira tela depois de entrar: o Painel ("Visão geral" vem sempre, ver AREA_FIXA). O resto é
+// só rede de segurança: a primeira tela do primeiro grupo liberado; sem nenhum, Minha conta
+export function telaInicialPermitida(usuario) {
+  if (!usuario) return "login";
+  if (usuario.perfil !== "gestor") return "home";
+  const ids = gruposPermitidos(usuario);
+  if (ids.includes("visao")) return "gestor";
+  const g = GRUPOS_MENU.find(x => !x.somenteEmail && ids.includes(x.id));
+  return g ? g.itens[0].nav : "minha_conta";
 }
