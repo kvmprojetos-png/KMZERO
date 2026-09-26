@@ -4,8 +4,9 @@ rules_version = '2';
 // KMZERO — Regras do Firestore (multiempresa / SaaS)
 //
 // Modelo de dados:
-//   usuarios/{uid}                     perfil de cada login Google (empresaId, perfil, ativo...)
+//   usuarios/{uid}                     perfil de cada login Google (empresaId, perfil, ativo, acessos...)
 //   convites/{email}                   convite do gestor: "este Gmail entra na empresa X como Y"
+//                                      (com as áreas do escritório em "acessos", se for gestor)
 //   empresas/{empresaId}               cadastro da empresa (gestorUid = quem criou)
 //   empresas/{empresaId}/{colecao}/*   obras, trabalhadores, pedidos, rdos, presencas...
 //
@@ -43,10 +44,14 @@ service cloud.firestore {
     function souDaEmpresa(empresaId) {
       return perfilAtivo() && minhaEmpresa() == empresaId;
     }
+    // A empresa existe e foi criada por este uid (o DONO da empresa: empresas/{id}.gestorUid)
+    function ehDono(empresaId, uid) {
+      return exists(/databases/$(database)/documents/empresas/$(empresaId))
+        && get(/databases/$(database)/documents/empresas/$(empresaId)).data.gestorUid == uid;
+    }
     // A empresa já existe e foi criada por quem está logado (usado no cadastro do gestor)
     function empresaCriadaPorMim(empresaId) {
-      return exists(/databases/$(database)/documents/empresas/$(empresaId))
-        && get(/databases/$(database)/documents/empresas/$(empresaId)).data.gestorUid == request.auth.uid;
+      return ehDono(empresaId, request.auth.uid);
     }
     // E-mail da conta Google de quem está logado, em minúsculas (é a chave do convite)
     function meuEmail() {
@@ -58,12 +63,67 @@ service cloud.firestore {
     function caminhoConvite() {
       return /databases/$(database)/documents/convites/$(meuEmail());
     }
-    // Existe convite para o meu e-mail e ele bate com o perfil que estou criando
+    // Áreas do escritório (campo "acessos" de usuarios/ e convites/):
+    //   null ou ausente = acesso total (todo gestor antigo continua assim);
+    //   lista de ids de grupos do menu (ex.: ['visao', 'financeiro']) = só essas áreas.
+    // Quem esconde as telas é o app. Aqui: o formato; ninguém muda as PRÓPRIAS áreas;
+    // só quem administra os acessos (Tudo ou a área 'sistema') convida e muda tipo,
+    // áreas ou ativo de outra pessoa; ninguém limita, rebaixa ou desativa o dono;
+    // quem foi desativado não volta sozinho (não apaga o próprio perfil para refazê-lo
+    // pelo convite, e o convite de quem foi desativado fica com ativo: false).
+    // ATENÇÃO: as áreas NÃO trancam os dados. Todo usuário ativo da empresa segue lendo
+    // e gravando empresas/{id}/* (ver o fim do arquivo).
+    function acessosDe(d) {
+      return d.get('acessos', null);
+    }
+    function acessosValidos(d) {
+      return acessosDe(d) == null || acessosDe(d) is list;
+    }
+    function mantemAcessos() {
+      return acessosDe(request.resource.data) == acessosDe(resource.data);
+    }
+    // Gestor que administra os acessos da empresa: acesso total ou com a área Sistema
+    // (é quem abre Sistema → Usuários e acessos no app)
+    function possoAdministrar() {
+      return souGestor()
+        && (perfil().get('acessos', null) == null || 'sistema' in perfil().get('acessos', null));
+    }
+    // O e-mail do perfil liga o perfil ao convite (convites/{email}): o app nunca o troca
+    function mantemEmail() {
+      return request.resource.data.get('email', '') == resource.data.get('email', '');
+    }
+    // A gravação não mexe em tipo de acesso, ativo, áreas nem e-mail (nome, cargo, obra, telefone...)
+    function mantemPoderes() {
+      return request.resource.data.perfil == resource.data.perfil
+        && request.resource.data.get('ativo', true) == resource.data.get('ativo', true)
+        && mantemAcessos()
+        && mantemEmail();
+    }
+    // Só desliga alguém da equipe de campo (Equipe → remover trabalhador → "desativar o acesso")
+    function soDesligaCampo() {
+      return resource.data.perfil != 'gestor'
+        && request.resource.data.perfil == resource.data.perfil
+        && request.resource.data.get('ativo', true) == false
+        && mantemAcessos()
+        && mantemEmail();
+    }
+    // O dono volta a ser escritório com acesso total no PRÓPRIO perfil (nunca fica trancado para fora)
+    function donoSeRestaurando(uid) {
+      return ehDono(resource.data.empresaId, uid)
+        && request.resource.data.perfil == 'gestor'
+        && request.resource.data.get('ativo', true) == resource.data.get('ativo', true)
+        && acessosDe(request.resource.data) == null;
+    }
+    // Existe convite para o meu e-mail, ele não foi desligado (desativar a pessoa em Usuários e
+    // acessos grava ativo: false também no convite dela) e bate com o perfil que estou criando
+    // (empresa, tipo de acesso e as áreas do escritório: ninguém entra com mais do que foi convidado)
     function conviteValeParaMim(novo) {
       return emailVerificado()
         && exists(caminhoConvite())
+        && get(caminhoConvite()).data.get('ativo', true) != false
         && get(caminhoConvite()).data.empresaId == novo.empresaId
-        && get(caminhoConvite()).data.perfil == novo.perfil;
+        && get(caminhoConvite()).data.perfil == novo.perfil
+        && get(caminhoConvite()).data.get('acessos', null) == acessosDe(novo);
     }
 
     // ── Perfis de login ─────────────────────────────────────────────────────
@@ -79,37 +139,54 @@ service cloud.firestore {
       // Criar:
       //  (a) gestor concluindo o cadastro da própria empresa (empresa já criada por ele)
       //  (b) pessoa convidada entrando pela 1ª vez com a conta Google do e-mail convidado
-      //  (c) gestor criando o perfil de alguém da sua empresa (uso administrativo/testes)
-      allow create: if logado() && (
+      //  (c) quem administra os acessos criando o perfil de alguém da sua empresa (uso administrativo/testes)
+      // Em (a) e (b) o e-mail do perfil é o da própria conta Google: é ele que liga o perfil ao
+      // convite dele (ninguém se refaz com o e-mail do convite de outra pessoa)
+      allow create: if logado() && acessosValidos(request.resource.data) && (
         (request.auth.uid == uid
           && request.resource.data.perfil == 'gestor'
+          && request.resource.data.get('email', '') == meuEmail()
           && empresaCriadaPorMim(request.resource.data.empresaId))
         || (request.auth.uid == uid
           && request.resource.data.get('ativo', true) == true
+          && request.resource.data.get('email', '') == meuEmail()
           && conviteValeParaMim(request.resource.data))
-        || (souGestor()
+        || (possoAdministrar()
           && uid != request.auth.uid
           && request.resource.data.empresaId == minhaEmpresa()
           && request.resource.data.perfil != 'gestor')
       );
 
-      // Atualizar:
-      //  - gestor edita qualquer perfil da sua empresa (sem mudar a empresa)
-      //  - o próprio usuário edita dados simples (não muda empresa, perfil nem ativo)
-      allow update: if logado() && (
+      // Atualizar (nunca muda a empresa; acessos, quando vier, é null = tudo ou lista):
+      //  - perfil de OUTRA pessoa da empresa, por um gestor:
+      //      nome, cargo, obra, telefone: qualquer gestor;
+      //      desligar alguém da equipe de campo: qualquer gestor;
+      //      tipo, áreas, religar, desligar gestor: só quem administra os acessos;
+      //      do dono da empresa, ninguém muda tipo, áreas nem ativo;
+      //  - o PRÓPRIO perfil: dados simples (não muda perfil, ativo nem áreas), menos
+      //    o dono, que pode se devolver o acesso total (donoSeRestaurando)
+      allow update: if logado() && acessosValidos(request.resource.data) && (
         (souGestor()
+          && uid != request.auth.uid
           && resource.data.empresaId == minhaEmpresa()
-          && request.resource.data.empresaId == resource.data.empresaId)
+          && request.resource.data.empresaId == resource.data.empresaId
+          && (mantemPoderes()
+            || (!ehDono(resource.data.empresaId, uid)
+              && (soDesligaCampo() || possoAdministrar()))))
         || (request.auth.uid == uid
           && request.resource.data.empresaId == resource.data.empresaId
-          && request.resource.data.perfil == resource.data.perfil
-          && request.resource.data.get('ativo', true) == resource.data.get('ativo', true))
+          && (mantemPoderes() || donoSeRestaurando(uid)))
       );
 
-      // Apagar: o próprio (direito de exclusão) ou o gestor da empresa
+      // Apagar: o próprio, enquanto ativo (direito de exclusão; quem foi desativado pede a quem
+      // administra, senão apagaria o perfil desligado e o refaria ativo pelo convite), ou quem
+      // administra os acessos (nunca o dono)
       allow delete: if logado() && (
-        request.auth.uid == uid
-        || (souGestor() && resource.data.empresaId == minhaEmpresa())
+        (request.auth.uid == uid
+          && (resource == null || resource.data.get('ativo', true) != false))
+        || (possoAdministrar()
+          && resource.data.empresaId == minhaEmpresa()
+          && !ehDono(resource.data.empresaId, uid))
       );
     }
 
@@ -121,16 +198,23 @@ service cloud.firestore {
         || (souGestor() && resource.data.empresaId == minhaEmpresa())
       );
       allow list: if logado() && souGestor() && resource.data.empresaId == minhaEmpresa();
-      // Só o gestor convida, sempre para a própria empresa, e a chave tem de ser o e-mail do documento
-      allow create: if logado() && souGestor()
+      // Só quem administra os acessos convida, sempre para a própria empresa, e a chave tem de
+      // ser o e-mail do documento. Ninguém cria nem edita o convite do PRÓPRIO e-mail (senão
+      // apagaria o próprio perfil e o refaria pelo caminho (b) com mais áreas)
+      allow create: if logado() && possoAdministrar()
+        && email != meuEmail()
         && request.resource.data.empresaId == minhaEmpresa()
         && request.resource.data.email == email
-        && request.resource.data.perfil in ['gestor', 'encarregado'];
-      allow update: if logado() && souGestor()
+        && request.resource.data.perfil in ['gestor', 'encarregado']
+        && acessosValidos(request.resource.data);
+      allow update: if logado() && possoAdministrar()
+        && email != meuEmail()
         && resource.data.empresaId == minhaEmpresa()
         && request.resource.data.empresaId == minhaEmpresa()
-        && request.resource.data.email == email;
-      allow delete: if logado() && souGestor() && resource.data.empresaId == minhaEmpresa();
+        && request.resource.data.email == email
+        && request.resource.data.perfil in ['gestor', 'encarregado']
+        && acessosValidos(request.resource.data);
+      allow delete: if logado() && possoAdministrar() && resource.data.empresaId == minhaEmpresa();
     }
 
     // ── Empresas ────────────────────────────────────────────────────────────
@@ -139,13 +223,15 @@ service cloud.firestore {
       allow create: if logado() && request.resource.data.gestorUid == request.auth.uid;
       allow get: if logado() && souDaEmpresa(empresaId);
       allow list: if false;
-      // Só o gestor edita o cadastro da empresa (e não pode trocar o dono)
-      allow update: if logado() && souGestor() && minhaEmpresa() == empresaId
+      // Só quem administra (acesso total ou área Sistema) edita o cadastro da empresa (e não troca o dono)
+      allow update: if logado() && possoAdministrar() && minhaEmpresa() == empresaId
         && request.resource.data.gestorUid == resource.data.gestorUid;
       // Quem criou a empresa pode apagá-la (inclusive para desfazer um cadastro que parou no meio)
       allow delete: if logado() && resource.data.gestorUid == request.auth.uid;
 
-      // Todos os dados da empresa: qualquer usuário ativo DA empresa
+      // Todos os dados da empresa: qualquer usuário ativo DA empresa. As áreas do escritório
+      // (acessos) NÃO valem aqui: um gestor "Financeiro" ainda lê e grava obras, folha,
+      // pedidos... por fora do app. Separar por área é outro projeto.
       match /{colecao}/{docId} {
         allow read, write: if logado() && souDaEmpresa(empresaId);
       }

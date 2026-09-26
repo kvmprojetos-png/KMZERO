@@ -13,7 +13,7 @@ import { useEscritorio } from "../components/ui.jsx";
 import { useTema } from "../lib/useTema.js";
 import { SinoAvisos } from "./avisos.jsx";
 // Nomes das telas iguais aos do menu lateral ("Indicadores", "Alertas", "Avisos"…) e e-mail do desenvolvedor
-import { EMAIL_DEV, labelDaTela } from "../components/menuGrupos.js";
+import { EMAIL_DEV, labelDaTela, telaPermitida } from "../components/menuGrupos.js";
 
 /* ── Documentos de saída (PDF/impressão) desta tela: padrão do núcleo (src/lib/pdf.js) ──
    Regras: só dados da EMPRESA CLIENTE (Sistema → Empresa), cores só em hex fixo, classes
@@ -232,6 +232,9 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
   const pedidosFiltrados = filtroStatus === "todos" ? pedidos : pedidos.filter(p => p.status === filtroStatus);
   const totalAlertas = gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos }).length;
   const novasMsgs = mensagens?.filter(m => !m.lida && m.para === usuario?.id).length || 0;
+  // Áreas liberadas (usuario.acessos, menuGrupos.js): atalho para tela fora delas não aparece;
+  // cartão informativo fica, sem o clique. A guarda de KMZeroApp.jsx segura o que escapar.
+  const pode = nav => telaPermitida(usuario, nav);
 
   // Modal de aprovação com forma pagamento + prazo
   const [pedidoAprovando, setPedidoAprovando] = useState(null);
@@ -353,7 +356,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
         ] : []),
       ],
     },
-  ];
+  ].map(cat => ({ ...cat, itens: cat.itens.filter(i => pode(i.nav)) })).filter(cat => cat.itens.length > 0);
 
   // Pendências: soma de alertas do sistema + movimentações + pedidos + mensagens (o indicador que soma tudo).
   // "Alertas" = o que o sistema detecta; "Avisos" = notificações/recados — nomes distintos, conceitos distintos.
@@ -437,14 +440,16 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       { v: presentesHoje,         l: "Presentes hoje",     nav: "calendario", c: GREEN },
       { v: pendentes,             l: "Pedidos aguardando", nav: "pedidos",    c: pendentes > 0 ? ORANGE : T.texto3 },
       { v: totalPendencias,       l: "Pendências",         nav: "alertas",    c: totalPendencias > 0 ? RED : GREEN },
-    ];
+    ].filter(i => pode(i.nav));
     const outrasPendencias = [
       { icon: "🔄", l: "Movimentações de pessoal",      v: movPendentes,      nav: "aprovar_mov" },
       { icon: "🔧", l: "Movimentações de equipamentos", v: movEquipPendentes, nav: "mov_equip" },
       { icon: "🔔", l: "Avisos novos",                  v: avisosNaoLidos,    nav: "avisos" },
       { icon: "💬", l: "Mensagens novas",               v: novasMsgs,         nav: "mensagens" },
       { icon: "🚨", l: "Alertas",                       v: totalAlertas,      nav: "alertas" },
-    ];
+    ].filter(i => pode(i.nav));
+    // Cartões informativos (obras, RDOs, fotos): continuam no Painel; só levam à tela se ela for da pessoa
+    const clique = nav => (pode(nav) ? { onClick: () => onNav(nav), cursor: "pointer" } : { onClick: undefined, cursor: "default" });
 
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
@@ -485,7 +490,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                       const fotos7d = (fotosObras || []).filter(f => String(f.obraId) === String(o.id) && tsLancamento(f) >= limite7d).length;
                       const local = [o.cliente, o.endereco || o.local].filter(Boolean).join(" · ");
                       return (
-                        <div key={o.id} onClick={() => onNav("obras")} style={{ ...cartaoS, cursor: "pointer", borderTop: `4px solid ${BLUE}` }}>
+                        <div key={o.id} onClick={clique("obras").onClick} style={{ ...cartaoS, cursor: clique("obras").cursor, borderTop: `4px solid ${BLUE}` }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                             <div style={{ fontWeight: 800, color: T.titulo, fontSize: 14, lineHeight: 1.3 }}>{o.nome}</div>
                             <Badge label={o.status} color={GREEN} small />
@@ -516,6 +521,8 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
               <div>
                 <div style={tituloSecaoS}>Pendências</div>
                 <div style={cartaoS}>
+                  {/* Aprovar/negar pedido é de quem tem a área Suprimentos */}
+                  {pode("pedidos") && <>
                   <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
                     📦 Pedidos aguardando
                     {pendentes > 0 && <span style={{ background: RED, color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 11, fontWeight: 800 }}>{pendentes}</span>}
@@ -541,7 +548,8 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                       Ver todos os {pendentes} pedidos →
                     </button>
                   )}
-                  <div style={{ borderTop: `1px solid ${T.borda}`, marginTop: 12, paddingTop: 10 }}>
+                  </>}
+                  <div style={pode("pedidos") ? { borderTop: `1px solid ${T.borda}`, marginTop: 12, paddingTop: 10 } : undefined}>
                     {outrasPendencias.map(i => (
                       <div key={i.nav} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
                         <span style={{ fontSize: 16 }}>{i.icon}</span>
@@ -563,7 +571,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                 {rdosRecentes.length === 0
                   ? <div style={{ fontSize: 12, color: T.texto3 }}>{textoVazio}</div>
                   : rdosRecentes.map(r => (
-                    <div key={r.id} onClick={() => onNav("rdo")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${T.borda}`, cursor: "pointer" }}>
+                    <div key={r.id} onClick={clique("rdo").onClick} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${T.borda}`, cursor: clique("rdo").cursor }}>
                       <span style={{ background: GOLD, color: NAVY, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>nº {r.numero ?? "—"}</span>
                       <span style={{ flex: 1, fontSize: 12, color: T.titulo, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nomeObra(r.obraId, r.obra)}</span>
                       <span style={{ fontSize: 11, color: T.texto2, whiteSpace: "nowrap" }}>{r.data || "—"}</span>
@@ -579,7 +587,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
                       {fotosRecentes.map(f => {
                         const src = f.fotoUrl || f.foto;
                         return (
-                          <div key={f.id} onClick={() => onNav("galeria")} style={{ width: 96, cursor: "pointer" }}>
+                          <div key={f.id} onClick={clique("galeria").onClick} style={{ width: 96, cursor: clique("galeria").cursor }}>
                             {src
                               ? <img src={src} alt={f.legenda || ""} style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, background: T.superficie2, display: "block" }} />
                               : <div style={{ width: 96, height: 96, borderRadius: 8, background: T.superficie2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📷</div>}
@@ -617,14 +625,14 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
 
         {/* Stats rápidas — CLICÁVEIS */}
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          <div onClick={() => onNav("obras")} style={{ flex: 1, background: BLUE, borderRadius: 12, padding: "10px 6px", textAlign: "center", cursor: "pointer", boxShadow: `0 3px 10px ${BLUE}40` }}>
+          {pode("obras") && <div onClick={() => onNav("obras")} style={{ flex: 1, background: BLUE, borderRadius: 12, padding: "10px 6px", textAlign: "center", cursor: "pointer", boxShadow: `0 3px 10px ${BLUE}40` }}>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{obras.filter(o => o.status === "Ativa").length}</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>🏗️ Obras</div>
-          </div>
-          <div onClick={() => onNav("equipe")} style={{ flex: 1, background: ORANGE, borderRadius: 12, padding: "10px 6px", textAlign: "center", cursor: "pointer", boxShadow: `0 3px 10px ${ORANGE}40` }}>
+          </div>}
+          {pode("equipe") && <div onClick={() => onNav("equipe")} style={{ flex: 1, background: ORANGE, borderRadius: 12, padding: "10px 6px", textAlign: "center", cursor: "pointer", boxShadow: `0 3px 10px ${ORANGE}40` }}>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{trabalhadores.length}</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>👥 Equipe</div>
-          </div>
+          </div>}
           <div onClick={() => onNav("alertas")} style={{ flex: 1, background: totalPendencias > 0 ? RED : GREEN, borderRadius: 12, padding: "10px 6px", textAlign: "center", cursor: "pointer", boxShadow: `0 3px 10px ${totalPendencias > 0 ? RED + "40" : GREEN + "40"}` }}>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{totalPendencias}</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>🚨 Pendências</div>
@@ -639,7 +647,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
             { icon: "💰", l: "Folha de Pagamento", nav: "folha_quinzenal", c: "#15803d" },
             { icon: "📋", l: "Cadastrar Ficha", nav: "ficha",         c: ORANGE },
             { icon: "🚨", l: "Alertas",         nav: "alertas",       c: totalAlertas > 0 ? RED : "#9ca3af", badge: totalAlertas },
-          ].map(b => (
+          ].filter(b => pode(b.nav)).map(b => (
             <button key={b.nav} onClick={() => onNav(b.nav)} style={{ background: b.c, color: "#fff", border: "none", borderRadius: 14, padding: "16px 8px", cursor: "pointer", textAlign: "center", boxShadow: `0 4px 14px ${b.c}55`, position: "relative" }}>
               <div style={{ fontSize: 32 }}>{b.icon}</div>
               <div style={{ fontSize: 13, fontWeight: 800, marginTop: 4 }}>{b.l}</div>
@@ -650,7 +658,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
         </div>
 
         {/* TABELA RESUMO DA EQUIPE — padrão elite */}
-        <TabelaResumoEquipe obras={obras} trabalhadores={trabalhadores} historico={historico} onNav={onNav} />
+        {pode("equipe") && <TabelaResumoEquipe obras={obras} trabalhadores={trabalhadores} historico={historico} onNav={onNav} />}
 
         {/* Categorias agrupadas */}
         <div style={{
@@ -681,8 +689,8 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
           <CategoriaCard key={idx} categoria={cat} onNav={onNav} />
         ))}
 
-        {/* Pedidos pendentes resumo */}
-        {pendentes > 0 && (
+        {/* Pedidos pendentes resumo (aprovar/negar é de quem tem a área Suprimentos) */}
+        {pendentes > 0 && pode("pedidos") && (
           <div style={{ marginTop: 18 }}>
             <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 10, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}>
               📦 Pedidos Aguardando Aprovação
