@@ -1,5 +1,5 @@
 import { MODELOS_CRONOGRAMA } from "./equipe.jsx";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { useTema } from "../lib/useTema.js";
@@ -698,6 +698,23 @@ const _registroSemRotulo = reg => String(reg || "").replace(/^\s*(resp(\.|ons[á
    "quantidade + 1" repetiria um número que a obra já tem). Os RDOs já emitidos mantêm o número que têm. ── */
 export const rdosDaObra = (rdos, obraId) => (rdos || []).filter(r => r && mesmoId(r.obraId, obraId));
 export const proximoNumeroRDO = (rdos, obraId) => rdosDaObra(rdos, obraId).reduce((m, r) => Math.max(m, Number(r.numero) || 0), 0) + 1;
+/* Mais recente primeiro: data do RDO, depois número, depois hora da emissão */
+const _isoRDO = r => r.dataIso || _isoDeBR(r.data) || "";
+const _maisRecentePrimeiro = (a, b) => _isoRDO(b).localeCompare(_isoRDO(a)) || (Number(b.numero) || 0) - (Number(a.numero) || 0) || (Number(b.ts) || 0) - (Number(a.ts) || 0);
+/* ── No máximo UM RDO por obra por dia. Chave: obra (mesmoId) + dia ISO (dataIso ou a data DD/MM/AAAA convertida).
+   RDOs da obra naquele dia, mais recente primeiro: vazio = dia sem RDO; mais de um = duplicado antigo (não se apaga
+   nem renumera sozinho: a tela avisa e o gestor decide). ── */
+export const rdosDoDiaObra = (rdos, obraId, iso) => (iso ? rdosDaObra(rdos, obraId).filter(r => _isoRDO(r) === iso).sort(_maisRecentePrimeiro) : []);
+/* "DD/MM/AAAA" digitado → "AAAA-MM-DD" só quando é uma data de calendário válida ("31/02/2026", "25/09/26" → "") */
+const _isoValidoDeBR = br => {
+  const m = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*$/.exec(String(br || ""));
+  if (!m) return "";
+  const d = Number(m[1]), mes = Number(m[2]), a = Number(m[3]);
+  const dt = new Date(a, mes - 1, d);
+  return dt.getFullYear() === a && dt.getMonth() === mes - 1 && dt.getDate() === d ? dataLocalIso(dt) : "";
+};
+const _brDeIso = iso => { const [a, m, d] = String(iso || "").split("-"); return a && m && d ? `${d}/${m}/${a}` : ""; };
+const _nRDO = n => String(n ?? "").padStart(3, "0");
 
 export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias, encarregado, empresa, horasTrabalhadas, horimetros, fotos, alimentacao, totalAlimentacao, recebimentos, fotosObras }) {
   presencas = presencas || {};
@@ -924,7 +941,9 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
 }
 
 
-export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, historico, diario, usuario, empresa, rdosEmitidos, recebimentos = [], fotosObras = [], despesasAvulsas = [], movimentacoes = [], movEquip = [], produtividade = [], cronogramas = [], onBack, onEmitirRDO, onUpdateRDO, onRemoveRDO }) {
+export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, historico, diario, usuario, empresa, rdosEmitidos, recebimentos = [], fotosObras = [], despesasAvulsas = [], movimentacoes = [], movEquip = [], produtividade = [], cronogramas = [], onBack, onEmitirRDO, onUpdateRDO, onRemoveRDO, podeCriarRdoDia = false }) {
+  // podeCriarRdoDia: só o ADMINISTRADOR (dono da empresa) cria o RDO de um dia que o encarregado não fechou.
+  // O gestor de escritório edita RDOs e gera o consolidado semanal, mas não cria RDO diário.
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
   const [data, setData] = useState(new Date().toLocaleDateString("pt-BR"));
   const [clima, setClima] = useState("Bom");
@@ -932,19 +951,83 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
   const [editandoRdo, setEditandoRdo] = useState(null);
   const [fotoVer, setFotoVer] = useState(null); // foto fullscreen
 
+  // Lista mais nova para a confirmação do "Criar RDO deste dia" (o callback roda depois do clique)
+  const rdosRef = useRef(rdosEmitidos);
+  rdosRef.current = rdosEmitidos;
+  const ultimaCriacaoRef = useRef(null); // { chave: "obra|dia", ts }: bloqueia 2º pedido enquanto a lista nova não chega
+
   const obra = obras.find(o => mesmoId(o.id, obraId));
-  const isoData = (() => { const [d, m, a] = data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; })();
-  const presencasDia = historico[isoData] || {};
+  const isoData = _isoValidoDeBR(data); // "" enquanto a data digitada não é uma data válida
+  const presencasDia = (isoData && historico[isoData]) || {};
   const ocorrenciasDia = _diarioDoDia(diario, obraId, data); // só o dia do RDO (antes entrava o diário inteiro da obra)
 
-  // Só os RDOs da obra selecionada; a numeração é por obra
-  const rdosObra = rdosDaObra(rdosEmitidos, obraId);
+  // Só os RDOs da obra selecionada (mais recente primeiro); a numeração é por obra
+  const rdosObra = rdosDaObra(rdosEmitidos, obraId).sort(_maisRecentePrimeiro);
   const proxNumero = proximoNumeroRDO(rdosEmitidos, obraId);
+  const qtdRdosNoDia = {}; // dia ISO → quantos RDOs desta obra (> 1 = duplicado antigo)
+  rdosObra.forEach(r => { const k = _isoRDO(r); if (k) qtdRdosNoDia[k] = (qtdRdosNoDia[k] || 0) + 1; });
 
-  const emitir = () => {
-    const numero = proxNumero;
-    onEmitirRDO({ id: Date.now(), numero, obraId: normId(obraId), data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
-    gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas: presencasDia, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias: ocorrenciasDia, encarregado: usuario?.nome, empresa, recebimentos, fotosObras });
+  // Um RDO por obra por dia: o do dia escolhido (duplicado antigo: mostra o mais recente e avisa)
+  const rdosDoDia = rdosDoDiaObra(rdosEmitidos, obraId, isoData);
+  const rdoDoDia = rdosDoDia[0] || null;
+  const dataFutura = !!isoData && isoData > dataLocalIso();
+  const podeCriar = !!podeCriarRdoDia && !!obra && !!isoData && !dataFutura && !rdoDoDia;
+
+  // O RDO diário nasce do encarregado ao finalizar o dia. Aqui só o administrador cria o RDO de um dia SEM RDO
+  // (hoje ou passado), uma única vez, com o próximo número da obra.
+  const criarRDODoDia = () => {
+    if (!podeCriar) return;
+    const oId = obraId, iso = isoData, dataBR = _brDeIso(iso), obraNome = obra.nome;
+    confirmar(`O encarregado não fechou este dia?\n\nO RDO Nº ${_nRDO(proxNumero)} será criado para ${obraNome} em ${dataBR}.`, () => {
+      const chave = `${String(oId)}|${iso}`;
+      const ult = ultimaCriacaoRef.current;
+      if (ult && ult.chave === chave && Date.now() - ult.ts < 5000) return;
+      if (rdosDoDiaObra(rdosRef.current, oId, iso).length > 0) return; // o dia ganhou RDO enquanto confirmava
+      ultimaCriacaoRef.current = { chave, ts: Date.now() };
+      const numero = proximoNumeroRDO(rdosRef.current, oId);
+      onEmitirRDO({ id: Date.now(), numero, obraId: normId(oId), data: dataBR, dataIso: iso, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
+      setObservacoes("");
+    });
+  };
+
+  // Excluir RDO: o administrador exclui qualquer um (só ele recria o RDO de um dia vazio). O gestor de
+  // escritório só exclui a cópia repetida de um dia com MAIS de um RDO (o dia continua com o outro):
+  // ele edita RDOs e gera o consolidado, mas não abre um dia sem RDO que só o administrador preenche.
+  const excluirRDO = r => {
+    const iso = _isoRDO(r);
+    const outrosNoDia = () => (iso ? rdosDoDiaObra(rdosRef.current, r.obraId, iso).filter(x => !mesmoId(x.id, r.id)).length : 0);
+    if (!podeCriarRdoDia && outrosNoDia() === 0) { alert("⚠️ Só o administrador exclui o RDO de um dia: o dia ficaria sem RDO e só ele cria outro."); return; }
+    const aviso = outrosNoDia() > 0 ? "\n\nO dia continua com o outro RDO desta obra." : `\n\n${_brDeIso(iso) || r.data || "O dia"} fica sem RDO desta obra.`;
+    confirmar(`Excluir RDO Nº ${_nRDO(r.numero)}?${aviso}`, () => {
+      if (!podeCriarRdoDia && outrosNoDia() === 0) return; // o outro RDO do dia sumiu enquanto confirmava
+      onRemoveRDO(r.id);
+    });
+  };
+
+  // PDF de um RDO salvo (bloco do dia e cartões da lista)
+  const baixarRDO = r => {
+    const o = obras.find(x => mesmoId(x.id, r.obraId));
+    if (!o) { alert("⚠️ Obra deste RDO não encontrada."); return; }
+    const isoDt = _isoRDO(r);
+    gerarPDFRDORabnt({
+      numero: r.numero,
+      obra: o,
+      data: r.data,
+      clima: r.clima || "Bom",
+      observacoes: r.observacoes || "",
+      presencas: r.presencas || historico[isoDt] || {},
+      trabalhadores, ativos, abastecimentos, pedidos,
+      ocorrencias: _diarioDoDia(diario, r.obraId, r.data),
+      encarregado: r.encarregado,
+      empresa,
+      horasTrabalhadas: r.horasTrabalhadas,
+      horimetros: r.horimetros,
+      fotos: r.fotos, // só existe no aparelho que finalizou o dia; sem elas, as fotos saem da galeria da obra
+      alimentacao: r.alimentacao,
+      totalAlimentacao: r.totalAlimentacao,
+      recebimentos,
+      fotosObras,
+    });
   };
 
   // RDO Semanal Consolidado: junta todos os RDOs da semana atual da obra selecionada
@@ -1274,12 +1357,6 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="RDO ABNT" sub="Relatório Diário Auditável" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <div style={{ background: `linear-gradient(135deg,${NAVY},${NAVY2})`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, boxShadow: "0 4px 14px rgba(15,33,81,0.3)" }}>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>Próximo RDO</div>
-          <div style={{ fontSize: 36, fontWeight: 900, color: GOLD }}>Nº {String(proxNumero).padStart(3, "0")}</div>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>{rdosObra.length} RDO(s) já emitidos nesta obra</div>
-        </div>
-
         <label style={labelS}>Obra</label>
         <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
@@ -1288,13 +1365,52 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         <label style={labelS}>Data do RDO</label>
         <input value={data} onChange={e => setData(e.target.value)} placeholder="DD/MM/AAAA" style={inputS} />
 
-        <label style={labelS}>Condição climática</label>
-        <select value={clima} onChange={e => setClima(e.target.value)} style={selS}>
-          <option>Bom</option><option>Nublado</option><option>Chuva leve</option><option>Chuva forte</option><option>Vento forte</option><option>Calor extremo</option>
-        </select>
-
-        <label style={labelS}>Observações gerais (opcional)</label>
-        <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} placeholder="Ex: serviço de alvenaria conforme cronograma..." style={{ ...inputS, resize: "none", fontFamily: "inherit" }} />
+        {/* RDO do dia: no máximo UM por obra por dia. Existe → mostra o RDO (PDF / Editar), sem criar outro;
+            não existe → só o administrador tem "Criar RDO deste dia" (ação secundária, só para hoje ou dia passado). */}
+        <div data-rdo-dia={rdoDoDia ? "existe" : "nenhum"} style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 6, boxShadow: T.sombra, borderLeft: `4px solid ${rdoDoDia ? (rdoDoDia.autoGerado ? GREEN : BLUE) : T.borda}` }}>
+          <div style={{ fontSize: 10, color: T.texto2, fontWeight: 800, letterSpacing: 0.6, marginBottom: 4 }}>RDO DESTE DIA{isoData ? ` · ${_brDeIso(isoData)}` : ""}</div>
+          {rdoDoDia ? (
+            <>
+              <div style={{ fontWeight: 800, color: T.titulo, fontSize: 16 }}>
+                RDO Nº {_nRDO(rdoDoDia.numero)} de {_brDeIso(isoData).slice(0, 5)}
+                {rdoDoDia.autoGerado && <span style={{ fontSize: 10, color: GREEN, fontWeight: 800, marginLeft: 8 }}>⚡ AUTO</span>}
+              </div>
+              <div style={{ fontSize: 12, color: T.texto2, marginTop: 2 }}>emitido por {rdoDoDia.encarregado || "—"}{rdoDoDia.clima ? ` · clima ${rdoDoDia.clima}` : ""}</div>
+              {rdosDoDia.length > 1 && (
+                <div style={{ background: T.avisoFundo, color: T.avisoTexto, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, marginTop: 8 }}>
+                  ⚠️ Dia com mais de um RDO: Nº {rdosDoDia.map(r => _nRDO(r.numero)).join(", ")}. Confira na lista abaixo e decida qual manter.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button type="button" onClick={() => baixarRDO(rdoDoDia)} style={{ flex: 1, background: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>📄 Baixar PDF</button>
+                <button type="button" onClick={() => setEditandoRdo(rdoDoDia)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>✏️ Editar</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 800, color: T.titulo, fontSize: 15 }}>Nenhum RDO desta obra neste dia</div>
+              {!isoData ? (
+                <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>Informe a data no formato DD/MM/AAAA.</div>
+              ) : !podeCriarRdoDia ? (
+                <div data-rdo-sem-criar="1" style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>O RDO sai do fechamento do encarregado; só o administrador cria o RDO de um dia sem fechamento.</div>
+              ) : dataFutura ? (
+                <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>Data futura: o RDO só pode ser criado no próprio dia ou depois.</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: T.texto2, marginTop: 4, marginBottom: 10 }}>O RDO diário nasce quando o encarregado finaliza o dia. Se ele não fechou este dia, crie o RDO aqui (uma vez só).</div>
+                  <label style={labelS}>Condição climática</label>
+                  <select value={clima} onChange={e => setClima(e.target.value)} style={selS}>
+                    <option>Bom</option><option>Nublado</option><option>Chuva leve</option><option>Chuva forte</option><option>Vento forte</option><option>Calor extremo</option>
+                  </select>
+                  <label style={labelS}>Observações gerais (opcional)</label>
+                  <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} placeholder="Ex: serviço de alvenaria conforme cronograma..." style={{ ...inputS, resize: "none", fontFamily: "inherit" }} />
+                  <button type="button" onClick={criarRDODoDia} disabled={!podeCriar} style={{ background: "transparent", color: T.contorno, border: `1.5px solid ${T.contorno}`, borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>＋ Criar RDO deste dia</button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: T.texto2, margin: "0 2px 12px" }}>Nesta obra: {rdosObra.length} RDO(s) já emitidos · próximo Nº {_nRDO(proxNumero)}</div>
 
         <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📋 Conteúdo do RDO</div>
@@ -1316,8 +1432,6 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
           </div>
         </div>
 
-        <Btn label="📄 EMITIR RDO PADRÃO ABNT (PDF)" color={GOLD} onClick={emitir} />
-
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={() => emitirSemanal(obraId)} style={{ flex: 1, background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "10px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>📅 RDO Semanal Consolidado</button>
         </div>
@@ -1328,28 +1442,8 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
             <Grade min={320} gap={6} style={{ marginBottom: 6 }}>
             {rdosObra.slice(0, 10).map(r => {
               const o = obras.find(x => mesmoId(x.id, r.obraId));
-              const baixar = () => {
-                const isoDt = r.dataIso || (() => { const [d, m, a] = r.data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; })();
-                gerarPDFRDORabnt({
-                  numero: r.numero,
-                  obra: o,
-                  data: r.data,
-                  clima: r.clima || "Bom",
-                  observacoes: r.observacoes || "",
-                  presencas: r.presencas || historico[isoDt] || {},
-                  trabalhadores, ativos, abastecimentos, pedidos,
-                  ocorrencias: _diarioDoDia(diario, r.obraId, r.data),
-                  encarregado: r.encarregado,
-                  empresa,
-                  horasTrabalhadas: r.horasTrabalhadas,
-                  horimetros: r.horimetros,
-                  fotos: r.fotos, // só existe no aparelho que finalizou o dia; sem elas, as fotos saem da galeria da obra
-                  alimentacao: r.alimentacao,
-                  totalAlimentacao: r.totalAlimentacao,
-                  recebimentos,
-                  fotosObras,
-                });
-              };
+              const baixar = () => baixarRDO(r);
+              const diaDuplicado = (qtdRdosNoDia[_isoRDO(r)] || 0) > 1;
               return (
                 <div key={r.id} style={{ background: T.superficie, borderRadius: 10, padding: "10px 14px", boxShadow: T.sombra, borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
@@ -1359,6 +1453,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                       <div style={{ fontSize: 10, color: T.texto2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o?.nome} • {r.data} • {r.encarregado}</div>
                     </div>
                   </div>
+                  {diaDuplicado && <div data-rdo-duplicado="1" style={{ fontSize: 10, fontWeight: 700, color: T.avisoTexto, background: T.avisoFundo, borderRadius: 6, padding: "3px 8px", marginBottom: 6 }}>⚠️ dia com mais de um RDO</div>}
 
                   {/* Mini-galeria de fotos do RDO — clicáveis */}
                   {r.fotos && r.fotos.length > 0 && (
@@ -1381,7 +1476,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={baixar} style={{ flex: 1, background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>📄 PDF</button>
                     <button onClick={() => setEditandoRdo(r)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>✏️ Editar</button>
-                    <button onClick={() => { confirmar(`Excluir RDO Nº ${r.numero}?`, () => { onRemoveRDO(r.id); }); }} style={{ background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>🗑️</button>
+                    {(podeCriarRdoDia || diaDuplicado) && <button data-rdo-excluir="1" title="Excluir este RDO" onClick={() => excluirRDO(r)} style={{ background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>🗑️</button>}
                   </div>
                 </div>
               );
@@ -1391,10 +1486,27 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         )}
 
         {/* MODAL EDITAR RDO */}
-        {editandoRdo && (
+        {editandoRdo && (() => {
+          // A obra do RDO não muda aqui; a data só muda para um dia válido, não futuro e SEM outro RDO desta obra
+          const original = rdosEmitidos.find(x => mesmoId(x.id, editandoRdo.id)) || editandoRdo;
+          const isoOrig = _isoRDO(original);
+          const mudouTexto = String(editandoRdo.data ?? "") !== String(original.data ?? "");
+          const isoNovo = mudouTexto ? _isoValidoDeBR(editandoRdo.data) : isoOrig;
+          const mudouDia = mudouTexto && !!isoNovo && isoNovo !== isoOrig;
+          const outroNoDia = mudouDia ? rdosDoDiaObra(rdosEmitidos, original.obraId, isoNovo).find(x => !mesmoId(x.id, original.id)) : null;
+          const erroData = !mudouTexto ? ""
+            : !isoNovo ? "Data inválida: use DD/MM/AAAA."
+            : mudouDia && isoNovo > dataLocalIso() ? "Data futura: o RDO não pode ser de um dia que ainda não aconteceu."
+            : outroNoDia ? `Esta obra já tem o RDO Nº ${_nRDO(outroNoDia.numero)} em ${_brDeIso(isoNovo)}. Cada obra tem um RDO por dia: escolha outra data ou edite aquele RDO.`
+            : "";
+          const obraDoRdo = obras.find(o => mesmoId(o.id, original.obraId));
+          return (
           <Modal show={!!editandoRdo} title={`Editar RDO Nº ${String(editandoRdo.numero).padStart(3, "0")}`} onClose={() => setEditandoRdo(null)}>
+            <label style={labelS}>Obra</label>
+            <div style={{ ...inputS, background: T.superficie2, color: T.texto2 }}>{obraDoRdo?.nome || "—"} <span style={{ fontSize: 10 }}>(a obra do RDO não muda)</span></div>
             <label style={labelS}>Data</label>
             <input value={editandoRdo.data || ""} onChange={e => setEditandoRdo(r => ({ ...r, data: e.target.value }))} placeholder="DD/MM/AAAA" style={inputS} />
+            {erroData && <div data-rdo-erro-data="1" style={{ background: T.erroFundo, color: T.erroTexto, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, margin: "-4px 0 10px" }}>⚠️ {erroData}</div>}
             <label style={labelS}>Clima</label>
             <select value={editandoRdo.clima || "Bom"} onChange={e => setEditandoRdo(r => ({ ...r, clima: e.target.value }))} style={selS}>
               {["Bom", "Nublado", "Chuvoso", "Sol forte", "Vento forte", "Garoa", "Tempestade"].map(c => <option key={c}>{c}</option>)}
@@ -1404,11 +1516,17 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
             <label style={labelS}>Encarregado</label>
             <input value={editandoRdo.encarregado || ""} onChange={e => setEditandoRdo(r => ({ ...r, encarregado: e.target.value }))} style={inputS} />
             <Btn label="💾 SALVAR ALTERAÇÕES" color={GREEN} onClick={() => {
-              onUpdateRDO({ ...editandoRdo, obraId: normId(editandoRdo.obraId) });
+              if (erroData) { alert("⚠️ " + erroData + "\n\nNada foi salvo."); return; }
+              onUpdateRDO({
+                ...editandoRdo,
+                obraId: normId(original.obraId),
+                ...(mudouTexto ? { data: _brDeIso(isoNovo), dataIso: isoNovo } : {}),
+              });
               setEditandoRdo(null);
             }} />
           </Modal>
-        )}
+          );
+        })()}
       </div>
       <KMFooter />
       {fotoVer && <FotoViewer src={fotoVer.src} legenda={fotoVer.legenda} onClose={() => setFotoVer(null)} />}

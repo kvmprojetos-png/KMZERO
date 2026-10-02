@@ -3,13 +3,13 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
-import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
+import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store, versaoRdo } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Tabela, useEscritorio } from "../components/ui.jsx";
 import { normId, mesmoId } from "../lib/ids.js";
-import { proximoNumeroRDO } from "./rdo.jsx";
+import { proximoNumeroRDO, rdosDoDiaObra } from "./rdo.jsx";
 
 export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos, pedidos, diario, usuario, empresa, historico, rdosEmitidos, fotosObras = [], onBack, onSavePresencas, onAutoEmitirRDO, onSalvarFotoObra }) {
   const [etapa, setEtapa] = useState(0);
@@ -41,6 +41,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
   const [equipsLocal, setEquipsLocal] = useState(equips.filter(e => mesmoId(e.obraId, obra.id)));
   const [confirmando, setConfirmando] = useState(false);
   const [numeroRdoGerado, setNumeroRdoGerado] = useState(null); // Nº realmente gerado ao finalizar o dia (numeração por obra)
+  const [rdoAtualizado, setRdoAtualizado] = useState(false); // true: a obra já tinha RDO hoje e o fechamento atualizou esse RDO
   const [localizacao, setLocalizacao] = useState(null);
   const [pegandoLoc, setPegandoLoc] = useState(false);
 
@@ -359,11 +360,14 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
               <button onClick={async () => {
                 setConfirmando(false);
 
-                // ⚡ AUTO-GERAR RDO ao finalizar (numeração por obra: maior Nº já emitido nesta obra + 1)
-                const numero = proximoNumeroRDO(rdosEmitidos, obra.id);
+                // ⚡ AUTO-GERAR RDO ao finalizar. Um RDO por obra por dia: se a obra JÁ tem RDO hoje (o administrador criou,
+                // ou o dia já foi fechado), o fechamento atualiza esse RDO (mesmo id e número). Senão, número da obra =
+                // maior Nº já emitido nesta obra + 1.
+                const hojeIso = hojeStr();
+                const rdoExistente = rdosDoDiaObra(rdosEmitidos, obra.id, hojeIso)[0] || null;
+                const numero = rdoExistente ? rdoExistente.numero : proximoNumeroRDO(rdosEmitidos, obra.id);
                 const dataStr = new Date().toLocaleDateString("pt-BR");
                 const horaStr = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-                const hojeIso = hojeStr();
                 const autorNome = usuario?.nome || "Encarregado";
 
                 // 📸 CARIMBA E ENVIA FOTOS PRA GALERIA
@@ -417,7 +421,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                   }
                 });
 
-                const rdo = {
+                const rdoNovo = {
                   id: Date.now(),
                   numero,
                   obraId: normId(obra.id),
@@ -439,9 +443,42 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                     return s + somaAlim(empresa, a);
                   }, 0),
                 };
+                let rdo = rdoNovo;
+                if (rdoExistente) {
+                  // Mescla o fechamento no RDO do dia: mantém id, número, data, clima e observações escritas pelo gestor;
+                  // presenças, horas, alimentação e horímetros do fechamento prevalecem; fotos somam.
+                  const presM = { ...(rdoExistente.presencas || {}), ...rdoNovo.presencas };
+                  const horasM = { ...(rdoExistente.horasTrabalhadas || {}), ...rdoNovo.horasTrabalhadas };
+                  const alimM = { ...(rdoExistente.alimentacao || {}), ...rdoNovo.alimentacao };
+                  let heM = 0;
+                  Object.entries(presM).forEach(([tid, st]) => { if (st === "Presente") { const h = Number(horasM[tid]) || 9; if (h > 9) heM += h - 9; } });
+                  const obsAuto = !String(rdoExistente.observacoes || "").trim() || /^Relatório gerado automaticamente/.test(rdoExistente.observacoes);
+                  rdo = {
+                    ...rdoExistente,
+                    ...rdoNovo,
+                    id: rdoExistente.id,
+                    numero: rdoExistente.numero,
+                    obraId: normId(rdoExistente.obraId ?? obra.id),
+                    data: rdoExistente.data || rdoNovo.data,
+                    dataIso: rdoExistente.dataIso || hojeIso,
+                    ts: rdoExistente.ts || rdoNovo.ts,
+                    // Sempre acima da versão que este aparelho viu (relógio do celular atrasado não esconde o fechamento dos outros aparelhos)
+                    atualizadoEm: Math.max(Date.now(), versaoRdo(rdoExistente) + 1),
+                    clima: rdoExistente.clima || rdoNovo.clima,
+                    observacoes: obsAuto ? rdoNovo.observacoes : rdoExistente.observacoes,
+                    presencas: presM,
+                    horasTrabalhadas: horasM,
+                    alimentacao: alimM,
+                    horimetros: { ...(rdoExistente.horimetros || {}), ...rdoNovo.horimetros },
+                    totalHE: +heM.toFixed(1),
+                    fotos: [...(Array.isArray(rdoExistente.fotos) ? rdoExistente.fotos : []), ...fotosCarimbadas],
+                    totalAlimentacao: Object.entries(alimM).reduce((s, [tid, a]) => s + (presM[tid] === "Presente" ? somaAlim(empresa, a) : 0), 0),
+                  };
+                }
                 if (onAutoEmitirRDO) onAutoEmitirRDO(rdo);
 
-                setNumeroRdoGerado(numero);
+                setNumeroRdoGerado(rdo.numero);
+                setRdoAtualizado(!!rdoExistente);
                 setEtapa(4);
               }} style={{ flex: 1, padding: "12px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>CONFIRMAR</button>
             </div>
@@ -458,7 +495,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
         <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", marginTop: 16 }}>Relatório Enviado!</div>
         <div style={{ color: "rgba(255,255,255,0.7)", marginTop: 8, fontSize: 14 }}>Ótimo trabalho hoje!</div>
         <div style={{ background: "rgba(245,166,35,0.15)", border: `1px solid ${GOLD}55`, color: GOLD, borderRadius: 10, padding: "10px 14px", fontSize: 12, fontWeight: 600, marginTop: 16 }}>
-          📄 RDO Nº {String(numeroRdoGerado ?? "").padStart(3, "0")} gerado e salvo automaticamente.<br/>
+          📄 RDO Nº {String(numeroRdoGerado ?? "").padStart(3, "0")} {rdoAtualizado ? "atualizado com o fechamento do dia" : "gerado e salvo automaticamente"}.<br/>
           <span style={{ fontSize: 10, opacity: 0.85 }}>O gestor poderá baixar o PDF no painel.</span>
         </div>
       </div>

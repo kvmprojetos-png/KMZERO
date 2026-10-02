@@ -1,8 +1,8 @@
 import { getApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where, getCountFromServer } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
 import { usuarioAtual } from "../firebase.js";
-import { normId } from "./ids.js";
+import { normId, normalizarColecao } from "./ids.js";
 
 let _empresaId = null;
 
@@ -124,6 +124,40 @@ export function mesclarAnexosLocais(docNuvem, docLocal) {
     if (typeof v === "object" && !Array.isArray(v) && typeof n === "object" && !Array.isArray(n)) r[k] = mesclarAnexosLocais(n, v);
   });
   return r;
+}
+
+/* ── RDOs entre aparelhos ──────────────────────────────────────────────────
+   O fechamento do encarregado regrava o RDO do dia no MESMO id (um RDO por obra por dia), e
+   o escritório edita RDOs: o id que um aparelho já tem precisa ser trocado pela versão nova.
+   Versão = última regravação (atualizadoEm); sem ela, a emissão (ts) ou o id. */
+export const versaoRdo = r => Number(r?.atualizadoEm) || Number(r?.ts) || Number(r?.id) || 0;
+
+/* Junta à lista local (estado do app) os RDOs que vieram da nuvem:
+   - id que este aparelho não tem → entra;
+   - id que ele já tem → troca SÓ quando a versão da nuvem é mais nova (o eco da própria gravação,
+     de mesma versão, não mexe; uma edição local ainda não enviada, mais nova, também não);
+   - as fotos do RDO não vão para a nuvem (só a galeria): na troca ficam as deste aparelho;
+   - RDO que só existe aqui fica como está.
+   Sem nada novo, devolve a MESMA lista (o React não re-renderiza). Mais novo primeiro (id). */
+export function mesclarRdosDaNuvem(loc, nuvem) {
+  const lista = Array.isArray(loc) ? loc : [];
+  const locPorId = new Map(lista.filter(r => r && r.id !== undefined && r.id !== null).map(r => [String(r.id), r]));
+  const novos = [];
+  const maisNovos = [];
+  (Array.isArray(nuvem) ? nuvem : []).forEach(n => {
+    if (!n || n.id === undefined || n.id === null) return;
+    const l = locPorId.get(String(n.id));
+    if (!l) novos.push(n);
+    else if (versaoRdo(n) > versaoRdo(l)) maisNovos.push(n);
+  });
+  if (!novos.length && !maisNovos.length) return loc;
+  const trocar = new Map(normalizarColecao("rdos", maisNovos).map(n => [String(n.id), n]));
+  const atualizados = !trocar.size ? lista : lista.map(l => {
+    const n = l && trocar.get(String(l.id));
+    if (!n) return l;
+    return Array.isArray(l.fotos) && l.fotos.length ? { ...n, fotos: l.fotos } : n;
+  });
+  return [...normalizarColecao("rdos", novos), ...atualizados].sort((a, b) => (Number(b?.id) || 0) - (Number(a?.id) || 0));
 }
 
 /* JSON com chaves em ordem — o Firestore devolve os campos em ordem alfabética,
@@ -408,6 +442,9 @@ export async function criarConvite({ email, nome, cargo, obraId, perfil, tel, em
     return { ok: true, email: chave };
   } catch (e) {
     console.error("criarConvite:", e);
+    // O convite é um por e-mail (convites/{email}): se outra empresa já convidou este e-mail,
+    // as regras recusam (só a empresa dona do convite o altera)
+    if (e && e.code === "permission-denied") return { ok: false, codigo: e.code, erro: "A nuvem recusou o convite. Se este e-mail já foi convidado por outra empresa no KMZERO, ela precisa cancelar o convite antes (ou fale com o suporte)." };
     return { ok: false, codigo: e.code, erro: mensagemNuvem(e, "Não foi possível salvar o acesso. Verifique a conexão.") };
   }
 }
@@ -457,45 +494,216 @@ export function observarConvitesNuvem(callback, onErro) {
   }, e => { console.warn("observarConvitesNuvem:", e); onErro && onErro(e); });
 }
 
+/* Usuário da sessão (o que o app guarda e usa) a partir da conta Google + perfil da nuvem */
+export const montarUsuarioLogin = (userGoogle, perfil) => ({
+  id: userGoogle.uid,
+  firebaseUid: userGoogle.uid,
+  email: emailChave(userGoogle.email),
+  foto: userGoogle.foto || perfil.foto || "",
+  nome: perfil.nome || userGoogle.nome || "Equipe",
+  perfil: perfil.perfil || "encarregado",
+  cargo: perfil.cargo || (perfil.perfil === "gestor" ? "Gestor" : "Encarregado"),
+  obraId: normId(perfil.obraId),
+  tel: perfil.tel || "",
+  acessos: lerAcessos(perfil), // áreas do escritório (null = tudo)
+  empresaId: perfil.empresaId,
+  ultimoLogin: Date.now(),
+});
+
+/* Conta Google cujo e-mail não foi confirmado: as regras não deixam o convite virar perfil
+   (emailVerificado). Só o false explícito conta (sessão antiga pode não trazer o campo). */
+const erroEmailNaoVerificado = email => ({
+  tipo: "erro", codigo: "email-nao-verificado", email: emailChave(email),
+  erro: `A conta Google ${emailChave(email)} ainda não confirmou o e-mail. Abra a mensagem de confirmação que o Google mandou (ou use uma conta Gmail) e entre de novo.`,
+});
+
+/* Apaga o PRÓPRIO perfil (as regras deixam enquanto ativo). Melhor esforço: true se apagou. */
+async function apagarPerfilProprio(uid) {
+  const fb = cloudRefs();
+  if (!fb || !uid) return false;
+  try { await deleteDoc(doc(fb.db, "usuarios", uid)); return true; }
+  catch (e) { console.warn("apagarPerfilProprio:", e); return false; }
+}
+
+/* ── Convite de OUTRA empresa para quem já tem perfil de escritório ──────────
+   Quem entrou ANTES de ser convidado e tocou em "criar minha empresa" ficou com perfil
+   próprio (empresa vazia), e o login nunca mais olhava o convite. Agora, se o perfil é de
+   escritório e existe convite para o mesmo e-mail de OUTRA empresa, o app pergunta se a
+   pessoa quer entrar nela. "Continuar na minha empresa" fica guardado POR CONVITE neste
+   aparelho (empresa + data do convite): não pergunta de novo; um convite refeito pergunta. */
+const CHAVE_ESCOLHA_CONVITE = "_kmzero_convite_continuar:";
+const idEscolhaConvite = (email, convite) => `${CHAVE_ESCOLHA_CONVITE}${emailChave(email)}|${convite?.empresaId || ""}|${convite?.criadoEm || 0}`;
+export function conviteJaRecusado(email, convite) {
+  try { return localStorage.getItem(idEscolhaConvite(email, convite)) === "1"; } catch { return false; }
+}
+export function guardarRecusaConvite(email, convite) {
+  try { localStorage.setItem(idEscolhaConvite(email, convite), "1"); } catch {}
+}
+
+/* A troca de empresa só vale para quem tem como voltar e nada a perder: o DONO (administrador,
+   empresas/{id}.gestorUid) de uma empresa VAZIA (sem obras nem trabalhadores). É o caso real de
+   quem entrou antes do convite e tocou em "criar minha empresa". Se a troca falhar no meio, as
+   regras deixam o dono refazer o perfil antigo (caminho (a)).
+   - Quem NÃO é dono não teria como voltar: o convite que o trouxe já não existe (um convite por
+     e-mail) e o caminho (a) é só do dono. Pelo app ele não troca (desativar em Usuários e acessos
+     não apaga o perfil, e o desativado não chega ao convite novo): a troca dele é com o suporte.
+   - O administrador de uma empresa COM dados nunca a perde por um toque: o dono é protegido.
+   Melhor esforço: o que não deu para conferir (sem internet, sem permissão) conta como "não".
+   Devolve { ok: true } ou { ok: false, motivo, erro }. */
+export async function podeTrocarDeEmpresa(uid, empresaId) {
+  const fb = cloudRefs();
+  const semConferir = { ok: false, motivo: "sem-conferir", erro: "Não foi possível conferir a sua empresa atual. Verifique a conexão e tente de novo. Você continua na sua empresa." };
+  if (!fb || !uid || !empresaId) return semConferir;
+  try {
+    const emp = await getDoc(doc(fb.db, "empresas", String(empresaId)));
+    if (!emp.exists() || emp.data().gestorUid !== uid) {
+      return { ok: false, motivo: "nao-dono", erro: "Esta conta faz parte de uma empresa que ela não administra: a troca não é feita pelo app, porque não haveria como voltar se algo falhasse. Fale com o suporte da KM para mudar de empresa. Nada mudou: você continua na sua empresa." };
+    }
+  } catch (e) { console.warn("podeTrocarDeEmpresa:", e); return semConferir; }
+  const contagem = {};
+  for (const col of ["obras", "trabalhadores"]) {
+    try { contagem[col] = (await getCountFromServer(collection(fb.db, "empresas", String(empresaId), col))).data().count; }
+    catch (e) { console.warn("podeTrocarDeEmpresa:", col, e); return semConferir; }
+  }
+  if (contagem.obras > 0 || contagem.trabalhadores > 0) {
+    return { ok: false, motivo: "com-dados", erro: "Esta conta é a administradora de uma empresa com obras ou trabalhadores cadastrados: ela não troca de empresa pelo app (os dados ficariam sem administrador). Fale com o suporte da KM." };
+  }
+  return { ok: true };
+}
+
+/* Convite para este e-mail de OUTRA empresa que não a do perfil (ou null). Só para perfil
+   de escritório ativo e só quando a troca é segura (podeTrocarDeEmpresa: dono de empresa
+   vazia). Melhor esforço: sem internet, sem convite, convite desligado, já recusado neste
+   aparelho ou troca não permitida → null, e a pessoa entra como sempre. As leituras extras
+   (empresa e contagens) só acontecem quando existe convite de outra empresa. */
+export async function conviteDeOutraEmpresa(email, perfil, uid) {
+  if (!perfil || perfil.perfil !== "gestor" || !perfil.empresaId || perfil.ativo === false || !uid) return null;
+  if (!emailChave(email).includes("@")) return null;
+  const c = await buscarConvite(email);
+  if (!c.ok || !c.convite) return null;
+  const cv = c.convite;
+  if (!cv.empresaId || String(cv.empresaId) === String(perfil.empresaId) || cv.ativo === false) return null;
+  if (conviteJaRecusado(email, cv)) return null;
+  if (!(await podeTrocarDeEmpresa(uid, perfil.empresaId)).ok) return null;
+  return cv;
+}
+
+/* Nome e tamanho da empresa atual da pessoa (para avisar o que fica para trás na troca).
+   Melhor esforço: o que não deu para ler volta "" / null. */
+export async function resumoEmpresaParaTroca(empresaId) {
+  const r = { nome: "", obras: null, trabalhadores: null };
+  const fb = cloudRefs();
+  if (!fb || !empresaId) return r;
+  try {
+    const s = await getDoc(doc(fb.db, "empresas", empresaId));
+    if (s.exists()) r.nome = s.data().nomeFantasia || s.data().razaoSocial || "";
+  } catch (e) { console.warn("resumoEmpresaParaTroca:", e); }
+  for (const col of ["obras", "trabalhadores"]) {
+    try { r[col] = (await getCountFromServer(collection(fb.db, "empresas", empresaId, col))).data().count; }
+    catch (e) { console.warn("resumoEmpresaParaTroca:", col, e); }
+  }
+  return r;
+}
+
+/* Mesmo convite que a pessoa viu na pergunta (empresa, tipo de acesso e áreas)? */
+const mesmoConvite = (a, b) => !!a && !!b
+  && String(a.empresaId) === String(b.empresaId)
+  && (a.perfil || "encarregado") === (b.perfil || "encarregado")
+  && JSON.stringify(Array.isArray(a.acessos) ? a.acessos : null) === JSON.stringify(Array.isArray(b.acessos) ? b.acessos : null);
+
+/* "Entrar na empresa que me convidou": apaga o PRÓPRIO perfil e cria o novo pelo convite
+   (as regras só criam perfil onde não existe). A empresa antiga NÃO é apagada.
+   Antes de apagar qualquer coisa, confere tudo de novo na nuvem:
+   - o convite RELIDO agora (pode ter sido desligado, cancelado ou refeito depois da pergunta)
+     tem de ser o mesmo que a pessoa aceitou; é ele (e não a cópia da pergunta) que vira perfil;
+   - quem troca tem de poder voltar (podeTrocarDeEmpresa: dono de empresa vazia).
+   Se o perfil novo não puder ser criado, refaz o antigo como dono (caminho (a) das regras),
+   para a pessoa não ficar sem nenhum. */
+export async function trocarParaConvite(userGoogle, convite) {
+  const fb = cloudRefs();
+  if (!fb) return { ok: false, erro: "Firebase não inicializado." };
+  const email = emailChave(userGoogle?.email);
+  if (userGoogle.emailVerificado === false) { const e = erroEmailNaoVerificado(email); return { ok: false, codigo: e.codigo, erro: e.erro }; }
+  const c = await buscarConvite(email);
+  if (!c.ok) return { ok: false, codigo: c.codigo, erro: c.erro };
+  const cv = c.convite;
+  if (!cv || cv.ativo === false || !cv.empresaId) {
+    return { ok: false, codigo: "convite-indisponivel", erro: "Este convite não está mais disponível (foi cancelado ou desligado pela empresa que convidou). Nada mudou: você continua na sua empresa." };
+  }
+  if (convite && !mesmoConvite(cv, convite)) {
+    return { ok: false, codigo: "convite-mudou", erro: "O convite mudou depois da pergunta (empresa, tipo de acesso ou áreas). Nada mudou: saia e entre de novo para ver o convite atualizado." };
+  }
+  const atual = await carregarPerfilNuvem(userGoogle.uid);
+  if (!atual.ok) return { ok: false, codigo: atual.codigo, erro: atual.erro };
+  const antigo = atual.perfil;
+  if (antigo && antigo.ativo === false) {
+    return { ok: false, codigo: "acesso-desativado", erro: `O acesso de ${email} foi desativado pelo gestor da empresa.` };
+  }
+  if (antigo && antigo.empresaId && String(antigo.empresaId) === String(cv.empresaId)) {
+    return { ok: true, usuario: montarUsuarioLogin(userGoogle, antigo) }; // já está na empresa do convite
+  }
+  if (antigo && antigo.empresaId) {
+    const pode = await podeTrocarDeEmpresa(userGoogle.uid, antigo.empresaId);
+    if (!pode.ok) return { ok: false, codigo: "troca-" + pode.motivo, erro: pode.erro };
+  }
+  if (antigo) {
+    try { await deleteDoc(doc(fb.db, "usuarios", userGoogle.uid)); }
+    catch (e) {
+      console.error("trocarParaConvite:", e);
+      return { ok: false, codigo: e.code, erro: mensagemNuvem(e, "Não foi possível trocar de empresa. Verifique a conexão e tente de novo.") };
+    }
+  }
+  const a = await aceitarConvite(userGoogle, cv);
+  if (a.ok) return { ok: true, usuario: montarUsuarioLogin(userGoogle, a.perfil) };
+  if (antigo && antigo.empresaId) {
+    // Só o dono chega aqui (podeTrocarDeEmpresa): refaz o perfil dele, com acesso total
+    const volta = { ...antigo, perfil: "gestor", acessos: null, email, ativo: true, atualizadoEm: Date.now() };
+    try { await setDoc(doc(fb.db, "usuarios", userGoogle.uid), semUndefined(volta)); }
+    catch (e) {
+      console.warn("trocarParaConvite: o perfil antigo não voltou:", e);
+      return { ok: false, codigo: a.codigo, erro: `${a.erro || "Não foi possível entrar na empresa do convite."} Saia e entre de novo com o Google.` };
+    }
+    return { ok: false, codigo: a.codigo, erro: `${a.erro || "Não foi possível entrar na empresa do convite."} Você continua na sua empresa.` };
+  }
+  return { ok: false, codigo: a.codigo, erro: a.erro };
+}
+
 /* Decide o que fazer depois de "Entrar com Google":
    - perfil existe e ativo → { tipo: "perfil", usuario }
+   - perfil de escritório + convite de OUTRA empresa → { tipo: "convite_outra_empresa", usuario, convite }
+     (a tela pergunta: entrar na empresa do convite ou continuar na própria)
    - sem perfil, com convite → cria o perfil → { tipo: "perfil", usuario }
    - sem perfil e sem convite → { tipo: "sem_convite" }
-   - desativado / erro → { tipo: "erro", erro } */
+   - desativado / erro → { tipo: "erro", erro, codigo, email } */
 export async function resolverEntradaGoogle(userGoogle) {
+  const email = emailChave(userGoogle.email);
   const p = await carregarPerfilNuvem(userGoogle.uid);
-  if (!p.ok) return { tipo: "erro", erro: p.erro, codigo: p.codigo };
-  const montar = perfil => ({
-    id: userGoogle.uid,
-    firebaseUid: userGoogle.uid,
-    email: emailChave(userGoogle.email),
-    foto: userGoogle.foto || perfil.foto || "",
-    nome: perfil.nome || userGoogle.nome || "Equipe",
-    perfil: perfil.perfil || "encarregado",
-    cargo: perfil.cargo || (perfil.perfil === "gestor" ? "Gestor" : "Encarregado"),
-    obraId: normId(perfil.obraId),
-    tel: perfil.tel || "",
-    acessos: lerAcessos(perfil), // áreas do escritório (null = tudo)
-    empresaId: perfil.empresaId,
-    ultimoLogin: Date.now(),
-  });
-  const desativado = { tipo: "erro", desativado: true, codigo: "acesso-desativado", email: emailChave(userGoogle.email), erro: `O acesso de ${emailChave(userGoogle.email)} foi desativado pelo gestor da empresa.` };
+  if (!p.ok) return { tipo: "erro", erro: p.erro, codigo: p.codigo, email };
+  const montar = perfil => montarUsuarioLogin(userGoogle, perfil);
+  const desativado = { tipo: "erro", desativado: true, codigo: "acesso-desativado", email, erro: `O acesso de ${email} foi desativado pelo gestor da empresa.` };
   if (p.perfil) {
     if (p.perfil.ativo === false) return desativado;
-    if (!p.perfil.empresaId) return { tipo: "sem_convite" };
-    // Dono da empresa limitado ou rebaixado (app ou regra antigos): entra já com acesso total.
-    // Para os outros, restaurarDonoNuvem só confere o dono e devolve null (nada é gravado).
-    let perfil = p.perfil;
-    if (perfil.perfil !== "gestor" || lerAcessos(perfil) !== null) perfil = (await restaurarDonoNuvem(userGoogle.uid, perfil)) || perfil;
-    return { tipo: "perfil", usuario: montar(perfil) };
+    if (p.perfil.empresaId) {
+      // Dono da empresa limitado ou rebaixado (app ou regra antigos): entra já com acesso total.
+      // Para os outros, restaurarDonoNuvem só confere o dono e devolve null (nada é gravado).
+      let perfil = p.perfil;
+      if (perfil.perfil !== "gestor" || lerAcessos(perfil) !== null) perfil = (await restaurarDonoNuvem(userGoogle.uid, perfil)) || perfil;
+      const convite = await conviteDeOutraEmpresa(email, perfil, userGoogle.uid);
+      if (convite) return { tipo: "convite_outra_empresa", usuario: montar(perfil), convite };
+      return { tipo: "perfil", usuario: montar(perfil) };
+    }
+    // Perfil sem empresa (sobra de versão antiga): não abre nada e travaria o convite e o
+    // cadastro da empresa (as regras só criam perfil onde não existe). Sai do caminho.
+    await apagarPerfilProprio(userGoogle.uid);
   }
-  const c = await buscarConvite(userGoogle.email);
-  if (!c.ok) return { tipo: "erro", erro: c.erro, codigo: c.codigo };
+  const c = await buscarConvite(email);
+  if (!c.ok) return { tipo: "erro", erro: c.erro, codigo: c.codigo, email };
   if (!c.convite) return { tipo: "sem_convite" };
   // Convite desligado (a pessoa foi desativada e o perfil dela sumiu): as regras recusariam o perfil
   if (c.convite.ativo === false) return desativado;
+  if (userGoogle.emailVerificado === false) return erroEmailNaoVerificado(email);
   const a = await aceitarConvite(userGoogle, c.convite);
-  if (!a.ok) return { tipo: "erro", erro: a.erro, codigo: a.codigo };
+  if (!a.ok) return { tipo: "erro", erro: a.erro, codigo: a.codigo, email };
   return { tipo: "perfil", usuario: montar(a.perfil) };
 }
 

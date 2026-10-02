@@ -285,7 +285,9 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
   let pedidoNum = 1;
   let movNum = 1;
   let movEqNum = 1;
-  let rdoNum = 1;
+  let rdoSeq = 1; // só para o id único do registro; o NÚMERO do RDO é por obra (rdoNumPorObra)
+  const rdoNumPorObra = {}; // obra → último Nº de RDO emitido nela (cada obra: 001, 002, …), como na emissão real
+  const rdoObraDia = new Set(); // "obra|AAAA-MM-DD": no máximo UM RDO por obra por dia
   let fotoId = 1;
   let despId = 1;
   let diaId = 1;
@@ -315,6 +317,11 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
     obrasAtivas.forEach((obra, idxObra) => {
       const trabsObra = trabs.filter(t => mesmoId(t.obraId, obra.id));
       if (trabsObra.length === 0) return;
+      const chaveObra = String(normId(obra.id));
+      if (rdoObraDia.has(`${chaveObra}|${isoData}`)) return; // obra repetida na lista: o dia já tem o RDO desta obra
+      rdoObraDia.add(`${chaveObra}|${isoData}`);
+      const numeroRdo = (rdoNumPorObra[chaveObra] || 0) + 1; // numeração por obra
+      rdoNumPorObra[chaveObra] = numeroRdo;
 
       const presentes = trabsObra.filter(t => historico[isoData][t.id] === "Presente").length;
       const faltas = trabsObra.filter(t => historico[isoData][t.id] === "Falta").length;
@@ -342,7 +349,7 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
           autor: obra.encarregado,
           data: dataStr,
           hora: horaFoto,
-          origemRDO: rdoNum,
+          origemRDO: numeroRdo,
         });
         fotosDia.push(placeholderUrl);
       }
@@ -362,8 +369,8 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
       Object.values(horasTrabalhadas).forEach(h => { if (h > 9) totalHE += h - 9; });
 
       rdosEmitidos.push({
-        id: ts + rdoNum,
-        numero: rdoNum++,
+        id: ts + rdoSeq++,
+        numero: numeroRdo,
         obraId: obra.id,
         data: dataStr,
         dataIso: isoData,
