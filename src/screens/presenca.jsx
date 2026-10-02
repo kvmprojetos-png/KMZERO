@@ -3,11 +3,13 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
-import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
+import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store, versaoRdo } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Tabela, useEscritorio } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
+import { proximoNumeroRDO, rdosDoDiaObra } from "./rdo.jsx";
 
 export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos, pedidos, diario, usuario, empresa, historico, rdosEmitidos, fotosObras = [], onBack, onSavePresencas, onAutoEmitirRDO, onSalvarFotoObra }) {
   const [etapa, setEtapa] = useState(0);
@@ -36,13 +38,15 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
   });
 
   const [fotos, setFotos] = useState([]);
-  const [equipsLocal, setEquipsLocal] = useState(equips.filter(e => e.obraId === obra.id));
+  const [equipsLocal, setEquipsLocal] = useState(equips.filter(e => mesmoId(e.obraId, obra.id)));
   const [confirmando, setConfirmando] = useState(false);
+  const [numeroRdoGerado, setNumeroRdoGerado] = useState(null); // Nº realmente gerado ao finalizar o dia (numeração por obra)
+  const [rdoAtualizado, setRdoAtualizado] = useState(false); // true: a obra já tinha RDO hoje e o fechamento atualizou esse RDO
   const [localizacao, setLocalizacao] = useState(null);
   const [pegandoLoc, setPegandoLoc] = useState(false);
 
   // Horímetro das máquinas (início/fim)
-  const ativosObra = (ativos || []).filter(a => a.obraId === obra.id);
+  const ativosObra = (ativos || []).filter(a => mesmoId(a.obraId, obra.id));
   const [horimetros, setHorimetros] = useState(() => {
     const m = {};
     ativosObra.forEach(a => { m[a.id] = { inicio: a.horimetro || "", fim: "" }; });
@@ -269,7 +273,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
               <div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{eq.nome}</div>
               <div style={{ fontSize: 11, color: T.texto3 }}>{eq.codigo}</div>
             </div>
-            <button onClick={() => setEquipsLocal(es => es.map(e => e.id === eq.id ? { ...e, status: ciclo[e.status] } : e))} style={{ background: EQUIP_COLOR[eq.status], color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{eq.status}</button>
+            <button onClick={() => setEquipsLocal(es => es.map(e => mesmoId(e.id, eq.id) ? { ...e, status: ciclo[e.status] } : e))} style={{ background: EQUIP_COLOR[eq.status], color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{eq.status}</button>
           </div>
         ))}
         {equipsLocal.length === 0 && <div style={{ textAlign: "center", color: T.texto3, padding: 30 }}>Nenhum equipamento nesta obra.</div>}
@@ -356,15 +360,18 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
               <button onClick={async () => {
                 setConfirmando(false);
 
-                // ⚡ AUTO-GERAR RDO ao finalizar
-                const numero = (rdosEmitidos?.length || 0) + 1;
+                // ⚡ AUTO-GERAR RDO ao finalizar. Um RDO por obra por dia: se a obra JÁ tem RDO hoje (o administrador criou,
+                // ou o dia já foi fechado), o fechamento atualiza esse RDO (mesmo id e número). Senão, número da obra =
+                // maior Nº já emitido nesta obra + 1.
+                const hojeIso = hojeStr();
+                const rdoExistente = rdosDoDiaObra(rdosEmitidos, obra.id, hojeIso)[0] || null;
+                const numero = rdoExistente ? rdoExistente.numero : proximoNumeroRDO(rdosEmitidos, obra.id);
                 const dataStr = new Date().toLocaleDateString("pt-BR");
                 const horaStr = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-                const hojeIso = hojeStr();
                 const autorNome = usuario?.nome || "Encarregado";
 
                 // 📸 CARIMBA E ENVIA FOTOS PRA GALERIA
-                const totalFotosObra = (fotosObras || []).filter(f => f.obraId === obra.id).length;
+                const totalFotosObra = (fotosObras || []).filter(f => mesmoId(f.obraId, obra.id)).length;
                 const fotosCarimbadas = [];
                 for (let i = 0; i < fotos.length; i++) {
                   const numeroFoto = totalFotosObra + i + 1;
@@ -383,7 +390,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                     onSalvarFotoObra({
                       id: Date.now() + i,
                       numero: numeroFoto,
-                      obraId: obra.id,
+                      obraId: normId(obra.id),
                       obraNome: obra.nome,
                       foto: carimbada,
                       legenda: "📅 Foto do dia (RDO)",
@@ -414,10 +421,10 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                   }
                 });
 
-                const rdo = {
+                const rdoNovo = {
                   id: Date.now(),
                   numero,
-                  obraId: obra.id,
+                  obraId: normId(obra.id),
                   data: dataStr,
                   dataIso: hojeIso,
                   encarregado: autorNome,
@@ -436,8 +443,42 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                     return s + somaAlim(empresa, a);
                   }, 0),
                 };
+                let rdo = rdoNovo;
+                if (rdoExistente) {
+                  // Mescla o fechamento no RDO do dia: mantém id, número, data, clima e observações escritas pelo gestor;
+                  // presenças, horas, alimentação e horímetros do fechamento prevalecem; fotos somam.
+                  const presM = { ...(rdoExistente.presencas || {}), ...rdoNovo.presencas };
+                  const horasM = { ...(rdoExistente.horasTrabalhadas || {}), ...rdoNovo.horasTrabalhadas };
+                  const alimM = { ...(rdoExistente.alimentacao || {}), ...rdoNovo.alimentacao };
+                  let heM = 0;
+                  Object.entries(presM).forEach(([tid, st]) => { if (st === "Presente") { const h = Number(horasM[tid]) || 9; if (h > 9) heM += h - 9; } });
+                  const obsAuto = !String(rdoExistente.observacoes || "").trim() || /^Relatório gerado automaticamente/.test(rdoExistente.observacoes);
+                  rdo = {
+                    ...rdoExistente,
+                    ...rdoNovo,
+                    id: rdoExistente.id,
+                    numero: rdoExistente.numero,
+                    obraId: normId(rdoExistente.obraId ?? obra.id),
+                    data: rdoExistente.data || rdoNovo.data,
+                    dataIso: rdoExistente.dataIso || hojeIso,
+                    ts: rdoExistente.ts || rdoNovo.ts,
+                    // Sempre acima da versão que este aparelho viu (relógio do celular atrasado não esconde o fechamento dos outros aparelhos)
+                    atualizadoEm: Math.max(Date.now(), versaoRdo(rdoExistente) + 1),
+                    clima: rdoExistente.clima || rdoNovo.clima,
+                    observacoes: obsAuto ? rdoNovo.observacoes : rdoExistente.observacoes,
+                    presencas: presM,
+                    horasTrabalhadas: horasM,
+                    alimentacao: alimM,
+                    horimetros: { ...(rdoExistente.horimetros || {}), ...rdoNovo.horimetros },
+                    totalHE: +heM.toFixed(1),
+                    fotos: [...(Array.isArray(rdoExistente.fotos) ? rdoExistente.fotos : []), ...fotosCarimbadas],
+                    totalAlimentacao: Object.entries(alimM).reduce((s, [tid, a]) => s + (presM[tid] === "Presente" ? somaAlim(empresa, a) : 0), 0),
+                  };
+                }
                 if (onAutoEmitirRDO) onAutoEmitirRDO(rdo);
 
+                setNumeroRdoGerado(rdo.numero);
+                setRdoAtualizado(!!rdoExistente);
                 setEtapa(4);
               }} style={{ flex: 1, padding: "12px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>CONFIRMAR</button>
             </div>
@@ -454,7 +495,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
         <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", marginTop: 16 }}>Relatório Enviado!</div>
         <div style={{ color: "rgba(255,255,255,0.7)", marginTop: 8, fontSize: 14 }}>Ótimo trabalho hoje!</div>
         <div style={{ background: "rgba(245,166,35,0.15)", border: `1px solid ${GOLD}55`, color: GOLD, borderRadius: 10, padding: "10px 14px", fontSize: 12, fontWeight: 600, marginTop: 16 }}>
-          📄 RDO Nº {String((rdosEmitidos?.length || 0)).padStart(3, "0")} gerado e salvo automaticamente.<br/>
+          📄 RDO Nº {String(numeroRdoGerado ?? "").padStart(3, "0")} {rdoAtualizado ? "atualizado com o fechamento do dia" : "gerado e salvo automaticamente"}.<br/>
           <span style={{ fontSize: 10, opacity: 0.85 }}>O gestor poderá baixar o PDF no painel.</span>
         </div>
       </div>
@@ -482,7 +523,7 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [diaSel, setDiaSel] = useState(null);
 
-  const trabObra = trabalhadores.filter(t => t.obraId === obraId);
+  const trabObra = trabalhadores.filter(t => mesmoId(t.obraId, obraId));
   const primDia = new Date(ano, mes, 1).getDay();
   const totalDias = new Date(ano, mes + 1, 0).getDate();
   const cells = [];
@@ -526,7 +567,7 @@ export function TelaCalendario({ obras, trabalhadores, historico, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Calendário" sub="Histórico de presenças" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12, maxWidth: 440 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 12, maxWidth: 440 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
         {/* No escritório: grid com o calendário (420-560 px) à esquerda e o detalhe do dia à direita; no celular empilha. */}
@@ -623,7 +664,7 @@ export function TelaFolha({ obras, trabalhadores, historico, onBack }) {
     return count;
   })();
 
-  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
+  const trabFiltro = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => mesmoId(t.obraId, obraId));
 
   const calcular = (t) => {
     const total = new Date(ano, mes + 1, 0).getDate();
@@ -657,7 +698,7 @@ export function TelaFolha({ obras, trabalhadores, historico, onBack }) {
             {[ano - 1, ano, ano + 1].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -709,7 +750,7 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
   const [recognition, setRecognition] = useState(null);
   const [erroVoz, setErroVoz] = useState("");
   const [fotoVer, setFotoVer] = useState(null); // visualização fullscreen
-  const minhasObras = diario.filter(d => d.obraId === obra.id).sort((a, b) => b.ts - a.ts);
+  const minhasObras = diario.filter(d => mesmoId(d.obraId, obra.id)).sort((a, b) => b.ts - a.ts);
 
   const adicionar = async () => {
     if (!texto.trim() && !foto) return;
@@ -722,7 +763,7 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
       const dataAtual = new Date().toLocaleDateString("pt-BR");
       const horaAtual = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       const autorNome = usuario?.nome || "—";
-      const totalFotosObra = (fotosObras || []).filter(f => f.obraId === obra.id).length;
+      const totalFotosObra = (fotosObras || []).filter(f => mesmoId(f.obraId, obra.id)).length;
       const numeroFoto = totalFotosObra + 1;
 
       try {
@@ -739,7 +780,7 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
           onSalvarFotoObra({
             id: Date.now(),
             numero: numeroFoto,
-            obraId: obra.id,
+            obraId: normId(obra.id),
             obraNome: obra.nome,
             foto: fotoFinal,
             legenda: texto.trim().substring(0, 80) || "📒 Diário de obra",
@@ -754,7 +795,7 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
       }
     }
 
-    onAdd({ id: Date.now(), obraId: obra.id, autor: usuario?.nome || "—", texto: texto.trim(), foto: fotoFinal, ts: Date.now() });
+    onAdd({ id: Date.now(), obraId: normId(obra.id), autor: usuario?.nome || "—", texto: texto.trim(), foto: fotoFinal, ts: Date.now() });
     setTexto("");
     setFoto(null);
     setSalvando(false);
@@ -986,7 +1027,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
   // Filtros: obra + equipe de pagamento (Equipe 1, 2… recebem juntas; "sem" = paga à parte)
   const equipeDe = t => (t.equipe ? String(t.equipe) : "sem");
   const nomeEquipe = g => (g === "todas" ? "Todas as equipes" : g === "sem" ? "Sem equipe" : `Equipe ${g}`);
-  const daObra = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => String(t.obraId) === String(obraId));
+  const daObra = obraId === "todas" ? trabalhadores : trabalhadores.filter(t => mesmoId(t.obraId, obraId));
   const trabFiltro = equipeFiltro === "todas" ? daObra : daObra.filter(t => equipeDe(t) === equipeFiltro);
 
   // ════ VALES (adiantamentos) com data dentro do período [ini, fim] (ISO, inclusive), em qualquer regime.
@@ -999,7 +1040,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     return `${an}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   };
   const valesDoPeriodo = (trabId, ini, fim) => (adiantamentos || [])
-    .filter(a => String(a.trabId) === String(trabId) && (!a.descontadoEm || (folhaArquivadaId && String(a.folhaId) === String(folhaArquivadaId))))
+    .filter(a => mesmoId(a.trabId, trabId) && (!a.descontadoEm || (folhaArquivadaId && mesmoId(a.folhaId, folhaArquivadaId))))
     .filter(a => { const iso = isoDoVale(a); return !!iso && iso >= ini && iso <= fim; });
 
   const calcularCiclo = (t) => {
@@ -1164,9 +1205,9 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const fbrCurta = iso => { const [, m, d] = String(iso).split("-"); return `${d}/${m}`; };
     // "14/09 a 25/09/2026" (mesmo ano) — cabe numa linha da coluna Período
     const fPeriodo = (ini, fim) => (!ini || !fim) ? "—" : (String(ini).slice(0, 4) === String(fim).slice(0, 4) ? `${fbrCurta(ini)} a ${fbr(fim)}` : `${fbr(ini)} a ${fbr(fim)}`);
-    const obraNome = obraId === "todas" ? "Todas as obras" : (obras.find(o => String(o.id) === String(obraId))?.nome || "—");
+    const obraNome = obraId === "todas" ? "Todas as obras" : (obras.find(o => mesmoId(o.id, obraId))?.nome || "—");
     // Obra do colaborador; sem obra (obraId vazio/0) = funcionário indireto do escritório, como na ficha cadastral
-    const itens = trabComMov.map(t => ({ t, c: calcular(t), obra: obras.find(o => String(o.id) === String(t.obraId))?.nome || (!t.obraId ? "Escritório (indireto)" : "—") }));
+    const itens = trabComMov.map(t => ({ t, c: calcular(t), obra: obras.find(o => mesmoId(o.id, t.obraId))?.nome || (!t.obraId ? "Escritório (indireto)" : "—") }));
     const ehFixo = c => c.formaCalculo === "mensal_fixo" && c.salarioFixo > 0;
     const temFixo = itens.some(({ c }) => ehFixo(c));
     // Feriado nacional pago entra em "dias pagos" sem coluna própria: mostra "+N feriado" sob as presenças para a linha fechar
@@ -1513,7 +1554,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
           );
         })()}
 
-        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           <option value="todas">Todas as obras</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
@@ -1588,12 +1629,12 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
           const periodo = `${String(dia1).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano} a ${String(dia2).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}/${ano}`;
           const itens = trabFiltro.map(t => {
             const c = calcular(t);
-            return { trabId: t.id, nome: t.nome, cargo: t.cargo, ...c };
+            return { trabId: normId(t.id), nome: t.nome, cargo: t.cargo, ...c };
           });
           const idFolha = Date.now();
           onSalvarFolha({
             id: idFolha, mes, ano, quinzena, periodo,
-            obraId: obraId === "todas" ? null : obraId,
+            obraId: obraId === "todas" ? null : normId(obraId),
             equipe: equipeFiltro === "todas" ? null : equipeFiltro,
             itens, totalLiquido: totalFolha, totalAdiant: totalAdiantQuinzena,
             ts: Date.now(),

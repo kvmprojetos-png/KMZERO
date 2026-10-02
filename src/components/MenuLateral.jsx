@@ -3,11 +3,13 @@ import { NAVY, GOLD, RED, DEFAULT_FONT } from "../theme.js";
 import { AvatarUsuario, cargoDoUsuario, LogoKM } from "./ui.jsx";
 import { Icone } from "./Icones.jsx";
 import { useTema, OPCOES_TEMA } from "../lib/useTema.js";
-import { CORES_BADGE, TEXTO_BADGE, TELA_PAI, grupoDaTela, itemDaTela, gruposVisiveis } from "./menuGrupos.js";
+import { CORES_BADGE, TEXTO_BADGE, TELA_PAI, grupoDaTela, itemDaTela, gruposDoMenu, telaPermitida } from "./menuGrupos.js";
 
 /* Menu lateral do modo escritório (gestor em tela larga, >= 1024 px).
    No celular este componente não é renderizado — o app de campo segue igual.
-   Grupos, itens, ícones e badges vêm de menuGrupos.js (fonte única).
+   Grupos, itens, ícones e badges vêm de menuGrupos.js (fonte única). Só aparecem os grupos
+   que a pessoa abre (gruposDoMenu: áreas em usuario.acessos + itens livres como Ajuda) — a
+   busca "Ir para…" usa a mesma lista.
    Largura 248 px; recolhido vira trilho de 64 px (Ctrl+B, guardado em _kmzero_menu_recolhido).
    Grupos recolhíveis (estado em _kmzero_menu_grupos), busca "Ir para…" (Ctrl+K ou "/"),
    rodapé fixo com a pessoa logada, alternador de tema e Sair. */
@@ -47,6 +49,8 @@ const CSS_MENU = `
 /* Cartão da empresa */
 .km-menu-empresa { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; margin: 0 0 6px; border-radius: 10px; border: 1px solid var(--km-menu-borda); background: var(--km-menu-fundo2); color: inherit; text-align: left; cursor: pointer; }
 .km-menu-empresa:hover { background: var(--km-menu-hover); }
+.km-menu-empresa.fixo { cursor: default; }
+.km-menu-empresa.fixo:hover { background: var(--km-menu-fundo2); }
 .km-menu-empresa-quadrado { width: 32px; height: 32px; border-radius: 8px; background: var(--km-menu-fundo); color: ${GOLD}; font-size: 12px; font-weight: 800; letter-spacing: 0.02em; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
 .km-menu-empresa-quadrado img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .km-menu-empresa-texto { min-width: 0; flex: 1; }
@@ -150,7 +154,9 @@ function injetarCSS() {
 export function MenuLateral({ tela, onNav, usuario, empresa, badges = {}, onLogout, topo = 0 }) {
   injetarCSS();
   const { preferencia, setPreferencia } = useTema();
-  const grupos = useMemo(() => gruposVisiveis(usuario?.email), [usuario?.email]);
+  // Grupos do menu e da busca: os que o e-mail vê, nas áreas liberadas para a pessoa
+  const grupos = useMemo(() => gruposDoMenu(usuario), [usuario]);
+  const podeEmpresa = telaPermitida(usuario, "empresa"); // cartão da empresa só leva a Empresa se a área Sistema for dela
   const telaMenu = TELA_PAI[tela] || tela; // tela de detalhe destaca o item pai
   const grupoAtivo = grupoDaTela(tela);
 
@@ -312,16 +318,27 @@ export function MenuLateral({ tela, onNav, usuario, empresa, badges = {}, onLogo
       </div>
 
       <div className="km-menu-rolagem">
-        {/* Cartão da empresa (lugar do futuro seletor de empresa) */}
-        <button type="button" className="km-menu-empresa" onClick={() => onNav && onNav("empresa")} aria-label={`${nomeEmpresa}. Configurar empresa`} title={nomeEmpresa} {...dicaProps(nomeEmpresa)}>
-          <span className="km-menu-empresa-quadrado" aria-hidden="true">
-            {empresa?.logoBase64 ? <img src={empresa.logoBase64} alt="" /> : iniciaisEmpresa}
-          </span>
-          <span className="km-menu-empresa-texto">
-            <span className="km-menu-empresa-nome">{nomeEmpresa}</span>
-            <span className="km-menu-empresa-sub">Configurar</span>
-          </span>
-        </button>
+        {/* Cartão da empresa (lugar do futuro seletor de empresa); sem a área Sistema, só mostra o nome */}
+        {podeEmpresa ? (
+          <button type="button" className="km-menu-empresa" onClick={() => onNav && onNav("empresa")} aria-label={`${nomeEmpresa}. Configurar empresa`} title={nomeEmpresa} {...dicaProps(nomeEmpresa)}>
+            <span className="km-menu-empresa-quadrado" aria-hidden="true">
+              {empresa?.logoBase64 ? <img src={empresa.logoBase64} alt="" /> : iniciaisEmpresa}
+            </span>
+            <span className="km-menu-empresa-texto">
+              <span className="km-menu-empresa-nome">{nomeEmpresa}</span>
+              <span className="km-menu-empresa-sub">Configurar</span>
+            </span>
+          </button>
+        ) : (
+          <div className="km-menu-empresa fixo" title={nomeEmpresa} onMouseEnter={e => mostrarDica(e, nomeEmpresa)} onMouseLeave={esconderDica}>
+            <span className="km-menu-empresa-quadrado" aria-hidden="true">
+              {empresa?.logoBase64 ? <img src={empresa.logoBase64} alt="" /> : iniciaisEmpresa}
+            </span>
+            <span className="km-menu-empresa-texto">
+              <span className="km-menu-empresa-nome">{nomeEmpresa}</span>
+            </span>
+          </div>
+        )}
 
         {/* Busca: campo no menu aberto; no trilho, uma lupa que expande enquanto busca */}
         {expandido ? (

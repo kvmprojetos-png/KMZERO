@@ -3,6 +3,7 @@ import { NAVY, GOLD, GREEN, RED, ORANGE, labelS, inputS, selS, T } from "../them
 import { KMHeader, KMFooter, EmptyState } from "../components/ui.jsx";
 import { TIPOS_AVISO, descreverPara, uidDe } from "../lib/avisosRegras.js";
 import { situacaoNotificacoes, ativarNotificacoes, desligarNotificacoes } from "../lib/avisos.js";
+import { normId } from "../lib/ids.js";
 
 /* Avisos: lista do que chegou para a pessoa + (gestor) escrever aviso para todos,
    gestores/diretores, encarregados, uma obra ou uma pessoa. O encarregado só
@@ -114,7 +115,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
                     <option value="pessoa">Uma pessoa</option>
                   </select>
                   {paraTipo === "obra" && (
-                    <select value={paraObra} onChange={e => setParaObra(e.target.value)} style={selS}>
+                    <select value={paraObra ?? ""} onChange={e => setParaObra(normId(e.target.value))} style={selS}>
                       {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
                     </select>
                   )}

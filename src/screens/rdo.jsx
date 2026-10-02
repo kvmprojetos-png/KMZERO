@@ -1,14 +1,15 @@
 import { MODELOS_CRONOGRAMA } from "./equipe.jsx";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { useTema } from "../lib/useTema.js";
-import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
+import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim } from "../utils.js";
 import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: empresaProp }) {
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
@@ -24,7 +25,7 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
 
-  const obra = obras.find(o => o.id === obraId);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
   const etapas = cronogramas[obraId] || [];
   const obraTipo = obra?.tipo || "Edificação";
 
@@ -53,10 +54,10 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
   };
 
   const salvarEtapa = (etapa) => {
-    const ja = etapas.find(e => e.id === etapa.id);
+    const ja = etapas.find(e => mesmoId(e.id, etapa.id));
     let novas;
     if (ja) {
-      novas = etapas.map(e => e.id === etapa.id ? etapa : e);
+      novas = etapas.map(e => mesmoId(e.id, etapa.id) ? etapa : e);
     } else {
       novas = [...etapas, { ...etapa, ordem: etapas.length, id: Date.now() }];
     }
@@ -67,11 +68,11 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
 
   const removerEtapa = (id) => {
     if (!confirm("Remover esta etapa?")) return;
-    onSalvar(obraId, etapas.filter(e => e.id !== id));
+    onSalvar(obraId, etapas.filter(e => !mesmoId(e.id, id)));
   };
 
   const moverEtapa = (id, direcao) => {
-    const idx = etapas.findIndex(e => e.id === id);
+    const idx = etapas.findIndex(e => mesmoId(e.id, id));
     if (idx < 0) return;
     const novoIdx = idx + direcao;
     if (novoIdx < 0 || novoIdx >= etapas.length) return;
@@ -81,7 +82,7 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
   };
 
   const setProgresso = (id, valor) => {
-    onSalvar(obraId, etapas.map(e => e.id === id ? { ...e, progresso: valor } : e));
+    onSalvar(obraId, etapas.map(e => mesmoId(e.id, id) ? { ...e, progresso: valor } : e));
   };
 
   const progressoGeral = etapas.length > 0
@@ -137,7 +138,7 @@ export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: 
       <KMHeader title="Cronograma" sub="Etapas da obra" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -406,7 +407,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
   const [criticaInput, setCriticaInput] = useState(false);
   const [progressoInput, setProgressoInput] = useState(0);
 
-  const obra = obras.find(o => o.id === obraId);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
   const hojeIso = dataLocalIso();
   const etapasRaw = cronogramas[obraId] || [];
 
@@ -429,7 +430,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
   };
 
   const salvarEtapa = () => {
-    const novas = etapasRaw.map(et => et.id === etapaSel.id ? {
+    const novas = etapasRaw.map(et => mesmoId(et.id, etapaSel.id) ? {
       ...et,
       custoBase: parseFloat(custoInput) || 0,
       critica: criticaInput,
@@ -444,7 +445,7 @@ export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
       <KMHeader title="Cronograma Pro" sub={obra?.nome || "—"} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
 
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 10 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
@@ -627,7 +628,7 @@ const _clsSituacao = st => st === "Presente" ? "txt-ok" : st === "Falta" ? "txt-
 const _diarioDoDia = (diario, obraId, dataBR) => {
   const iso = _isoDeBR(dataBR);
   if (!iso) return [];
-  return (diario || []).filter(d => d.obraId === obraId && (d.data ? _isoDeBR(d.data) === iso : d.ts ? dataLocalIso(new Date(d.ts)) === iso : false));
+  return (diario || []).filter(d => mesmoId(d.obraId, obraId) && (d.data ? _isoDeBR(d.data) === iso : d.ts ? dataLocalIso(new Date(d.ts)) === iso : false));
 };
 /* Foto guardada como SVG em data-URI SEM width/height (ex.: placeholders da demonstração): o html2canvas do PDF usa como
    recorte da origem o tamanho natural que o navegador dá a um SVG só com viewBox (200×150) e a foto sai como um retângulo
@@ -653,14 +654,75 @@ const _srcImgDoc = src => {
     return cab + btoa(bin);
   } catch { return src; }
 };
+/* Texto sem emoji (as legendas da galeria vêm como "📅 Foto do dia (RDO)", "📒 Diário de obra") */
+const _semEmojiDoc = s => String(s ?? "").replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "").replace(/\s+/g, " ").trim();
+/* <img> das fotos: URL da nuvem (Firebase Storage responde Access-Control-Allow-Origin: *) vai com crossorigin,
+   para o html2canvas do PDF conseguir desenhar a foto; data-URI passa direto. */
+const _imgDoc = (src, alt = "") => {
+  const s = _srcImgDoc(src);
+  return `<img src="${_escDoc(s)}" alt="${_escDoc(alt)}"${/^https?:/i.test(s) ? ' crossorigin="anonymous"' : ""}/>`;
+};
+/* Fotos da GALERIA da obra no dia do RDO. A cópia do RDO na nuvem vai sem as fotos (limite de 1 MB por documento do
+   Firestore): quem baixa o RDO em outro aparelho, ou emite o RDO pelo painel, usa as fotos que o "Finalizar dia", o
+   diário e a câmera gravaram na galeria (mesma obra, mesma data). Ordem: hora, depois número da foto. */
+const _LIMITE_FOTOS_RDO = 12;
+const _isoFotoGaleria = f => f.data ? _isoDeBR(f.data) : (f.criadoEm || f.ts) ? dataLocalIso(new Date(f.criadoEm || f.ts)) : "";
+const _minutosDoc = h => { const m = /^(\d{1,2}):(\d{2})/.exec(String(h || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : 24 * 60; };
+const _fotosGaleriaDoDia = (fotosObras, obraId, dataBR) => {
+  const iso = _isoDeBR(dataBR);
+  if (!iso) return [];
+  return (fotosObras || [])
+    .filter(f => f && (f.foto || f.fotoUrl) && mesmoId(f.obraId, obraId) && _isoFotoGaleria(f) === iso)
+    .sort((a, b) => _minutosDoc(a.hora) - _minutosDoc(b.hora) || (Number(a.numero) || 0) - (Number(b.numero) || 0));
+};
+/* Legenda da foto da galeria: número · data hora · legenda (sem emoji) */
+const _legendaFotoGaleria = f => {
+  const leg = _semEmojiDoc(f.legenda);
+  return [f.numero ? "#" + String(f.numero).padStart(3, "0") : "", [f.data, f.hora].filter(Boolean).join(" "), leg.length > 80 ? leg.slice(0, 79) + "…" : leg].filter(Boolean).join(" · ");
+};
+/* Refeições no documento: preço vazio OU zerado = sem preço (o cadastro novo da empresa vem com 0). Nunca vira "R$ 0,00". */
+const _TIPOS_REFEICAO = [["cafeManha", "Café manhã"], ["cafeTarde", "Café tarde"], ["marmita", "Marmita"], ["lanche", "Lanche"]];
+const _precoRefeicaoDoc = (empresa, k) => { const p = precoAlim(empresa, k); return p !== null && p > 0 ? p : null; };
+const _algumPrecoRefeicao = empresa => _TIPOS_REFEICAO.some(([k]) => _precoRefeicaoDoc(empresa, k) !== null);
+const _qtdRefeicoes = marcados => _TIPOS_REFEICAO.filter(([k]) => !!(marcados || {})[k]).length;
+/* Quadro curto não se divide entre páginas: título e tabela mudam de página juntos (classe .km-quadro-inteiro,
+   bloco com break-inside: avoid; o paginador não abre). Classe própria: a .km-inteiro do pdf.js é inline-block
+   (partes do cabeçalho de continuação que não se quebram). Só para quadros que cabem com folga numa página. */
+const _inteiroSe = (curto, html) => curto ? `<div class="km-quadro-inteiro">${html}</div>` : html;
+/* Registro profissional sem o rótulo repetido: o campo às vezes vem digitado como "Resp. técnico: Eng. Civil … — CREA-…",
+   e o bloco de assinatura já diz "Responsável técnico". */
+const _registroSemRotulo = reg => String(reg || "").replace(/^\s*(resp(\.|ons[áa]vel)?\s*t[ée]c(\.|nico)?|r\.?\s?t\.?)\s*[:\-–—]\s*/i, "").trim();
 
-export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias, encarregado, empresa, horasTrabalhadas, horimetros, fotos, alimentacao, totalAlimentacao, recebimentos }) {
+/* ── RDOs por obra: a lista e a numeração são de cada obra (antes contavam os RDOs de todas as obras).
+   Próximo Nº = maior número já emitido NA OBRA + 1 (com a numeração antiga, que era única para todas as obras,
+   "quantidade + 1" repetiria um número que a obra já tem). Os RDOs já emitidos mantêm o número que têm. ── */
+export const rdosDaObra = (rdos, obraId) => (rdos || []).filter(r => r && mesmoId(r.obraId, obraId));
+export const proximoNumeroRDO = (rdos, obraId) => rdosDaObra(rdos, obraId).reduce((m, r) => Math.max(m, Number(r.numero) || 0), 0) + 1;
+/* Mais recente primeiro: data do RDO, depois número, depois hora da emissão */
+const _isoRDO = r => r.dataIso || _isoDeBR(r.data) || "";
+const _maisRecentePrimeiro = (a, b) => _isoRDO(b).localeCompare(_isoRDO(a)) || (Number(b.numero) || 0) - (Number(a.numero) || 0) || (Number(b.ts) || 0) - (Number(a.ts) || 0);
+/* ── No máximo UM RDO por obra por dia. Chave: obra (mesmoId) + dia ISO (dataIso ou a data DD/MM/AAAA convertida).
+   RDOs da obra naquele dia, mais recente primeiro: vazio = dia sem RDO; mais de um = duplicado antigo (não se apaga
+   nem renumera sozinho: a tela avisa e o gestor decide). ── */
+export const rdosDoDiaObra = (rdos, obraId, iso) => (iso ? rdosDaObra(rdos, obraId).filter(r => _isoRDO(r) === iso).sort(_maisRecentePrimeiro) : []);
+/* "DD/MM/AAAA" digitado → "AAAA-MM-DD" só quando é uma data de calendário válida ("31/02/2026", "25/09/26" → "") */
+const _isoValidoDeBR = br => {
+  const m = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*$/.exec(String(br || ""));
+  if (!m) return "";
+  const d = Number(m[1]), mes = Number(m[2]), a = Number(m[3]);
+  const dt = new Date(a, mes - 1, d);
+  return dt.getFullYear() === a && dt.getMonth() === mes - 1 && dt.getDate() === d ? dataLocalIso(dt) : "";
+};
+const _brDeIso = iso => { const [a, m, d] = String(iso || "").split("-"); return a && m && d ? `${d}/${m}/${a}` : ""; };
+const _nRDO = n => String(n ?? "").padStart(3, "0");
+
+export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias, encarregado, empresa, horasTrabalhadas, horimetros, fotos, alimentacao, totalAlimentacao, recebimentos, fotosObras }) {
   presencas = presencas || {};
   empresa = empresa || {};
-  const trabObra = (trabalhadores || []).filter(t => t.obraId === obra.id);
-  const ativosObra = (ativos || []).filter(a => a.obraId === obra.id);
-  const abastDia = (abastecimentos || []).filter(a => a.obraId === obra.id && a.data === data);
-  const pedidosDia = (pedidos || []).filter(p => p.obraId === obra.id && p.data === data);
+  const trabObra = (trabalhadores || []).filter(t => mesmoId(t.obraId, obra.id));
+  const ativosObra = (ativos || []).filter(a => mesmoId(a.obraId, obra.id));
+  const abastDia = (abastecimentos || []).filter(a => mesmoId(a.obraId, obra.id) && a.data === data);
+  const pedidosDia = (pedidos || []).filter(p => mesmoId(p.obraId, obra.id) && p.data === data);
 
   const presentes = trabObra.filter(t => presencas[t.id] === "Presente").length;
   const faltas    = trabObra.filter(t => presencas[t.id] === "Falta").length;
@@ -678,19 +740,42 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
 
   const numeroTxt = String(numero ?? "").padStart(3, "0");
   const temAlim = !!(alimentacao && Object.keys(alimentacao).length > 0);
-  const trabAlim = (trabalhadores || []).filter(t => presencas[t.id] === "Presente");
+  // Presentes da obra (presencas pode vir do histórico do dia inteiro, com trabalhadores de outras obras)
+  const trabAlim = (trabalhadores || []).filter(t => presencas[t.id] === "Presente" && (mesmoId(t.obraId, obra.id) || !!alimentacao?.[t.id]));
   const totalAlimDia = trabAlim.reduce((s, t) => s + somaAlim(empresa, alimentacao?.[t.id]), 0);
+  // Com algum preço configurado: valores em R$ (refeição sem preço sai "✓", fora do total).
+  // Sem nenhum preço: tabela de QUANTIDADES (✓ / —, refeições por trabalhador e por tipo), sem "R$ 0,00".
+  const comPrecoAlim = _algumPrecoRefeicao(empresa);
+  const marcouAlim = (t, k) => !!(alimentacao?.[t.id] || {})[k];
+  const semPrecoMarcada = comPrecoAlim && trabAlim.some(t => _TIPOS_REFEICAO.some(([k]) => marcouAlim(t, k) && _precoRefeicaoDoc(empresa, k) === null));
 
-  // Registro fotográfico: fotos do encarregado + cupons de combustível + recebimentos + ocorrências do dia
+  // Registro fotográfico: fotos do dia + cupons de combustível + recebimentos + ocorrências do dia.
+  // Fotos do dia: as do próprio RDO (aparelho de quem finalizou o dia) ou, sem elas (cópia da nuvem, RDO emitido
+  // pelo painel), as da galeria da obra na mesma data.
+  const galeriaDia = _fotosGaleriaDoDia(fotosObras, obra.id, data);
   const todasFotos = [];
-  (fotos || []).forEach((f, i) => todasFotos.push({ src: f, tipo: "Obra", legenda: `Foto da obra ${i + 1}` }));
+  let fotosGaleriaForaDoLimite = 0;
+  if (fotos && fotos.length) {
+    // a mesma foto carimbada está na galeria (igual, ou já trocada pela URL da nuvem: aí vale a ordem das fotos deste RDO)
+    const doRdo = galeriaDia.filter(x => String(x.origemRDO ?? "") === String(numero ?? "-"));
+    fotos.forEach((f, i) => {
+      const g = galeriaDia.find(x => x.foto === f) || (doRdo.length === fotos.length ? doRdo[i] : null);
+      todasFotos.push({ src: f, tipo: "Obra", legenda: g ? _legendaFotoGaleria(g) : `Foto da obra ${i + 1}` });
+    });
+  } else {
+    // foto de ocorrência do diário também vai para a galeria: não repete (ela já sai como "Ocorrência")
+    const jaNaOcorrencia = g => (ocorrencias || []).some(o => o.foto && (o.foto === g.foto || (g.origemDiario && String(o.texto || "").trim().substring(0, 80) === String(g.legenda || "").trim())));
+    const doDia = galeriaDia.filter(g => !jaNaOcorrencia(g));
+    fotosGaleriaForaDoLimite = Math.max(0, doDia.length - _LIMITE_FOTOS_RDO);
+    doDia.slice(0, _LIMITE_FOTOS_RDO).forEach(g => todasFotos.push({ src: g.foto || g.fotoUrl, tipo: "Obra", legenda: _legendaFotoGaleria(g) }));
+  }
   abastDia.forEach(a => {
     if (!a.fotoCupom) return;
-    const ativo = (ativos || []).find(x => x.id === a.ativoId);
+    const ativo = (ativos || []).find(x => mesmoId(x.id, a.ativoId));
     todasFotos.push({ src: a.fotoCupom, tipo: "Combustível", legenda: `${ativo?.nome || "Veículo"} — ${_brl(a.valor)} (${a.posto || "posto"})` });
   });
   if (Array.isArray(recebimentos)) {
-    recebimentos.filter(r => r.obraId === obra.id && r.data === data && r.foto).forEach(r => {
+    recebimentos.filter(r => mesmoId(r.obraId, obra.id) && r.data === data && r.foto).forEach(r => {
       todasFotos.push({ src: r.foto, tipo: "Recebimento", legenda: `${r.material} — ${r.qtd} (${r.conformidade || "Conforme"})` });
     });
   }
@@ -706,7 +791,7 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
 
   const assinantes = [
     encarregado ? { nome: encarregado, cargo: "Encarregado responsável" } : null,
-    empresa.responsavel && empresa.responsavel !== encarregado ? { nome: empresa.responsavel, cargo: "Responsável técnico" + (empresa.registro ? " · " + empresa.registro : "") } : null,
+    empresa.responsavel && empresa.responsavel !== encarregado ? { nome: empresa.responsavel, cargo: "Responsável técnico" + (_registroSemRotulo(empresa.registro) ? " · " + _registroSemRotulo(empresa.registro) : "") } : null,
   ].filter(Boolean);
   if (!assinantes.length) assinantes.push({ nome: "", cargo: "Encarregado responsável" });
   assinantes.push({ nome: "Fiscalização", cargo: "Visto / Carimbo" });
@@ -724,8 +809,31 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
   for (let i = 0; i < todasFotos.length; i += 3) linhasFotos.push(todasFotos.slice(i, i + 3));
   const fotosHTML = linhasFotos.map((linha, li) => `<div class="fotos linha${li === linhasFotos.length - 1 ? " junto" : ""}">${linha.map((f, k) => {
     const n = li * 3 + k + 1;
-    return `<figure><img src="${_escDoc(_srcImgDoc(f.src))}" alt="Foto ${n}"/><figcaption><b>${f.tipo}</b> · ${_escDoc(f.legenda)}</figcaption></figure>`;
+    return `<figure>${_imgDoc(f.src, "Foto " + n)}<figcaption><b>${f.tipo}</b> · ${_escDoc(f.legenda)}</figcaption></figure>`;
   }).join("")}</div>`).join("");
+
+  // 5. Alimentação: quadro inteiro até 12 trabalhadores (título, cabeçalho, linhas e total nunca se separam; não
+  // sobra 1 linha no pé da página). Mais que isso, divide por linhas com o cabeçalho repetido. A explicação do "✓"
+  // fica na própria linha de total, nunca solta na página.
+  const alimHTML = !temAlim ? "" : _inteiroSe(trabAlim.length <= 12, `
+    <div class="sec">${secAlim}. Alimentação do dia${comPrecoAlim ? "" : " <small>quantidades registradas no dia</small>"}</div>
+    <table class="quadro">
+      <thead><tr><th style="width:32%">Trabalhador</th>${_TIPOS_REFEICAO.map(([, rot]) => `<th style="width:13%" class="${comPrecoAlim ? "num" : "centro"}">${rot}</th>`).join("")}<th style="width:16%" class="num">${comPrecoAlim ? "Total" : "Refeições"}</th></tr></thead>
+      <tbody>
+      ${trabAlim.length === 0 ? '<tr><td colspan="6" class="vazio">Sem refeições registradas</td></tr>' : trabAlim.map(t => {
+        const a = alimentacao[t.id] || {};
+        const cel = k => {
+          if (!a[k]) return '<span class="txt-cinza">—</span>';
+          if (!comPrecoAlim) return "<b>✓</b>";
+          const p = _precoRefeicaoDoc(empresa, k);
+          return p === null ? '<span class="txt-cinza">✓</span>' : _brl(p);
+        };
+        return `<tr><td>${_escDoc(t.nome)}</td>${_TIPOS_REFEICAO.map(([k]) => `<td class="${comPrecoAlim ? "num" : "centro"}">${cel(k)}</td>`).join("")}<td class="num"><b>${comPrecoAlim ? _brl(somaAlim(empresa, a)) : _qtdRefeicoes(a)}</b></td></tr>`;
+      }).join("") + (comPrecoAlim
+        ? `<tr class="total"><td colspan="5">Total do dia${semPrecoMarcada ? ' <span class="nota-total">· ✓ = refeição sem valor unitário, fora do total</span>' : ""}</td><td class="num">${_brl(totalAlimDia)}</td></tr>`
+        : `<tr class="total"><td>Total do dia</td>${_TIPOS_REFEICAO.map(([k]) => `<td class="centro">${trabAlim.filter(t => marcouAlim(t, k)).length}</td>`).join("")}<td class="num">${trabAlim.reduce((s, t) => s + _qtdRefeicoes(alimentacao[t.id]), 0)}</td></tr>`)}
+      </tbody>
+    </table>`);
 
   const html = `<html><head><meta charset="UTF-8"><title>RDO ${numeroTxt} — ${_escDoc(obra.nome)}</title>
     <style>
@@ -734,6 +842,8 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
       .quadro tbody tr.total td { background: #fff7df; }
       .fotos.linha { margin-bottom: 6px; }
       .fotos.linha.junto { margin-bottom: 8px; }
+      .km-quadro-inteiro { display: block; break-inside: avoid; page-break-inside: avoid; }
+      .quadro tr.total .nota-total { font-weight: 400; font-size: 7pt; color: #5c6b73; margin-left: 2px; }
     </style></head><body>
 
     ${gerarHeaderHTML({ tipo: "Relatório Diário de Obra", numero, periodo: data, info_extra: `${obra.nome}${obra.local ? " · " + obra.local : ""} · Clima: ${clima || "—"}${encarregado ? " · Encarregado: " + encarregado : ""}`, empresa })}
@@ -766,12 +876,13 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
       </tbody>
     </table>
 
+    ${ativosObra.length <= 6 ? '<div class="km-quadro-inteiro">' : ""}
     <div class="sec">2. Ativos e logística <small>maquinário e frota</small></div>
     <table class="quadro compacto">
       <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:24%">Identificação</th><th style="width:12%">Placa</th><th style="width:17%">Tipo</th><th style="width:11%;text-align:right">Horímetro início</th><th style="width:11%;text-align:right">Horímetro fim</th><th style="width:8%" class="num">Horas</th><th style="width:12%" class="num">Combustível</th></tr></thead>
       <tbody>
       ${ativosObra.length === 0 ? '<tr><td colspan="8" class="vazio">Sem ativos nesta obra</td></tr>' : ativosObra.map((a, i) => {
-        const abastA = abastDia.filter(x => x.ativoId === a.id);
+        const abastA = abastDia.filter(x => mesmoId(x.ativoId, a.id));
         const totalAbast = abastA.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0);
         const horim = horimetros?.[a.id] || null;
         const inicioH = horim ? _numDoc(horim.inicio, 1) : "—";
@@ -781,22 +892,26 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
       }).join("")}
       </tbody>
     </table>
+    ${ativosObra.length <= 6 ? "</div>" : ""}
 
     ${abastDia.length > 0 ? `
+    ${abastDia.length <= 6 ? '<div class="km-quadro-inteiro">' : ""}
     <div class="sec">2.1. Abastecimentos do dia</div>
     <table class="quadro">
       <thead><tr><th style="width:5%" class="num">Nº</th><th style="width:25%">Veículo</th><th style="width:20%">Posto</th><th style="width:10%" class="num">Litros</th><th style="width:12%" class="num">R$/litro</th><th style="width:14%" class="num">Valor</th><th style="width:14%;text-align:right">Km ou horímetro</th></tr></thead>
       <tbody>
       ${abastDia.map((a, i) => {
-        const ativo = (ativos || []).find(x => x.id === a.ativoId);
+        const ativo = (ativos || []).find(x => mesmoId(x.id, a.ativoId));
         const litros = parseFloat(a.litros) || 0, valor = parseFloat(a.valor) || 0;
         return `<tr><td class="num">${i + 1}</td><td><b>${_escDoc(ativo?.nome) || "—"}</b>${ativo?.placa ? `<br/><span class="txt-cinza">${_escDoc(ativo.placa)}</span>` : ""}</td><td>${_escDoc(a.posto) || "—"}</td><td class="num">${_numDoc(litros, 1)}</td><td class="num">${litros > 0 ? _brl(valor / litros) : "—"}</td><td class="num"><b>${_brl(valor)}</b></td><td class="num">${_escDoc(a.km || a.horimetro) || "—"}</td></tr>`;
       }).join("")}
       <tr class="total"><td colspan="3">Total do dia</td><td class="num">${_numDoc(abastDia.reduce((s, a) => s + (parseFloat(a.litros) || 0), 0), 1)} L</td><td></td><td class="num">${_brl(abastDia.reduce((s, a) => s + (parseFloat(a.valor) || 0), 0))}</td><td></td></tr>
       </tbody>
     </table>
+    ${abastDia.length <= 6 ? "</div>" : ""}
     ` : ""}
 
+    ${pedidosDia.length <= 6 ? '<div class="km-quadro-inteiro">' : ""}
     <div class="sec">3. Materiais e insumos</div>
     <table class="quadro">
       <thead><tr><th style="width:12%" class="num">Pedido Nº</th><th style="width:36%">Material</th><th style="width:16%" class="num">Quantidade</th><th style="width:22%">Solicitante</th><th style="width:14%" class="centro">Situação</th></tr></thead>
@@ -804,31 +919,18 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
       ${pedidosDia.length === 0 ? '<tr><td colspan="5" class="vazio">Sem materiais ou insumos registrados neste dia</td></tr>' : pedidosDia.map(p => `<tr><td class="num"><b>${String(p.id).slice(-6)}</b></td><td>${_escDoc(p.material)}</td><td class="num">${_escDoc(fmtQtd(p.qtd))}</td><td>${_escDoc(p.enc) || "—"}</td><td class="centro ${_clsStatusPedido(p.status)}"><b>${_escDoc(p.status) || "—"}</b></td></tr>`).join("")}
       </tbody>
     </table>
+    ${pedidosDia.length <= 6 ? "</div>" : ""}
 
     <div class="sec">4. Observações gerais</div>
     ${observacoes ? `<div class="bloco">${_quebrasDoc(observacoes)}</div>` : '<div class="vazio">Sem observações</div>'}
 
-    ${temAlim ? `
-    <div class="sec">${secAlim}. Alimentação do dia</div>
-    <table class="quadro">
-      <thead><tr><th style="width:30%">Trabalhador</th><th style="width:14%" class="num">Café manhã</th><th style="width:14%" class="num">Café tarde</th><th style="width:14%" class="num">Marmita</th><th style="width:14%" class="num">Lanche</th><th style="width:14%" class="num">Total</th></tr></thead>
-      <tbody>
-      ${trabAlim.length === 0 ? '<tr><td colspan="6" class="vazio">Sem refeições registradas</td></tr>' : trabAlim.map(t => {
-        const a = alimentacao[t.id] || {};
-        // Só soma o que tem preço configurado; refeição marcada sem preço sai como "sem preço"
-        const cel = k => { if (!a[k]) return '<span class="txt-cinza">—</span>'; const p = precoAlim(empresa, k); return p === null ? '<span class="txt-alerta">sem preço</span>' : _brl(p); };
-        return `<tr><td>${_escDoc(t.nome)}</td><td class="num">${cel("cafeManha")}</td><td class="num">${cel("cafeTarde")}</td><td class="num">${cel("marmita")}</td><td class="num">${cel("lanche")}</td><td class="num"><b>${_brl(somaAlim(empresa, a))}</b></td></tr>`;
-      }).join("") + `<tr class="total"><td colspan="5">Total do dia</td><td class="num">${_brl(totalAlimDia)}</td></tr>`}
-      </tbody>
-    </table>
-    ${faltaPrecoAlim(empresa) ? '<div class="nota">Refeição sem preço configurado aparece como "sem preço" e não entra no total. Configure os preços em Sistema → Empresa.</div>' : ""}
-    ` : ""}
+    ${alimHTML}
 
     <div class="sec">${secOcor}. Ocorrências técnicas do dia</div>
     ${ocorrenciasHTML}
 
     ${todasFotos.length ? `
-    <div class="sec">${secFotos}. Registro fotográfico <small>${todasFotos.length} foto${todasFotos.length > 1 ? "s" : ""}</small></div>
+    <div class="sec">${secFotos}. Registro fotográfico <small>${todasFotos.length} foto${todasFotos.length > 1 ? "s" : ""}${fotosGaleriaForaDoLimite ? ` · mais ${fotosGaleriaForaDoLimite} do dia na galeria da obra` : ""}</small></div>
     ${fotosHTML}
     ` : ""}
 
@@ -839,7 +941,9 @@ export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, prese
 }
 
 
-export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, historico, diario, usuario, empresa, rdosEmitidos, recebimentos = [], fotosObras = [], despesasAvulsas = [], movimentacoes = [], movEquip = [], produtividade = [], cronogramas = [], onBack, onEmitirRDO, onUpdateRDO, onRemoveRDO }) {
+export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos, historico, diario, usuario, empresa, rdosEmitidos, recebimentos = [], fotosObras = [], despesasAvulsas = [], movimentacoes = [], movEquip = [], produtividade = [], cronogramas = [], onBack, onEmitirRDO, onUpdateRDO, onRemoveRDO, podeCriarRdoDia = false }) {
+  // podeCriarRdoDia: só o ADMINISTRADOR (dono da empresa) cria o RDO de um dia que o encarregado não fechou.
+  // O gestor de escritório edita RDOs e gera o consolidado semanal, mas não cria RDO diário.
   const [obraId, setObraId] = useState(obras[0]?.id || 1);
   const [data, setData] = useState(new Date().toLocaleDateString("pt-BR"));
   const [clima, setClima] = useState("Bom");
@@ -847,23 +951,89 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
   const [editandoRdo, setEditandoRdo] = useState(null);
   const [fotoVer, setFotoVer] = useState(null); // foto fullscreen
 
-  const obra = obras.find(o => o.id === obraId);
-  const isoData = (() => { const [d, m, a] = data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; })();
-  const presencasDia = historico[isoData] || {};
+  // Lista mais nova para a confirmação do "Criar RDO deste dia" (o callback roda depois do clique)
+  const rdosRef = useRef(rdosEmitidos);
+  rdosRef.current = rdosEmitidos;
+  const ultimaCriacaoRef = useRef(null); // { chave: "obra|dia", ts }: bloqueia 2º pedido enquanto a lista nova não chega
+
+  const obra = obras.find(o => mesmoId(o.id, obraId));
+  const isoData = _isoValidoDeBR(data); // "" enquanto a data digitada não é uma data válida
+  const presencasDia = (isoData && historico[isoData]) || {};
   const ocorrenciasDia = _diarioDoDia(diario, obraId, data); // só o dia do RDO (antes entrava o diário inteiro da obra)
 
-  const proxNumero = rdosEmitidos.length + 1;
+  // Só os RDOs da obra selecionada (mais recente primeiro); a numeração é por obra
+  const rdosObra = rdosDaObra(rdosEmitidos, obraId).sort(_maisRecentePrimeiro);
+  const proxNumero = proximoNumeroRDO(rdosEmitidos, obraId);
+  const qtdRdosNoDia = {}; // dia ISO → quantos RDOs desta obra (> 1 = duplicado antigo)
+  rdosObra.forEach(r => { const k = _isoRDO(r); if (k) qtdRdosNoDia[k] = (qtdRdosNoDia[k] || 0) + 1; });
 
-  const emitir = () => {
-    const numero = proxNumero;
-    onEmitirRDO({ id: Date.now(), numero, obraId, data, dataIso: isoData, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
-    gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas: presencasDia, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias: ocorrenciasDia, encarregado: usuario?.nome, empresa, recebimentos });
+  // Um RDO por obra por dia: o do dia escolhido (duplicado antigo: mostra o mais recente e avisa)
+  const rdosDoDia = rdosDoDiaObra(rdosEmitidos, obraId, isoData);
+  const rdoDoDia = rdosDoDia[0] || null;
+  const dataFutura = !!isoData && isoData > dataLocalIso();
+  const podeCriar = !!podeCriarRdoDia && !!obra && !!isoData && !dataFutura && !rdoDoDia;
+
+  // O RDO diário nasce do encarregado ao finalizar o dia. Aqui só o administrador cria o RDO de um dia SEM RDO
+  // (hoje ou passado), uma única vez, com o próximo número da obra.
+  const criarRDODoDia = () => {
+    if (!podeCriar) return;
+    const oId = obraId, iso = isoData, dataBR = _brDeIso(iso), obraNome = obra.nome;
+    confirmar(`O encarregado não fechou este dia?\n\nO RDO Nº ${_nRDO(proxNumero)} será criado para ${obraNome} em ${dataBR}.`, () => {
+      const chave = `${String(oId)}|${iso}`;
+      const ult = ultimaCriacaoRef.current;
+      if (ult && ult.chave === chave && Date.now() - ult.ts < 5000) return;
+      if (rdosDoDiaObra(rdosRef.current, oId, iso).length > 0) return; // o dia ganhou RDO enquanto confirmava
+      ultimaCriacaoRef.current = { chave, ts: Date.now() };
+      const numero = proximoNumeroRDO(rdosRef.current, oId);
+      onEmitirRDO({ id: Date.now(), numero, obraId: normId(oId), data: dataBR, dataIso: iso, encarregado: usuario?.nome, clima, observacoes, ts: Date.now() });
+      setObservacoes("");
+    });
+  };
+
+  // Excluir RDO: o administrador exclui qualquer um (só ele recria o RDO de um dia vazio). O gestor de
+  // escritório só exclui a cópia repetida de um dia com MAIS de um RDO (o dia continua com o outro):
+  // ele edita RDOs e gera o consolidado, mas não abre um dia sem RDO que só o administrador preenche.
+  const excluirRDO = r => {
+    const iso = _isoRDO(r);
+    const outrosNoDia = () => (iso ? rdosDoDiaObra(rdosRef.current, r.obraId, iso).filter(x => !mesmoId(x.id, r.id)).length : 0);
+    if (!podeCriarRdoDia && outrosNoDia() === 0) { alert("⚠️ Só o administrador exclui o RDO de um dia: o dia ficaria sem RDO e só ele cria outro."); return; }
+    const aviso = outrosNoDia() > 0 ? "\n\nO dia continua com o outro RDO desta obra." : `\n\n${_brDeIso(iso) || r.data || "O dia"} fica sem RDO desta obra.`;
+    confirmar(`Excluir RDO Nº ${_nRDO(r.numero)}?${aviso}`, () => {
+      if (!podeCriarRdoDia && outrosNoDia() === 0) return; // o outro RDO do dia sumiu enquanto confirmava
+      onRemoveRDO(r.id);
+    });
+  };
+
+  // PDF de um RDO salvo (bloco do dia e cartões da lista)
+  const baixarRDO = r => {
+    const o = obras.find(x => mesmoId(x.id, r.obraId));
+    if (!o) { alert("⚠️ Obra deste RDO não encontrada."); return; }
+    const isoDt = _isoRDO(r);
+    gerarPDFRDORabnt({
+      numero: r.numero,
+      obra: o,
+      data: r.data,
+      clima: r.clima || "Bom",
+      observacoes: r.observacoes || "",
+      presencas: r.presencas || historico[isoDt] || {},
+      trabalhadores, ativos, abastecimentos, pedidos,
+      ocorrencias: _diarioDoDia(diario, r.obraId, r.data),
+      encarregado: r.encarregado,
+      empresa,
+      horasTrabalhadas: r.horasTrabalhadas,
+      horimetros: r.horimetros,
+      fotos: r.fotos, // só existe no aparelho que finalizou o dia; sem elas, as fotos saem da galeria da obra
+      alimentacao: r.alimentacao,
+      totalAlimentacao: r.totalAlimentacao,
+      recebimentos,
+      fotosObras,
+    });
   };
 
   // RDO Semanal Consolidado: junta todos os RDOs da semana atual da obra selecionada
   const emitirSemanal = (oId) => {
     try {
-      const obraSel = obras.find(o => o.id === oId);
+      const obraSel = obras.find(o => mesmoId(o.id, oId));
       if (!obraSel) {
         alert("⚠️ Obra não encontrada");
         return;
@@ -876,12 +1046,12 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       const isoDe = r => r.dataIso || _isoDeBR(r.data); // "YYYY-MM-DD" do RDO (dataIso ou a data DD/MM/AAAA)
       let rdosSem = (rdosEmitidos || []).filter(r => {
         const dt = _dataLocalDoc(isoDe(r)); // local: new Date("YYYY-MM-DD") lia em UTC e jogava a segunda-feira no domingo
-        return r.obraId === oId && dt && dt >= seg && dt <= sex;
+        return mesmoId(r.obraId, oId) && dt && dt >= seg && dt <= sex;
       });
 
       let modoFallback = false;
       if (rdosSem.length === 0) {
-        const todosObra = (rdosEmitidos || []).filter(r => r.obraId === oId);
+        const todosObra = (rdosEmitidos || []).filter(r => mesmoId(r.obraId, oId));
         if (todosObra.length === 0) {
           alert("⚠️ Sem RDOs para esta obra ainda.\n\nObra: " + obraSel.nome + "\n\nFinalize pelo menos 1 dia de obra (RDO) para gerar o relatório semanal.");
           return;
@@ -900,7 +1070,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     rdosSem.forEach(r => {
       const pres = r.presencas || {};
       Object.entries(pres).forEach(([tid, st]) => {
-        if (!trabPres[tid]) trabPres[tid] = { p: 0, f: 0, a: 0, horas: 0, alimentacao: 0 };
+        if (!trabPres[tid]) trabPres[tid] = { p: 0, f: 0, a: 0, horas: 0, alimentacao: 0, refeicoes: 0 };
         if (st === "Presente") {
           trabPres[tid].p++; totalPres++;
           trabPres[tid].horas += (r.horasTrabalhadas?.[tid] || 9);
@@ -908,6 +1078,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
           const ali = (r.alimentacao || {})[tid] || {};
           const valDia = somaAlim(empresa, ali); // só o que tem preço configurado (sem valor inventado)
           trabPres[tid].alimentacao += valDia;
+          trabPres[tid].refeicoes += _qtdRefeicoes(ali); // quantidade marcada (vale mesmo sem preço configurado)
         }
         else if (st === "Falta") { trabPres[tid].f++; totalFalt++; }
         else if (st === "Atestado") { trabPres[tid].a++; totalAtest++; }
@@ -928,7 +1099,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // ⛽ Combustível do período
     const abastSemana = (abastecimentos || []).filter(a => {
-      if (a.obraId !== oId) return false;
+      if (!mesmoId(a.obraId, oId)) return false;
       try {
         const [d, m, y] = (a.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
@@ -939,9 +1110,9 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     const totalLitros = abastSemana.reduce((s, a) => s + (parseFloat(a.litros) || 0), 0);
 
     // Por veículo
-    const ativosObraSel = (ativos || []).filter(a => a.obraId === oId);
+    const ativosObraSel = (ativos || []).filter(a => mesmoId(a.obraId, oId));
     const combPorVeic = ativosObraSel.map(a => {
-      const aa = abastSemana.filter(x => x.ativoId === a.id);
+      const aa = abastSemana.filter(x => mesmoId(x.ativoId, a.id));
       return {
         ativo: a,
         gasto: aa.reduce((s, x) => s + (parseFloat(x.valor) || 0), 0),
@@ -956,17 +1127,17 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // 📷 FOTOS do período
     const fotosSem = (fotosObras || []).filter(f => {
-      if (f.obraId !== oId) return false;
+      if (!mesmoId(f.obraId, oId)) return false;
       try {
         const [d, m, y] = (f.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
         return dt >= segReal && dt <= sexReal;
       } catch { return false; }
-    });
+    }).sort((a, b) => _isoFotoGaleria(a).localeCompare(_isoFotoGaleria(b)) || _minutosDoc(a.hora) - _minutosDoc(b.hora) || (Number(a.numero) || 0) - (Number(b.numero) || 0)); // ordem do dia e da hora (a galeria guarda a mais nova primeiro)
 
     // 📦 PEDIDOS do período
     const pedidosSem = (pedidos || []).filter(p => {
-      if (p.obraId !== oId) return false;
+      if (!mesmoId(p.obraId, oId)) return false;
       try {
         const [d, m, y] = (p.dataSolicitacao || p.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
@@ -979,7 +1150,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // 💸 DESPESAS avulsas do período
     const despesasSem = (despesasAvulsas || []).filter(d => {
-      if (d.obraId !== oId) return false;
+      if (!mesmoId(d.obraId, oId)) return false;
       try {
         const [dia, m, y] = (d.data || "").split("/");
         const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(dia));
@@ -990,7 +1161,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
 
     // 📋 DIÁRIO do período
     const diarioSem = (diario || []).filter(d => {
-      if (d.obraId !== oId) return false;
+      if (!mesmoId(d.obraId, oId)) return false;
       const dt = new Date(d.ts || 0);
       return dt >= segReal && dt <= sexReal;
     });
@@ -998,18 +1169,18 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     // 🔄 MOVIMENTAÇÕES do período (pessoal e equipamento)
     const movPessSem = (movimentacoes || []).filter(m => {
       const dt = new Date(m.ts || 0);
-      const envolvida = m.obraOrigem === oId || m.obraDestino === oId;
+      const envolvida = mesmoId(m.obraOrigem, oId) || mesmoId(m.obraDestino, oId);
       return envolvida && dt >= segReal && dt <= sexReal;
     });
     const movEquipSem = (movEquip || []).filter(m => {
       const dt = new Date(m.ts || 0);
-      const envolvida = m.obraOrigemId === oId || m.obraDestinoId === oId;
+      const envolvida = mesmoId(m.obraOrigemId, oId) || mesmoId(m.obraDestinoId, oId);
       return envolvida && dt >= segReal && dt <= sexReal;
     });
 
     // 📈 PRODUTIVIDADE do período
     const prodSem = (produtividade || []).filter(p => {
-      if (p.obraId !== oId) return false;
+      if (!mesmoId(p.obraId, oId)) return false;
       const dt = new Date(p.ts || 0);
       return dt >= segReal && dt <= sexReal;
     });
@@ -1023,20 +1194,22 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     var totalRdosObra = 0;
     var totalPedidosObra = 0;
     for (var i = 0; i < (rdosEmitidos || []).length; i++) {
-      if (rdosEmitidos[i].obraId === oId) totalRdosObra++;
+      if (mesmoId(rdosEmitidos[i].obraId, oId)) totalRdosObra++;
     }
     for (var i = 0; i < (pedidos || []).length; i++) {
-      if (pedidos[i].obraId === oId) totalPedidosObra++;
+      if (mesmoId(pedidos[i].obraId, oId)) totalPedidosObra++;
     }
 
     // Linhas da tabela de frequência (só trabalhadores ainda cadastrados) e os totais que fecham com elas
     const linhasFreq = Object.entries(trabPres).map(([tid, st]) => {
-      const t = trabalhadores.find(x => String(x.id) === String(tid));
+      const t = trabalhadores.find(x => mesmoId(x.id, tid));
       if (!t) return null;
       const diaria = parseFloat(t.diaria) || 0;
       return { t, st, aPagar: (st.p + st.a) * diaria };
     }).filter(Boolean);
-    const somaFreq = linhasFreq.reduce((s, l) => ({ p: s.p + l.st.p, f: s.f + l.st.f, a: s.a + l.st.a, horas: s.horas + l.st.horas, alimentacao: s.alimentacao + l.st.alimentacao, aPagar: s.aPagar + l.aPagar }), { p: 0, f: 0, a: 0, horas: 0, alimentacao: 0, aPagar: 0 });
+    const somaFreq = linhasFreq.reduce((s, l) => ({ p: s.p + l.st.p, f: s.f + l.st.f, a: s.a + l.st.a, horas: s.horas + l.st.horas, alimentacao: s.alimentacao + l.st.alimentacao, refeicoes: s.refeicoes + (l.st.refeicoes || 0), aPagar: s.aPagar + l.aPagar }), { p: 0, f: 0, a: 0, horas: 0, alimentacao: 0, refeicoes: 0, aPagar: 0 });
+    // Sem nenhum preço de refeição configurado: a coluna mostra a QUANTIDADE de refeições (nunca "R$ 0,00")
+    const comPrecoAlim = _algumPrecoRefeicao(empresa);
 
     // 💰 CUSTO consolidado da semana — mesma fonte da tabela de frequência, para o "Resumo financeiro" bater com o quadro:
     // mão de obra = (presenças + atestados) × diária; alimentação = refeições marcadas nos RDOs × preço configurado
@@ -1052,6 +1225,8 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         .quadro tbody tr.total td { background: #fff7df; }
         .selos { margin: 0 0 6px; }
         .selos .selo { margin-right: 6px; }
+        .sec + .nota.junto { margin: 0 0 4px; }
+        .km-quadro-inteiro { display: block; break-inside: avoid; page-break-inside: avoid; }
       </style></head><body>
 
       ${gerarHeaderHTML({ tipo: "RDO Semanal Consolidado", periodo, info_extra: `${obraSel.nome}${obraSel.local ? " · " + obraSel.local : ""} · ${rdosSem.length} dia(s)${modoFallback ? " · últimos RDOs emitidos (nenhum na semana atual)" : ""}`, empresa })}
@@ -1065,21 +1240,21 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
       </div>
 
       <div class="sec">Frequência e custos por trabalhador</div>
+      <div class="nota junto">Presente, Falta e Atestado = dias no período. A pagar = (presenças + atestados) × diária do trabalhador. ${comPrecoAlim ? "Alimentação = refeições marcadas nos RDOs com valor unitário cadastrado." : "Refeições = quantidade marcada nos RDOs do período."}</div>
       <table class="quadro compacto">
-        <thead><tr><th style="width:25%">Nome</th><th style="width:18%">Cargo</th><th style="width:9%" class="num">Presente</th><th style="width:7%" class="num">Falta</th><th style="width:9%" class="num">Atestado</th><th style="width:7%" class="num">Horas</th><th style="width:12%" class="num">Alimentação</th><th style="width:13%" class="num">A pagar</th></tr></thead>
+        <thead><tr><th style="width:25%">Nome</th><th style="width:18%">Cargo</th><th style="width:9%" class="num">Presente</th><th style="width:7%" class="num">Falta</th><th style="width:9%" class="num">Atestado</th><th style="width:7%" class="num">Horas</th><th style="width:12%" class="num">${comPrecoAlim ? "Alimentação" : "Refeições"}</th><th style="width:13%" class="num">A pagar</th></tr></thead>
         <tbody>
-        ${linhasFreq.length === 0 ? '<tr><td colspan="8" class="vazio">Sem presenças registradas nos RDOs do período</td></tr>' : linhasFreq.map(({ t, st, aPagar }) => `<tr><td><b>${_escDoc(t.nome)}</b></td><td>${_escDoc(t.cargo)}</td><td class="num txt-ok"><b>${st.p}</b></td><td class="num ${st.f ? "txt-erro" : "txt-cinza"}">${st.f}</td><td class="num ${st.a ? "txt-alerta" : "txt-cinza"}">${st.a}</td><td class="num">${_horasDoc(st.horas)}</td><td class="num">${_brl(st.alimentacao)}</td><td class="num"><b>${_brl(aPagar)}</b></td></tr>`).join("") + `<tr class="total"><td colspan="2">Total da semana</td><td class="num">${somaFreq.p}</td><td class="num">${somaFreq.f}</td><td class="num">${somaFreq.a}</td><td class="num">${_horasDoc(somaFreq.horas)}</td><td class="num">${_brl(somaFreq.alimentacao)}</td><td class="num">${_brl(somaFreq.aPagar)}</td></tr>`}
+        ${linhasFreq.length === 0 ? '<tr><td colspan="8" class="vazio">Sem presenças registradas nos RDOs do período</td></tr>' : linhasFreq.map(({ t, st, aPagar }) => `<tr><td><b>${_escDoc(t.nome)}</b></td><td>${_escDoc(t.cargo)}</td><td class="num txt-ok"><b>${st.p}</b></td><td class="num ${st.f ? "txt-erro" : "txt-cinza"}">${st.f}</td><td class="num ${st.a ? "txt-alerta" : "txt-cinza"}">${st.a}</td><td class="num">${_horasDoc(st.horas)}</td><td class="num">${comPrecoAlim ? _brl(st.alimentacao) : (st.refeicoes || 0)}</td><td class="num"><b>${_brl(aPagar)}</b></td></tr>`).join("") + `<tr class="total"><td colspan="2">Total da semana</td><td class="num">${somaFreq.p}</td><td class="num">${somaFreq.f}</td><td class="num">${somaFreq.a}</td><td class="num">${_horasDoc(somaFreq.horas)}</td><td class="num">${comPrecoAlim ? _brl(somaFreq.alimentacao) : somaFreq.refeicoes}</td><td class="num">${_brl(somaFreq.aPagar)}</td></tr>`}
         </tbody>
       </table>
-      <div class="nota">Presente, Falta e Atestado = dias no período. A pagar = (presenças + atestados) × diária do trabalhador. Alimentação = refeições marcadas nos RDOs com preço configurado.</div>
 
-      ${prodSem.length > 0 ? `
+      ${prodSem.length > 0 ? _inteiroSe(Object.keys(prodTotal).length <= 6, `
       <div class="sec">Produtividade executada</div>
       <table class="quadro">
         <thead><tr><th style="width:60%">Serviço</th><th style="width:20%" class="num">Quantidade</th><th style="width:20%">Unidade</th></tr></thead>
         <tbody>${Object.entries(prodTotal).map(([k, total]) => { const [tipo, un] = k.split("|"); return `<tr><td><b>${_escDoc(tipo)}</b></td><td class="num txt-ok"><b>${_numDoc(total, 1)}</b></td><td>${_escDoc(un)}</td></tr>`; }).join("")}</tbody>
       </table>
-      ` : ""}
+      `) : ""}
 
       <div class="sec">Atividades por dia</div>
       <table class="quadro">
@@ -1087,79 +1262,82 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         <tbody>${rdosOrdenados.length === 0 ? '<tr><td colspan="5" class="vazio">Sem registros</td></tr>' : rdosOrdenados.map(r => `<tr><td><b>${_escDoc(r.data)}</b></td><td class="num">${String(r.numero ?? "").padStart(3, "0")}</td><td>${_escDoc(r.encarregado) || "—"}</td><td>${_escDoc(r.clima) || "—"}</td><td>${r.observacoes ? _quebrasDoc(r.observacoes) : "—"}</td></tr>`).join("")}</tbody>
       </table>
 
-      ${diarioSem.length > 0 ? `
+      ${diarioSem.length > 0 ? _inteiroSe(diarioSem.length <= 6, `
       <div class="sec">Anotações do diário</div>
       <table class="quadro">
         <thead><tr><th style="width:13%">Data</th><th style="width:22%">Autor</th><th style="width:65%">Anotação</th></tr></thead>
         <tbody>${diarioSem.sort((a, b) => a.ts - b.ts).map(d => `<tr><td>${new Date(d.ts).toLocaleDateString("pt-BR")}</td><td>${_escDoc(d.autor) || "—"}</td><td>${d.texto ? _quebrasDoc(d.texto) : "—"}</td></tr>`).join("")}</tbody>
       </table>
-      ` : ""}
+      `) : ""}
 
-      ${pedidosSem.length > 0 ? `
+      ${pedidosSem.length > 0 ? _inteiroSe(pedidosSem.length <= 6, `
       <div class="sec">Pedidos de material <small>${pedidosSem.length} no período</small></div>
       <div class="selos"><span class="selo ok">${pedAprov.length} aprovado${pedAprov.length !== 1 ? "s" : ""}</span><span class="selo alerta">${pedAguard.length} aguardando</span><span class="selo erro">${pedNeg.length} negado${pedNeg.length !== 1 ? "s" : ""}</span></div>
       <table class="quadro">
         <thead><tr><th style="width:10%" class="num">Nº</th><th style="width:13%">Data</th><th style="width:33%">Material</th><th style="width:14%" class="num">Quantidade</th><th style="width:16%">Marca</th><th style="width:14%" class="centro">Situação</th></tr></thead>
         <tbody>${pedidosSem.sort((a, b) => (a.ts || 0) - (b.ts || 0)).map(p => `<tr><td class="num"><b>${String(p.id).slice(-6)}</b></td><td>${_escDoc(p.dataSolicitacao || p.data) || "—"}</td><td><b>${_escDoc(p.material) || "—"}</b></td><td class="num">${p.qtd ? _escDoc(fmtQtd(p.qtd)) : "—"}</td><td>${_escDoc(p.marca) || "—"}</td><td class="centro ${_clsStatusPedido(p.status)}"><b>${_escDoc(p.status) || "—"}</b></td></tr>`).join("")}</tbody>
       </table>
-      ` : ""}
+      `) : ""}
 
-      ${movPessSem.length > 0 ? `
+      ${movPessSem.length > 0 ? _inteiroSe(movPessSem.length <= 6, `
       <div class="sec">Movimentações de pessoal <small>${movPessSem.length} no período</small></div>
       <table class="quadro">
         <thead><tr><th style="width:12%">Data</th><th style="width:22%">Trabalhador</th><th style="width:28%">Origem → Destino</th><th style="width:24%">Motivo</th><th style="width:14%" class="centro">Situação</th></tr></thead>
-        <tbody>${movPessSem.map(m => { const oOrig = obras.find(o => o.id === m.obraOrigem)?.nome || "—"; const oDest = obras.find(o => o.id === m.obraDestino)?.nome || "—"; return `<tr><td>${_escDoc(m.data) || "—"}</td><td><b>${_escDoc(m.trabNome) || "—"}</b></td><td>${_escDoc(oOrig)} → ${_escDoc(oDest)}</td><td>${_escDoc(m.motivo) || "—"}</td><td class="centro">${_escDoc(m.status) || "—"}</td></tr>`; }).join("")}</tbody>
+        <tbody>${movPessSem.map(m => { const oOrig = obras.find(o => mesmoId(o.id, m.obraOrigem))?.nome || "—"; const oDest = obras.find(o => mesmoId(o.id, m.obraDestino))?.nome || "—"; return `<tr><td>${_escDoc(m.data) || "—"}</td><td><b>${_escDoc(m.trabNome) || "—"}</b></td><td>${_escDoc(oOrig)} → ${_escDoc(oDest)}</td><td>${_escDoc(m.motivo) || "—"}</td><td class="centro">${_escDoc(m.status) || "—"}</td></tr>`; }).join("")}</tbody>
       </table>
-      ` : ""}
-      ${movEquipSem.length > 0 ? `
+      `) : ""}
+      ${movEquipSem.length > 0 ? _inteiroSe(movEquipSem.length <= 6, `
       <div class="sec">Movimentações de equipamentos <small>${movEquipSem.length} no período</small></div>
       <table class="quadro">
         <thead><tr><th style="width:12%">Data</th><th style="width:22%">Item</th><th style="width:28%">Origem → Destino</th><th style="width:24%">Motivo</th><th style="width:14%" class="centro">Situação</th></tr></thead>
         <tbody>${movEquipSem.map(m => `<tr><td>${_escDoc(m.dataSolicitacao) || "—"}</td><td><b>${_escDoc(m.itemNome) || "—"}</b></td><td>${_escDoc(m.obraOrigemNome) || "—"} → ${_escDoc(m.obraDestinoNome) || "—"}</td><td>${_escDoc(m.motivo) || "—"}</td><td class="centro">${_escDoc(m.status) || "—"}</td></tr>`).join("")}</tbody>
       </table>
-      ` : ""}
+      `) : ""}
 
-      ${despesasSem.length > 0 ? `
+      ${despesasSem.length > 0 ? _inteiroSe(despesasSem.length <= 6, `
       <div class="sec">Despesas avulsas</div>
       <table class="quadro">
         <thead><tr><th style="width:13%">Data</th><th style="width:22%">Categoria</th><th style="width:47%">Descrição</th><th style="width:18%" class="num">Valor</th></tr></thead>
         <tbody>${despesasSem.map(d => `<tr><td>${_escDoc(d.data) || "—"}</td><td>${_escDoc(d.categoria) || "—"}</td><td>${_escDoc(d.descricao) || "—"}</td><td class="num"><b>${_brl(d.valor)}</b></td></tr>`).join("")}<tr class="total"><td colspan="3">Total das despesas avulsas</td><td class="num">${_brl(totalDespesas)}</td></tr></tbody>
       </table>
-      ` : ""}
+      `) : ""}
 
-      ${combPorVeic.length > 0 ? `
+      ${combPorVeic.length > 0 ? _inteiroSe(combPorVeic.length <= 6, `
       <div class="sec">Combustível por veículo</div>
       <table class="quadro">
         <thead><tr><th style="width:30%">Veículo</th><th style="width:14%">Placa</th><th style="width:18%" class="num">Abastecimentos</th><th style="width:16%" class="num">Litros</th><th style="width:22%" class="num">Valor</th></tr></thead>
         <tbody>${combPorVeic.map(v => `<tr><td><b>${_escDoc(v.ativo.nome)}</b></td><td>${_escDoc(v.ativo.placa) || "—"}</td><td class="num">${v.qtd}</td><td class="num">${_numDoc(v.litros, 1)} L</td><td class="num"><b>${_brl(v.gasto)}</b></td></tr>`).join("")}<tr class="total"><td colspan="2">Total do período</td><td class="num">${combPorVeic.reduce((s, v) => s + v.qtd, 0)}</td><td class="num">${_numDoc(combPorVeic.reduce((s, v) => s + v.litros, 0), 1)} L</td><td class="num">${_brl(combPorVeic.reduce((s, v) => s + v.gasto, 0))}</td></tr></tbody>
       </table>
-      ` : ""}
+      `) : ""}
 
       ${fotosSem.length > 0 ? `
-      <div class="sec">Registro fotográfico <small>${fotosSem.length} foto${fotosSem.length > 1 ? "s" : ""}</small></div>
+      <div class="sec">Registro fotográfico <small>${fotosSem.length > 24 ? `24 de ${fotosSem.length} fotos · as demais na galeria da obra` : `${fotosSem.length} foto${fotosSem.length > 1 ? "s" : ""}`}</small></div>
       <div class="fotos f4">
-        ${fotosSem.slice(0, 24).map(f => `<figure><img src="${_escDoc(_srcImgDoc(f.foto))}" alt=""/><figcaption><b>#${String(f.numero || 0).padStart(3, "0")}</b> · ${_escDoc(f.data) || "—"} ${_escDoc(f.hora || "")}<br/>${_escDoc((f.legenda || "").substring(0, 35))}${(f.legenda || "").length > 35 ? "…" : ""}</figcaption></figure>`).join("")}
+        ${fotosSem.slice(0, 24).map(f => { const leg = _semEmojiDoc(f.legenda); return `<figure>${_imgDoc(f.foto || f.fotoUrl)}<figcaption><b>#${String(f.numero || 0).padStart(3, "0")}</b> · ${_escDoc(f.data) || "—"} ${_escDoc(f.hora || "")}${leg ? `<br/>${_escDoc(leg.length > 80 ? leg.slice(0, 79) + "…" : leg)}` : ""}</figcaption></figure>`; }).join("")}
       </div>
-      ${fotosSem.length > 24 ? `<div class="nota">+ ${fotosSem.length - 24} foto(s) adicional(is) na galeria do aplicativo.</div>` : ""}
       ` : ""}
 
+      <div class="km-quadro-inteiro">
       <div class="sec">Acumulado da obra</div>
       <table class="quadro">
         <thead><tr><th style="width:70%">Indicador</th><th style="width:30%" class="num">Total</th></tr></thead>
         <tbody><tr><td>Total de RDOs emitidos</td><td class="num"><b>${totalRdosObra}</b></td></tr><tr><td>Total de pedidos da obra</td><td class="num"><b>${totalPedidosObra}</b></td></tr></tbody>
       </table>
+      </div>
 
+      <div class="km-quadro-inteiro">
       <div class="sec">Resumo financeiro da semana</div>
-      <table class="quadro junto">
+      <table class="quadro">
         <thead><tr><th style="width:70%">Item</th><th style="width:30%" class="num">Valor</th></tr></thead>
         <tbody>
           <tr><td><b>Mão de obra (diárias)</b></td><td class="num">${_brl(custoMaoObra)}</td></tr>
-          <tr><td><b>Alimentação</b></td><td class="num">${_brl(totalAlimentacao)}</td></tr>
+          <tr><td><b>Alimentação</b>${comPrecoAlim ? "" : ` <span class="txt-cinza">· ${somaFreq.refeicoes} refeiç${somaFreq.refeicoes === 1 ? "ão" : "ões"}, sem valor unitário</span>`}</td><td class="num">${comPrecoAlim ? _brl(totalAlimentacao) : "—"}</td></tr>
           <tr><td><b>Combustível</b></td><td class="num">${_brl(totalCombustivel)}</td></tr>
           <tr><td><b>Despesas avulsas</b></td><td class="num">${_brl(totalDespesas)}</td></tr>
           <tr class="total"><td>Total da semana</td><td class="num">${_brl(custoTotalSem)}</td></tr>
         </tbody>
       </table>
+      </div>
 
       ${gerarAssinaturasHTML({ empresa, autor: empresa.responsavel })}
       ${gerarFooterHTML({ empresa, autor: empresa.responsavel })}
@@ -1172,41 +1350,74 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
     }
   };
 
-  const trabObra = trabalhadores.filter(t => t.obraId === obraId);
+  const trabObra = trabalhadores.filter(t => mesmoId(t.obraId, obraId));
   const presentes = trabObra.filter(t => presencasDia[t.id] === "Presente").length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="RDO ABNT" sub="Relatório Diário Auditável" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <div style={{ background: `linear-gradient(135deg,${NAVY},${NAVY2})`, color: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, boxShadow: "0 4px 14px rgba(15,33,81,0.3)" }}>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>Próximo RDO</div>
-          <div style={{ fontSize: 36, fontWeight: 900, color: GOLD }}>Nº {String(proxNumero).padStart(3, "0")}</div>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>{rdosEmitidos.length} RDO(s) já emitidos</div>
-        </div>
-
         <label style={labelS}>Obra</label>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={selS}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={selS}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 
         <label style={labelS}>Data do RDO</label>
         <input value={data} onChange={e => setData(e.target.value)} placeholder="DD/MM/AAAA" style={inputS} />
 
-        <label style={labelS}>Condição climática</label>
-        <select value={clima} onChange={e => setClima(e.target.value)} style={selS}>
-          <option>Bom</option><option>Nublado</option><option>Chuva leve</option><option>Chuva forte</option><option>Vento forte</option><option>Calor extremo</option>
-        </select>
-
-        <label style={labelS}>Observações gerais (opcional)</label>
-        <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} placeholder="Ex: serviço de alvenaria conforme cronograma..." style={{ ...inputS, resize: "none", fontFamily: "inherit" }} />
+        {/* RDO do dia: no máximo UM por obra por dia. Existe → mostra o RDO (PDF / Editar), sem criar outro;
+            não existe → só o administrador tem "Criar RDO deste dia" (ação secundária, só para hoje ou dia passado). */}
+        <div data-rdo-dia={rdoDoDia ? "existe" : "nenhum"} style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 6, boxShadow: T.sombra, borderLeft: `4px solid ${rdoDoDia ? (rdoDoDia.autoGerado ? GREEN : BLUE) : T.borda}` }}>
+          <div style={{ fontSize: 10, color: T.texto2, fontWeight: 800, letterSpacing: 0.6, marginBottom: 4 }}>RDO DESTE DIA{isoData ? ` · ${_brDeIso(isoData)}` : ""}</div>
+          {rdoDoDia ? (
+            <>
+              <div style={{ fontWeight: 800, color: T.titulo, fontSize: 16 }}>
+                RDO Nº {_nRDO(rdoDoDia.numero)} de {_brDeIso(isoData).slice(0, 5)}
+                {rdoDoDia.autoGerado && <span style={{ fontSize: 10, color: GREEN, fontWeight: 800, marginLeft: 8 }}>⚡ AUTO</span>}
+              </div>
+              <div style={{ fontSize: 12, color: T.texto2, marginTop: 2 }}>emitido por {rdoDoDia.encarregado || "—"}{rdoDoDia.clima ? ` · clima ${rdoDoDia.clima}` : ""}</div>
+              {rdosDoDia.length > 1 && (
+                <div style={{ background: T.avisoFundo, color: T.avisoTexto, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, marginTop: 8 }}>
+                  ⚠️ Dia com mais de um RDO: Nº {rdosDoDia.map(r => _nRDO(r.numero)).join(", ")}. Confira na lista abaixo e decida qual manter.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button type="button" onClick={() => baixarRDO(rdoDoDia)} style={{ flex: 1, background: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>📄 Baixar PDF</button>
+                <button type="button" onClick={() => setEditandoRdo(rdoDoDia)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 10, padding: "10px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>✏️ Editar</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 800, color: T.titulo, fontSize: 15 }}>Nenhum RDO desta obra neste dia</div>
+              {!isoData ? (
+                <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>Informe a data no formato DD/MM/AAAA.</div>
+              ) : !podeCriarRdoDia ? (
+                <div data-rdo-sem-criar="1" style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>O RDO sai do fechamento do encarregado; só o administrador cria o RDO de um dia sem fechamento.</div>
+              ) : dataFutura ? (
+                <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>Data futura: o RDO só pode ser criado no próprio dia ou depois.</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: T.texto2, marginTop: 4, marginBottom: 10 }}>O RDO diário nasce quando o encarregado finaliza o dia. Se ele não fechou este dia, crie o RDO aqui (uma vez só).</div>
+                  <label style={labelS}>Condição climática</label>
+                  <select value={clima} onChange={e => setClima(e.target.value)} style={selS}>
+                    <option>Bom</option><option>Nublado</option><option>Chuva leve</option><option>Chuva forte</option><option>Vento forte</option><option>Calor extremo</option>
+                  </select>
+                  <label style={labelS}>Observações gerais (opcional)</label>
+                  <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} placeholder="Ex: serviço de alvenaria conforme cronograma..." style={{ ...inputS, resize: "none", fontFamily: "inherit" }} />
+                  <button type="button" onClick={criarRDODoDia} disabled={!podeCriar} style={{ background: "transparent", color: T.contorno, border: `1.5px solid ${T.contorno}`, borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>＋ Criar RDO deste dia</button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: T.texto2, margin: "0 2px 12px" }}>Nesta obra: {rdosObra.length} RDO(s) já emitidos · próximo Nº {_nRDO(proxNumero)}</div>
 
         <div style={{ background: T.superficie, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: T.sombra }}>
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📋 Conteúdo do RDO</div>
           <div style={{ fontSize: 12, color: T.texto2 }}>
             <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>👷 Mão de obra: <b>{trabObra.length}</b> ({presentes} presentes)</div>
-            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>🚜 Ativos: <b>{ativos.filter(a => a.obraId === obraId).length}</b></div>
-            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>📦 Pedidos do dia: <b>{pedidos.filter(p => p.obraId === obraId && p.data === data).length}</b></div>
+            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>🚜 Ativos: <b>{ativos.filter(a => mesmoId(a.obraId, obraId)).length}</b></div>
+            <div style={{ padding: "4px 0", borderBottom: `1px solid ${T.borda}` }}>📦 Pedidos do dia: <b>{pedidos.filter(p => mesmoId(p.obraId, obraId) && p.data === data).length}</b></div>
             <div style={{ padding: "4px 0" }}>📌 Ocorrências: <b>{ocorrenciasDia.length}</b></div>
           </div>
         </div>
@@ -1221,39 +1432,18 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
           </div>
         </div>
 
-        <Btn label="📄 EMITIR RDO PADRÃO ABNT (PDF)" color={GOLD} onClick={emitir} />
-
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={() => emitirSemanal(obraId)} style={{ flex: 1, background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "10px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>📅 RDO Semanal Consolidado</button>
         </div>
 
-        {rdosEmitidos.length > 0 && (
+        {rdosObra.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosEmitidos.length})</div>
+            <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 13 }}>📜 RDOs Recentes ({rdosObra.length})</div>
             <Grade min={320} gap={6} style={{ marginBottom: 6 }}>
-            {rdosEmitidos.slice(0, 10).map(r => {
-              const o = obras.find(x => x.id === r.obraId);
-              const baixar = () => {
-                const isoDt = r.dataIso || (() => { const [d, m, a] = r.data.split("/"); return `${a}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; })();
-                gerarPDFRDORabnt({
-                  numero: r.numero,
-                  obra: o,
-                  data: r.data,
-                  clima: r.clima || "Bom",
-                  observacoes: r.observacoes || "",
-                  presencas: r.presencas || historico[isoDt] || {},
-                  trabalhadores, ativos, abastecimentos, pedidos,
-                  ocorrencias: _diarioDoDia(diario, r.obraId, r.data),
-                  encarregado: r.encarregado,
-                  empresa,
-                  horasTrabalhadas: r.horasTrabalhadas,
-                  horimetros: r.horimetros,
-                  fotos: r.fotos,
-                  alimentacao: r.alimentacao,
-                  totalAlimentacao: r.totalAlimentacao,
-                  recebimentos,
-                });
-              };
+            {rdosObra.slice(0, 10).map(r => {
+              const o = obras.find(x => mesmoId(x.id, r.obraId));
+              const baixar = () => baixarRDO(r);
+              const diaDuplicado = (qtdRdosNoDia[_isoRDO(r)] || 0) > 1;
               return (
                 <div key={r.id} style={{ background: T.superficie, borderRadius: 10, padding: "10px 14px", boxShadow: T.sombra, borderLeft: r.autoGerado ? `4px solid ${GREEN}` : `4px solid ${BLUE}` }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
@@ -1263,6 +1453,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                       <div style={{ fontSize: 10, color: T.texto2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o?.nome} • {r.data} • {r.encarregado}</div>
                     </div>
                   </div>
+                  {diaDuplicado && <div data-rdo-duplicado="1" style={{ fontSize: 10, fontWeight: 700, color: T.avisoTexto, background: T.avisoFundo, borderRadius: 6, padding: "3px 8px", marginBottom: 6 }}>⚠️ dia com mais de um RDO</div>}
 
                   {/* Mini-galeria de fotos do RDO — clicáveis */}
                   {r.fotos && r.fotos.length > 0 && (
@@ -1285,7 +1476,7 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={baixar} style={{ flex: 1, background: GOLD, color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>📄 PDF</button>
                     <button onClick={() => setEditandoRdo(r)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>✏️ Editar</button>
-                    <button onClick={() => { confirmar(`Excluir RDO Nº ${r.numero}?`, () => { onRemoveRDO(r.id); }); }} style={{ background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>🗑️</button>
+                    {(podeCriarRdoDia || diaDuplicado) && <button data-rdo-excluir="1" title="Excluir este RDO" onClick={() => excluirRDO(r)} style={{ background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 6, padding: "6px 10px", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>🗑️</button>}
                   </div>
                 </div>
               );
@@ -1295,10 +1486,27 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         )}
 
         {/* MODAL EDITAR RDO */}
-        {editandoRdo && (
+        {editandoRdo && (() => {
+          // A obra do RDO não muda aqui; a data só muda para um dia válido, não futuro e SEM outro RDO desta obra
+          const original = rdosEmitidos.find(x => mesmoId(x.id, editandoRdo.id)) || editandoRdo;
+          const isoOrig = _isoRDO(original);
+          const mudouTexto = String(editandoRdo.data ?? "") !== String(original.data ?? "");
+          const isoNovo = mudouTexto ? _isoValidoDeBR(editandoRdo.data) : isoOrig;
+          const mudouDia = mudouTexto && !!isoNovo && isoNovo !== isoOrig;
+          const outroNoDia = mudouDia ? rdosDoDiaObra(rdosEmitidos, original.obraId, isoNovo).find(x => !mesmoId(x.id, original.id)) : null;
+          const erroData = !mudouTexto ? ""
+            : !isoNovo ? "Data inválida: use DD/MM/AAAA."
+            : mudouDia && isoNovo > dataLocalIso() ? "Data futura: o RDO não pode ser de um dia que ainda não aconteceu."
+            : outroNoDia ? `Esta obra já tem o RDO Nº ${_nRDO(outroNoDia.numero)} em ${_brDeIso(isoNovo)}. Cada obra tem um RDO por dia: escolha outra data ou edite aquele RDO.`
+            : "";
+          const obraDoRdo = obras.find(o => mesmoId(o.id, original.obraId));
+          return (
           <Modal show={!!editandoRdo} title={`Editar RDO Nº ${String(editandoRdo.numero).padStart(3, "0")}`} onClose={() => setEditandoRdo(null)}>
+            <label style={labelS}>Obra</label>
+            <div style={{ ...inputS, background: T.superficie2, color: T.texto2 }}>{obraDoRdo?.nome || "—"} <span style={{ fontSize: 10 }}>(a obra do RDO não muda)</span></div>
             <label style={labelS}>Data</label>
             <input value={editandoRdo.data || ""} onChange={e => setEditandoRdo(r => ({ ...r, data: e.target.value }))} placeholder="DD/MM/AAAA" style={inputS} />
+            {erroData && <div data-rdo-erro-data="1" style={{ background: T.erroFundo, color: T.erroTexto, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, margin: "-4px 0 10px" }}>⚠️ {erroData}</div>}
             <label style={labelS}>Clima</label>
             <select value={editandoRdo.clima || "Bom"} onChange={e => setEditandoRdo(r => ({ ...r, clima: e.target.value }))} style={selS}>
               {["Bom", "Nublado", "Chuvoso", "Sol forte", "Vento forte", "Garoa", "Tempestade"].map(c => <option key={c}>{c}</option>)}
@@ -1308,11 +1516,17 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
             <label style={labelS}>Encarregado</label>
             <input value={editandoRdo.encarregado || ""} onChange={e => setEditandoRdo(r => ({ ...r, encarregado: e.target.value }))} style={inputS} />
             <Btn label="💾 SALVAR ALTERAÇÕES" color={GREEN} onClick={() => {
-              onUpdateRDO(editandoRdo);
+              if (erroData) { alert("⚠️ " + erroData + "\n\nNada foi salvo."); return; }
+              onUpdateRDO({
+                ...editandoRdo,
+                obraId: normId(original.obraId),
+                ...(mudouTexto ? { data: _brDeIso(isoNovo), dataIso: isoNovo } : {}),
+              });
               setEditandoRdo(null);
             }} />
           </Modal>
-        )}
+          );
+        })()}
       </div>
       <KMFooter />
       {fotoVer && <FotoViewer src={fotoVer.src} legenda={fotoVer.legenda} onClose={() => setFotoVer(null)} />}
@@ -1349,12 +1563,12 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
 
   const adicionar = () => {
     if (!qtd) return;
-    onAdd({ id: Date.now(), obraId, tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
+    onAdd({ id: Date.now(), obraId: normId(obraId), tipo, qtd: parseFloat(qtd), unidade, obs, autor: usuario?.nome, ts: Date.now(), data: new Date().toLocaleDateString("pt-BR") });
     setQtd(""); setObs("");
   };
 
-  const minhasObra = produtividade.filter(p => p.obraId === obraId).sort((a, b) => b.ts - a.ts);
-  const obra = obras.find(o => o.id === obraId);
+  const minhasObra = produtividade.filter(p => mesmoId(p.obraId, obraId)).sort((a, b) => b.ts - a.ts);
+  const obra = obras.find(o => mesmoId(o.id, obraId));
 
   // Totais por tipo
   const totais = {};
@@ -1367,7 +1581,7 @@ export function TelaProdutividade({ obras, usuario, produtividade, onBack, onAdd
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Produtividade" sub={obra?.nome} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
-        <select value={obraId} onChange={e => setObraId(parseInt(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
+        <select value={obraId} onChange={e => setObraId(normId(e.target.value))} style={{ ...selS, marginBottom: 12 }}>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
 

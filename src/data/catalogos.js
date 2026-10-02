@@ -1,5 +1,6 @@
 import { BLUE, GREEN, RED, ORANGE } from "../theme.js";
 import { dataLocalIso, somaAlim } from "../utils.js";
+import { normId, mesmoId } from "../lib/ids.js";
 
 export const DEFAULT_FORNECEDORES = [
   // LOJAS DE MATERIAL DE CONSTRUÇÃO — ALEGRE/ES
@@ -210,13 +211,13 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
   const nomeTrab = {};
   listaTrab.forEach(t => { nomeTrab[t.id] = t.nome; });
   // Só quem está em obra entra na simulação (obraId 0 = escritório)
-  const trabs = listaTrab.filter(t => t.obraId).map(t => ({ id: t.id, obraId: t.obraId }));
+  const trabs = listaTrab.filter(t => normId(t.obraId)).map(t => ({ id: normId(t.id), obraId: normId(t.obraId) }));
   // Obras com equipe: o encarregado é o primeiro "Encarregado" da obra (ou o primeiro da lista)
   const obrasAtivas = obras
     .map(o => {
-      const equipe = listaTrab.filter(t => String(t.obraId) === String(o.id));
+      const equipe = listaTrab.filter(t => mesmoId(t.obraId, o.id));
       const enc = equipe.find(t => /encarregad/i.test(t.cargo || "")) || equipe[0];
-      return enc ? { id: o.id, nome: o.nome, encarregado: enc.nome } : null;
+      return enc ? { id: normId(o.id), nome: o.nome, encarregado: enc.nome } : null;
     })
     .filter(Boolean);
   const obraA = obrasAtivas[0] || { id: 1, nome: "", encarregado: "" };
@@ -284,7 +285,9 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
   let pedidoNum = 1;
   let movNum = 1;
   let movEqNum = 1;
-  let rdoNum = 1;
+  let rdoSeq = 1; // só para o id único do registro; o NÚMERO do RDO é por obra (rdoNumPorObra)
+  const rdoNumPorObra = {}; // obra → último Nº de RDO emitido nela (cada obra: 001, 002, …), como na emissão real
+  const rdoObraDia = new Set(); // "obra|AAAA-MM-DD": no máximo UM RDO por obra por dia
   let fotoId = 1;
   let despId = 1;
   let diaId = 1;
@@ -312,8 +315,13 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
 
     // RDO + 5 fotos por obra (apenas dias úteis com obras ativas)
     obrasAtivas.forEach((obra, idxObra) => {
-      const trabsObra = trabs.filter(t => t.obraId === obra.id);
+      const trabsObra = trabs.filter(t => mesmoId(t.obraId, obra.id));
       if (trabsObra.length === 0) return;
+      const chaveObra = String(normId(obra.id));
+      if (rdoObraDia.has(`${chaveObra}|${isoData}`)) return; // obra repetida na lista: o dia já tem o RDO desta obra
+      rdoObraDia.add(`${chaveObra}|${isoData}`);
+      const numeroRdo = (rdoNumPorObra[chaveObra] || 0) + 1; // numeração por obra
+      rdoNumPorObra[chaveObra] = numeroRdo;
 
       const presentes = trabsObra.filter(t => historico[isoData][t.id] === "Presente").length;
       const faltas = trabsObra.filter(t => historico[isoData][t.id] === "Falta").length;
@@ -341,7 +349,7 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
           autor: obra.encarregado,
           data: dataStr,
           hora: horaFoto,
-          origemRDO: rdoNum,
+          origemRDO: numeroRdo,
         });
         fotosDia.push(placeholderUrl);
       }
@@ -361,8 +369,8 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
       Object.values(horasTrabalhadas).forEach(h => { if (h > 9) totalHE += h - 9; });
 
       rdosEmitidos.push({
-        id: ts + rdoNum,
-        numero: rdoNum++,
+        id: ts + rdoSeq++,
+        numero: numeroRdo,
         obraId: obra.id,
         data: dataStr,
         dataIso: isoData,
@@ -373,7 +381,7 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
         autoGerado: true,
         horasTrabalhadas,
         totalHE: +totalHE.toFixed(1),
-        horimetros: obra.id === obraA.id ? { 1: { inicio: 1234 + (29 - d) * 8, fim: 1234 + (29 - d) * 8 + 7, horas: 7 } } : {},
+        horimetros: mesmoId(obra.id, obraA.id) ? { 1: { inicio: 1234 + (29 - d) * 8, fim: 1234 + (29 - d) * 8 + 7, horas: 7 } } : {},
         fotos: fotosNoRdo ? fotosDia : [],
         qtdFotosNaGaleria: fotosDia.length,
         presencas,
@@ -385,7 +393,7 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
 
     // PEDIDOS: 1-2 por obra por dia útil (volume real de obra ativa)
     obrasAtivas.forEach(obraEsc => {
-      const trabsObra = trabs.filter(t => t.obraId === obraEsc.id);
+      const trabsObra = trabs.filter(t => mesmoId(t.obraId, obraEsc.id));
       if (trabsObra.length === 0) return;
 
       // 60% chance de ter 1 pedido + 30% chance de ter 2 pedidos
@@ -464,7 +472,7 @@ export function gerarDadosMes30Dias({ fotosPorDia = 5, obras = DEFAULT_OBRAS, tr
 
     // MOVIMENTAÇÃO de pessoal a cada 7 dias
     if (d % 7 === 0 && d > 0) {
-      const trabsEM = trabs.filter(t => t.obraId === obraA.id);
+      const trabsEM = trabs.filter(t => mesmoId(t.obraId, obraA.id));
       if (trabsEM.length > 1) {
         const trabEsc = trabsEM[Math.floor(Math.random() * trabsEM.length)];
         movimentacoes.push({
@@ -1917,8 +1925,8 @@ export const DEMO_FERRAMENTAS = [
 function gerarManutencoesDemo() {
   const agora = Date.now();
   return [
-    { id: agora - 900000, tipoItem: "ativo",       itemId: "1", tipo: "Troca de óleo",  proxData: isoDaqui(4),  observacao: "Óleo do motor e filtro (a cada 250 h)", obraId: "1", ts: agora - 900000, realizada: false },
-    { id: agora - 800000, tipoItem: "equipamento", itemId: "1", tipo: "Revisão geral",  proxData: isoDaqui(21), observacao: "Correia e rolamentos da betoneira",     obraId: "1", ts: agora - 800000, realizada: false },
+    { id: agora - 900000, tipoItem: "ativo",       itemId: 1, tipo: "Troca de óleo",  proxData: isoDaqui(4),  observacao: "Óleo do motor e filtro (a cada 250 h)", obraId: 1, ts: agora - 900000, realizada: false },
+    { id: agora - 800000, tipoItem: "equipamento", itemId: 1, tipo: "Revisão geral",  proxData: isoDaqui(21), observacao: "Correia e rolamentos da betoneira",     obraId: 1, ts: agora - 800000, realizada: false },
   ];
 }
 

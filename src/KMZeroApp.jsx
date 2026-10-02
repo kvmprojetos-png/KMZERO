@@ -6,20 +6,22 @@ import { logoutFirebase, resultadoRedirecionamento, aguardarSessao } from "./fir
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T, DEFAULT_FONT, ESCURO } from "./theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm } from "./utils.js";
-import { setEmpresaId, getEmpresaId, setModoDemo, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store } from "./lib/store.js";
+import { setEmpresaId, getEmpresaId, setModoDemo, cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, carregarPerfilNuvem, carregarCadastroEmpresa, aplicarPerfilNuvem, resolverEntradaGoogle, observarEquipeNuvem, observarConvitesNuvem, definirAcessoAtivo, jsonEstavel, store, lerAcessos, carregarDonoEmpresa, restaurarDonoNuvem, conviteDeOutraEmpresa, trocarParaConvite, guardarRecusaConvite, mesclarRdosDaNuvem, versaoRdo } from "./lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "./lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "./lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, gerarDadosDemo, gerarAvisosDemo, DEMO_ID, DEMO_USUARIO, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "./data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, UsuarioContext, EscritorioContext } from "./components/ui.jsx";
 import { MenuLateral } from "./components/MenuLateral.jsx";
-import { TODAS_TELAS_MENU } from "./components/menuGrupos.js";
+import { TODAS_TELAS_MENU, PRESETS_ACESSOS, normalizarAcessos, telaPermitida, telaInicialPermitida } from "./components/menuGrupos.js";
+import { Icone } from "./components/Icones.jsx";
 import { useModoEscritorio } from "./lib/useLargura.js";
 import { CHAVE_TEMA, aplicarTema } from "./lib/useTema.js";
 import { LARGURA_POR_TELA, tipoDaTela } from "./lib/layoutEscritorio.js";
 import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
+import { normId, mesmoId, normalizarColecao } from "./lib/ids.js";
 
 /* ── Telas separadas por domínio ── */
-import { TelaEntrar, TelaPrimeiroAcesso, TelaMinhaConta, TelaAcessosApp } from "./screens/auth.jsx";
+import { TelaEntrar, TelaPrimeiroAcesso, TelaMinhaConta, TelaAcessosApp, TelaConviteOutraEmpresa } from "./screens/auth.jsx";
 import { TelaRegistro } from "./screens/registro.jsx";
 import { TelaHome, TelaPainelGestor, CategoriaCard, TelaDashboard, TelaRelatorio, TelaRelatorioConsolidado, TelaAlertas, gerarAlertas } from "./screens/home.jsx";
 import { TelaObras, TelaObraDetalhe, TelaMapa } from "./screens/obras.jsx";
@@ -45,7 +47,14 @@ import { TelaConfigEmpresa, TelaEscritorio, TelaAjuda, TelaBackup, TelaGerarSimu
    3) o boot pula aguardarSessao/resultadoRedirecionamento/verificarAcessoNuvem e nunca
       grava _kmzero_empresaId nem _kmzero_sessao: a conta Google real não é tocada.
    Os dados vivem em localStorage com prefixo demo_ (empresaId "demo") e no IndexedDB
-   demo_files; "Sair" apaga tudo isso e volta para a vitrine. */
+   demo_files; "Sair" apaga tudo isso e volta para a vitrine.
+   Parâmetros (só na demo): &tema=claro|escuro · &tela=<nav do menu> · &acessos=financeiro|
+   administrativo|obras|tudo (pacotes da tela Usuários e acessos) ou lista de áreas com vírgula
+   (ex.: &acessos=obras,campo — "obras," é só a área Obras). Ex.: /app/?demo=1&acessos=financeiro
+   Administrador: sem &acessos= o visitante é o ADMINISTRADOR (o dono, quem criou a empresa: acesso
+   total, cartão travado em Usuários e acessos, pode criar o RDO de um dia que o encarregado não
+   fechou). Com um &acessos= válido ele passa a ser um usuário do escritório que NÃO é o dono
+   (como o Ricardo, Financeiro): o dono da demo vira outro (DEMO_DONO_OUTRO), mesmo com &acessos=tudo. */
 const CHAVE_SEMENTE_DEMO = "demo__semente";
 const detectarDemo = () => {
   try {
@@ -60,12 +69,34 @@ const aplicarTemaDaDemo = () => {
     if (t === "claro" || t === "escuro") { localStorage.setItem(CHAVE_TEMA, t); aplicarTema(t); }
   } catch {}
 };
-// Tela inicial da demo: ?tela=<nav do menu> abre direto nela (links da vitrine e capturas); senão, o Painel
-const telaInicialDemo = () => {
+// Tela inicial da demo: ?tela=<nav do menu> abre direto nela (links da vitrine e capturas); senão, a
+// tela inicial do visitante (o Painel, ou a primeira área liberada por &acessos=). Tela fora das
+// áreas liberadas: a guarda de navegação devolve para a inicial, com o aviso — a mesma regra do login real.
+const telaInicialDemo = (u) => {
   try {
     const t = new URLSearchParams(window.location.search).get("tela");
-    return t && TODAS_TELAS_MENU.has(t) ? t : "gestor";
-  } catch { return "gestor"; }
+    return t && TODAS_TELAS_MENU.has(t) ? t : telaInicialPermitida(u);
+  } catch { return telaInicialPermitida(u); }
+};
+// Áreas do visitante da demo (&acessos=, ver o comentário do modo demonstração): lista de áreas,
+// null para "tudo", ou undefined quando não veio nada válido (visitante com acesso total, como sempre)
+const acessosDaDemo = () => {
+  try {
+    const v = (new URLSearchParams(window.location.search).get("acessos") || "").trim().toLowerCase();
+    if (!v) return undefined;
+    if (!v.includes(",")) { const p = PRESETS_ACESSOS.find(x => x.id === v); return p ? p.acessos : undefined; }
+    const lista = normalizarAcessos(v.split(","));
+    return lista.length ? lista : undefined;
+  } catch { return undefined; }
+};
+// Dono (administrador) da demo: o próprio visitante, a não ser que &acessos= simule alguém do
+// escritório; aí o dono é outra pessoa, que não está na lista (ver o comentário do modo demonstração)
+const DEMO_DONO_OUTRO = "demo-administrador";
+const donoDaDemo = () => acessosDaDemo() === undefined ? DEMO_USUARIO.id : DEMO_DONO_OUTRO;
+// Usuário com as áreas que vieram da nuvem (null = tudo); devolve o MESMO objeto se nada mudou
+const comAcessos = (u, acessos) => {
+  const novo = normalizarAcessos(acessos);
+  return JSON.stringify(novo) === JSON.stringify(normalizarAcessos(u.acessos)) ? u : { ...u, acessos: novo };
 };
 // Limpeza oportunista: em todo login real, apaga o que a demo deixou (chaves demo_* e o banco demo_files)
 const limparRestosDemo = () => {
@@ -82,6 +113,47 @@ function FaixaDemo({ onSair }) {
     </div>
   );
 }
+
+/* Setter do que CHEGA DA NUVEM pelo useSyncColecao: registro novo ou trocado pela nuvem entra com
+   os códigos canônicos (normalizarColecao, ids.js). O sync (jsonEstavel) vê que o registro local
+   ficou diferente do da nuvem e sobe o documento normalizado uma vez; a volta já vem igual e para.
+   Contra laço: cada registro é normalizado no máximo UMA vez por sessão. Se a nuvem devolver o
+   texto de novo (gravação recusada, ou um aparelho com versão antiga regravou), fica como veio —
+   mesmoId compara igual — e não sobe de novo. `jaFeitos` é um retrato tirado antes do updater,
+   para ele dar o mesmo resultado se o React o chamar duas vezes (StrictMode). */
+function useSetterDaNuvem(nome, set) {
+  const normalizadosRef = useRef(new Set());
+  return useCallback(fn => {
+    const jaFeitos = new Set(normalizadosRef.current);
+    set(prev => {
+      const novo = typeof fn === "function" ? fn(prev) : fn;
+      if (novo === prev || !Array.isArray(novo)) return novo;
+      const antes = new Set(Array.isArray(prev) ? prev : []); // mesmos objetos = não vieram agora da nuvem
+      let mudou = false;
+      const saida = novo.map(item => {
+        if (!item || typeof item !== "object" || antes.has(item)) return item;
+        const chave = String(item.id);
+        if (jaFeitos.has(chave)) return item;
+        const norm = normalizarColecao(nome, [item])[0];
+        if (norm === item) return item;
+        normalizadosRef.current.add(chave);
+        mudou = true;
+        return norm;
+      });
+      return mudou ? saida : novo;
+    });
+  }, [nome, set]);
+}
+
+/* RDO emitido: substitui no lugar o registro de mesmo código (o fechamento do encarregado
+   atualiza o RDO do dia reaproveitando o id) e tira cópias repetidas desse código; se não
+   existe, entra na frente. Um RDO por id, nunca dois. */
+const upsertRdo = (lista, r) => {
+  const arr = Array.isArray(lista) ? lista : [];
+  const i = arr.findIndex(x => x && mesmoId(x.id, r.id));
+  if (i === -1) return [r, ...arr];
+  return arr.filter((x, j) => j === i || !(x && mesmoId(x.id, r.id))).map(x => (x && mesmoId(x.id, r.id) ? r : x));
+};
 
 export default function App() {
   const [tela, setTelaRaw]        = useState("login");
@@ -116,10 +188,8 @@ export default function App() {
         setTelaRaw(anterior);
         return novaPilha;
       }
-      // Sem histórico: vai pra tela raiz baseado no perfil
-      if (usuario?.perfil === "gestor") setTelaRaw("gestor");
-      else if (usuario) setTelaRaw("home");
-      else setTelaRaw("login");
+      // Sem histórico: vai pra tela raiz da pessoa (Painel, a primeira área liberada, home ou login)
+      setTelaRaw(telaInicialPermitida(usuario));
       return [];
     });
   };
@@ -128,6 +198,7 @@ export default function App() {
   const [usuarios, setUsuarios]   = useState([]);
   const [usuarioGoogle, setUsuarioGoogle] = useState(null); // conta Google sem empresa (primeiro acesso)
   const [erroEntrada, setErroEntrada] = useState("");        // aviso para a tela de entrada: { codigo, mensagem, email } (redirect, acesso desativado)
+  const [escolhaConvite, setEscolhaConvite] = useState(null); // { usuario, convite, userGoogle }: escritório com convite de OUTRA empresa (tela convite_empresa)
   const [obras, setObras]         = useState([]);
   const [trabalhadores, setTrab]  = useState([]);
   const [equips, setEquips]       = useState([]);
@@ -152,7 +223,7 @@ export default function App() {
   }, []);
   const mudarStatusPedidoSync = useCallback((id, status, extras = {}) => {
     // Aviso: quem pediu fica sabendo que o gestor aprovou/negou/entregou
-    const antes = pedidosRef.current.find(x => x.id === id);
+    const antes = pedidosRef.current.find(x => mesmoId(x.id, id));
     if (antes && antes.status !== status && ["Aprovado", "Negado", "Entregue", "Recebido"].includes(status)) {
       const icone = status === "Negado" ? "❌" : "✅";
       enviarAvisoRef.current?.({
@@ -163,18 +234,18 @@ export default function App() {
       });
     }
     setPedidos(ps => ps.map(p => {
-      if (p.id !== id) return p;
+      if (!mesmoId(p.id, id)) return p;
       const novo = { ...p, status, ...extras };
       enviarDocNuvem("pedidos", id, novo);
       return novo;
     }));
   }, []);
   const editarPedidoSync = useCallback(pa => {
-    setPedidos(ps => ps.map(p => p.id === pa.id ? pa : p));
+    setPedidos(ps => ps.map(p => mesmoId(p.id, pa.id) ? pa : p));
     enviarDocNuvem("pedidos", pa.id, pa);
   }, []);
   const removerPedidoSync = useCallback(id => {
-    setPedidos(ps => ps.filter(p => p.id !== id));
+    setPedidos(ps => ps.filter(p => !mesmoId(p.id, id)));
     removerDocNuvem("pedidos", id);
   }, []);
   const [historico, setHistorico] = useState({});
@@ -187,7 +258,7 @@ export default function App() {
   }, []);
   const marcarLidaSync = useCallback(id => {
     setMensagens(ms => ms.map(m => {
-      if (m.id !== id) return m;
+      if (!mesmoId(m.id, id)) return m;
       const novo = { ...m, lida: true };
       enviarDocNuvem("mensagens", id, novo);
       return novo;
@@ -208,12 +279,21 @@ export default function App() {
   const [avisos, setAvisos] = useState([]);
   const [ultimaLeituraAvisos, setUltimaLeituraAvisos] = useState(0);
   const [avisoNaTela, setAvisoNaTela] = useState(null); // faixa no topo quando o push não está ligado
+  const [avisoAcesso, setAvisoAcesso] = useState(null); // "Sua conta não tem acesso a esta área" (guarda das áreas)
+  const [donoUid, setDonoUid] = useState(null); // uid de quem criou a empresa (empresas/{id}.gestorUid); null = ainda não sabe
+  const donoUidRef = useRef(null); donoUidRef.current = donoUid;
+  // Dono na demo: o visitante, ou outra pessoa quando &acessos= simula alguém do escritório (donoDaDemo)
+  const [donoDemo] = useState(() => (modoDemo ? donoDaDemo() : null));
+  // ADMINISTRADOR = a conta que criou a empresa (o dono): acesso total, protegido. Só ele cria o RDO
+  // de um dia que o encarregado não fechou; o escritório edita RDOs e gera o consolidado.
+  // Na demo o visitante não tem firebaseUid: compara pelo id dele.
+  const ehAdministrador = modoDemo ? mesmoId(donoDemo, usuario?.id) : mesmoId(donoUid, usuario?.firebaseUid);
   const enviarAviso = useCallback(async parcial => {
     const u = usuarioRef.current;
     if (!u) return { ok: false, erro: "Sem login." };
     const agora = Date.now();
     const aviso = { id: String(agora), criadoEm: agora, de: uidDe(u), deNome: u.nome || "", tipo: "manual", ...parcial };
-    setAvisos(as => [aviso, ...as.filter(a => a.id !== aviso.id)]);
+    setAvisos(as => [aviso, ...as.filter(a => !mesmoId(a.id, aviso.id))]);
     if (modoDemo) return { ok: true }; // demo: fica só em memória (sem nuvem, sem push)
     try { return await publicarAviso(aviso); }
     catch (e) { console.error("enviarAviso:", e); return { ok: false, erro: "Não foi possível enviar agora." }; }
@@ -267,27 +347,28 @@ export default function App() {
     const { fotos, ...resto } = r; // fotos base64 estouram o limite de 1MB/doc do Firestore
     return { ...resto, qtdFotosNaGaleria: fotos?.length || 0 };
   };
+  // Emitir = upsert (upsertRdo): o RDO do dia que o encarregado fecha de novo substitui o mesmo id
   const emitirRDOSync = useCallback(r => {
-    setRdos(rs => [r, ...rs]);
+    setRdos(rs => upsertRdo(rs, r));
     enviarDocNuvem("rdos", r.id, rdoParaNuvem(r));
   }, []);
+  // Editar carimba atualizadoEm: é a versão que os outros aparelhos comparam para trocar a cópia deles
+  // (sempre acima da versão editada, mesmo com o relógio deste aparelho atrasado)
   const updateRDOSync = useCallback(r => {
-    setRdos(rs => rs.map(x => x.id === r.id ? r : x));
-    enviarDocNuvem("rdos", r.id, rdoParaNuvem(r));
+    const novo = { ...r, atualizadoEm: Math.max(Date.now(), versaoRdo(r) + 1) };
+    setRdos(rs => rs.map(x => mesmoId(x.id, novo.id) ? novo : x));
+    enviarDocNuvem("rdos", novo.id, rdoParaNuvem(novo));
   }, []);
   const removeRDOSync = useCallback(id => {
-    setRdos(rs => rs.filter(x => x.id !== id));
+    setRdos(rs => rs.filter(x => !mesmoId(x.id, id)));
     removerDocNuvem("rdos", id);
   }, []);
+  // RDO de outro aparelho: id novo entra; id que este aparelho já tem é TROCADO quando a versão da nuvem
+  // é mais nova (o encarregado fechou o dia de novo, o escritório editou, o fechamento caiu no RDO que o
+  // administrador criou). As fotos ficam as deste aparelho (store.js mesclarRdosDaNuvem).
   useEffect(() => {
     if (modoDemo || !usuario?.firebaseUid) return;
-    return observarColecaoNuvem("rdos", nuvem => {
-      setRdos(loc => {
-        const ids = new Set(loc.map(r => String(r.id)));
-        const novos = nuvem.filter(n => !ids.has(String(n.id))); // não sobrescreve cópia local (que tem as fotos)
-        return novos.length ? [...novos, ...loc].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0)) : loc;
-      });
-    });
+    return observarColecaoNuvem("rdos", nuvem => setRdos(loc => mesclarRdosDaNuvem(loc, nuvem)));
   }, [usuario?.firebaseUid]);
   const [empresa, setEmpresa]     = useState({});
   const [produtividade, setProd]  = useState([]);
@@ -314,7 +395,7 @@ export default function App() {
     // Depois do upload, troca o base64 pela URL da nuvem (o localStorage para de guardar a foto inteira)
     enviarFotoNuvem(f).then(url => {
       if (typeof url !== "string" || !url) return;
-      setFotosObras(fs => fs.map(x => String(x.id) === String(f.id) ? { ...x, foto: url, fotoUrl: url } : x));
+      setFotosObras(fs => fs.map(x => mesmoId(x.id, f.id) ? { ...x, foto: url, fotoUrl: url } : x));
     }).catch(e => console.error("salvarFotoObraSync:", e));
   }, []);
 
@@ -324,7 +405,7 @@ export default function App() {
     const parar = observarFotosNuvem(nuvem => {
       setFotosObras(loc => {
         const ids = new Set(loc.map(x => String(x.id)));
-        const novas = nuvem.filter(n => !ids.has(String(n.id)));
+        const novas = normalizarColecao("fotosObras", nuvem.filter(n => !ids.has(String(n.id))));
         return novas.length ? [...novas, ...loc] : loc;
       });
     });
@@ -337,7 +418,7 @@ export default function App() {
     return observarColecaoNuvem("pedidos", nuvem => {
       setPedidos(loc => {
         const porId = new Map(loc.map(p => [String(p.id), p]));
-        nuvem.forEach(n => porId.set(String(n.id), n));
+        normalizarColecao("pedidos", nuvem).forEach(n => porId.set(String(n.id), n)); // pedidos só sobem por ação (sem laço)
         return [...porId.values()].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
       });
     });
@@ -365,7 +446,7 @@ export default function App() {
   // Gestor: sem obra fixa cai na primeira obra. Equipe: só a obra vinculada (sem obra → aviso, nunca a obra de outro)
   const usuarioEhGestor = usuario?.perfil === "gestor";
   const temObraId = usuario?.obraId !== undefined && usuario?.obraId !== null && usuario?.obraId !== "";
-  const obraVinculada = temObraId ? obras.find(o => String(o.id) === String(usuario.obraId)) || null : null;
+  const obraVinculada = temObraId ? obras.find(o => mesmoId(o.id, usuario.obraId)) || null : null;
   const obraAtual = (usuarioEhGestor || !usuario) ? (obraVinculada || obras[0]) : obraVinculada;
   const presencasHoje = historico[hojeStr()] || {};
 
@@ -376,7 +457,7 @@ export default function App() {
     if (!p.ok) return; // sem internet ou regras: mantém a sessão (offline-first)
     if (!p.perfil || p.perfil.ativo === false) {
       try { await logoutFirebase(); } catch {}
-      setUsuarios(us => us.filter(x => String(x.id) !== String(u.id)));
+      setUsuarios(us => us.filter(x => !mesmoId(x.id, u.id)));
       store.set("usuarioLogado", null);
       localStorage.removeItem("_kmzero_sessao");
       setUsuario(null);
@@ -388,10 +469,40 @@ export default function App() {
     if (u.perfil !== "gestor") {
       const atualizado = aplicarPerfilNuvem(u, p.perfil);
       if (jsonEstavel(atualizado) !== jsonEstavel(u)) {
-        setUsuarios(us => us.map(x => String(x.id) === String(u.id) ? { ...x, ...atualizado } : x));
+        setUsuarios(us => us.map(x => mesmoId(x.id, u.id) ? { ...x, ...atualizado } : x));
         setUsuario(atualizado);
         store.set("usuarioLogado", atualizado);
       }
+    } else {
+      // Escritório. O dono da empresa nunca fica trancado para fora: se o perfil dele aparecer
+      // limitado (áreas) ou rebaixado, volta sozinho para acesso total (as regras só deixam o
+      // próprio dono fazer isso). Para os outros, restaurarDonoNuvem só confere e devolve null.
+      let perfilNuvem = p.perfil;
+      if (perfilNuvem.perfil !== "gestor" || lerAcessos(perfilNuvem) !== null) {
+        perfilNuvem = (await restaurarDonoNuvem(u.firebaseUid, perfilNuvem)) || perfilNuvem;
+      }
+      aplicarPerfilDoEscritorio(u, perfilNuvem);
+    }
+  };
+  // Sessão aberta de quem está no escritório diante do perfil da nuvem (usuarios/{uid}) — a nuvem manda:
+  //  - continua "gestor": só as áreas (acessos) podem ter mudado em Usuários e acessos;
+  //  - deixou de ser "gestor" (rebaixado para a equipe de campo): vira encarregado JÁ nesta sessão
+  //    e vai para o Início do app de campo. Nunca vira "Tudo" (na dúvida, menos acesso).
+  const aplicarPerfilDoEscritorio = (u, perfilNuvem) => {
+    if (perfilNuvem.perfil !== "gestor") {
+      const campo = { ...aplicarPerfilNuvem(u, perfilNuvem), perfil: "encarregado", acessos: null };
+      setUsuarios(us => us.map(x => mesmoId(x.id, u.id) ? { ...x, ...campo } : x));
+      setUsuario(campo);
+      store.set("usuarioLogado", campo);
+      setHistoricoTelas([]);
+      setTelaRaw("home");
+      return;
+    }
+    // lerAcessos: valor estranho vira "só Visão geral", nunca "Tudo"
+    const atualizado = comAcessos(u, lerAcessos(perfilNuvem));
+    if (atualizado !== u) {
+      setUsuario(atualizado);
+      store.set("usuarioLogado", atualizado);
     }
   };
 
@@ -463,48 +574,46 @@ export default function App() {
       const forn_    = await store.get("fornecedores");
       const clientes_ = await store.get("clientes");
       const userLogado = await store.get("usuarioLogado");
-      // Normaliza obraId/trabId gravados como texto por versões antigas (consertava TODOS os filtros)
-      const normIds = (arr) => Array.isArray(arr) ? arr.map(x => {
-        if (!x || typeof x !== "object") return x;
-        const y = { ...x };
-        ["obraId", "trabId"].forEach(k => {
-          if (typeof y[k] === "string" && y[k] !== "" && !isNaN(Number(y[k]))) y[k] = Number(y[k]);
-        });
-        return y;
-      }) : arr;
-      if (obras_)   setObras(obras_);
-      if (trab_)    setTrab(normIds(trab_));
-      if (equips_)  setEquips(normIds(equips_));
-      if (pedidos_) setPedidos(normIds(pedidos_));
+      // Códigos gravados como texto (select, versões antigas, nuvem) entram canônicos: normalizarColecao
+      // (ids.js) em cada coleção, com os campos de CAMPOS_ID_COLECAO. Os efeitos store.set logo abaixo
+      // regravam o localStorage já normalizado. Coleção sem campos de código volta igual.
+      const n = normalizarColecao;
+      if (obras_)   setObras(n("obras", obras_));
+      if (trab_)    setTrab(n("trabalhadores", trab_));
+      if (equips_)  setEquips(n("equips", equips_));
+      if (pedidos_) setPedidos(n("pedidos", pedidos_));
       if (hist_)    setHistorico(hist_);
-      if (users_)   setUsuarios(users_);
+      if (users_)   setUsuarios(n("usuarios", users_));
       if (msgs_)    setMensagens(msgs_);
-      if (diario_)  setDiario(diario_);
-      if (ativos_) setAtivos(normIds(ativos_));
-      if (abast_) setAbast(normIds(abast_));
-      if (ferias_)  setFerias(ferias_);
-      if (rdos_)    setRdos(rdos_);
+      if (diario_)  setDiario(n("diario", diario_));
+      if (ativos_)  setAtivos(n("ativos", ativos_));
+      if (abast_)   setAbast(n("abastecimentos", abast_));
+      if (ferias_)  setFerias(n("ferias", ferias_));
+      if (rdos_)    setRdos(n("rdos", rdos_));
       if (emp_)     setEmpresa(emp_);
-      if (prod_)    setProd(prod_);
-      if (receb_) setReceb(normIds(receb_));
-      if (mov_)     setMov(mov_);
-      if (ferr_) setFerr(normIds(ferr_));
+      if (prod_)    setProd(n("produtividade", prod_));
+      if (receb_)   setReceb(n("recebimentos", receb_));
+      if (mov_)     setMov(n("movimentacoes", mov_));
+      if (ferr_)    setFerr(n("ferramentas", ferr_));
       if (links_)   setLinks(links_);
-      if (adiant_) setAdiant(normIds(adiant_));
-      if (manut_) setManut(normIds(manut_));
-      if (folhas_)  setFolhasSalvas(folhas_);
+      if (adiant_)  setAdiant(n("adiantamentos", adiant_));
+      if (manut_)   setManut(n("manutencoes", manut_));
+      if (folhas_)  setFolhasSalvas(n("folhasSalvas", folhas_));
       if (cron_)    setCronog(cron_);
-      if (movE_) setMovEquip(normIds(movE_));
-      if (despAv_)  setDespesasAvulsas(normIds(despAv_));
-      if (fotos_) setFotosObras(normIds(fotos_));
-      if (forn_)    setFornecedores(forn_);
-      if (clientes_) setClientes(normIds(clientes_));
+      if (movE_)    setMovEquip(n("movEquip", movE_));
+      if (despAv_)  setDespesasAvulsas(n("despesasAvulsas", despAv_));
+      if (fotos_)   setFotosObras(n("fotosObras", fotos_));
+      if (forn_)    setFornecedores(n("fornecedores", forn_));
+      if (clientes_) setClientes(n("clientes", clientes_));
       if (modoDemo) {
         // Visitante gestor, sem conta Google: nunca chama aguardarSessao/resultadoRedirecionamento/
         // verificarAcessoNuvem (restaurariam a conta real do navegador) e nunca grava _kmzero_sessao.
-        setUsuario(DEMO_USUARIO);
+        // &acessos= aplica um pacote de áreas ao visitante (testar os perfis do escritório)
+        const acessosDemo = acessosDaDemo();
+        const visitante = acessosDemo === undefined ? DEMO_USUARIO : { ...DEMO_USUARIO, acessos: acessosDemo };
+        setUsuario(visitante);
         setAvisos(gerarAvisosDemo()); // avisos só existem na nuvem; na demo ficam em memória
-        setTelaRaw(telaInicialDemo());
+        setTelaRaw(telaInicialDemo(visitante));
       } else if (userLogado) {
         limparRestosDemo(); // login real: o que a demo deixou neste navegador sai
         if (userLogado.empresaId) {
@@ -512,9 +621,10 @@ export default function App() {
           setEmpresaIdState(userLogado.empresaId);
         }
         setUsuario(userLogado);
-        setTela(userLogado.perfil === "gestor" ? "gestor" : "home");
+        setTela(telaInicialPermitida(userLogado));
         localStorage.setItem("_kmzero_sessao", "1"); // a vitrine (/) manda direto para /app/
-        verificarAcessoNuvem(userLogado); // em segundo plano
+        // em segundo plano; depois, se for escritório com convite de OUTRA empresa, pergunta (como no login)
+        verificarAcessoNuvem(userLogado).then(() => oferecerConviteOutraEmpresa(userLogado)).catch(e => console.warn("entrada:", e));
       } else {
         // Sem sessão local: pode ser a volta do login por redirecionamento (Google),
         // ou a sessão Google gravada no aparelho ainda vale (ex.: app fechado no meio do 1º acesso).
@@ -573,35 +683,90 @@ export default function App() {
   // presenças e fotos já tinham sync próprio acima — continuam iguais.)
   const syncAtivo = !modoDemo && !carregando && !!usuario?.firebaseUid && !!empresaIdState;
 
-  useSyncColecao("obras",           obras,           setObras,           syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("trabalhadores",   trabalhadores,   setTrab,            syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("equips",          equips,          setEquips,          syncAtivo, { ordenar: porIdAsc });
+  // O que chega da nuvem entra com os códigos canônicos (useSetterDaNuvem: sobe normalizado uma vez, sem laço)
+  const setObrasNuvem    = useSetterDaNuvem("obras", setObras);
+  const setTrabNuvem     = useSetterDaNuvem("trabalhadores", setTrab);
+  const setEquipsNuvem   = useSetterDaNuvem("equips", setEquips);
+  const setFornNuvem     = useSetterDaNuvem("fornecedores", setFornecedores);
+  const setClientesNuvem = useSetterDaNuvem("clientes", setClientes);
+  const setAtivosNuvem   = useSetterDaNuvem("ativos", setAtivos);
+  const setFerrNuvem     = useSetterDaNuvem("ferramentas", setFerr);
+  const setFeriasNuvem   = useSetterDaNuvem("ferias", setFerias);
+  const setManutNuvem    = useSetterDaNuvem("manutencoes", setManut);
+  const setDiarioNuvem   = useSetterDaNuvem("diario", setDiario);
+  const setAbastNuvem    = useSetterDaNuvem("abastecimentos", setAbast);
+  const setAdiantNuvem   = useSetterDaNuvem("adiantamentos", setAdiant);
+  const setMovNuvem      = useSetterDaNuvem("movimentacoes", setMov);
+  const setMovEquipNuvem = useSetterDaNuvem("movEquip", setMovEquip);
+  const setDespAvNuvem   = useSetterDaNuvem("despesasAvulsas", setDespesasAvulsas);
+  const setRecebNuvem    = useSetterDaNuvem("recebimentos", setReceb);
+  const setProdNuvem     = useSetterDaNuvem("produtividade", setProd);
+  const setFolhasNuvem   = useSetterDaNuvem("folhasSalvas", setFolhasSalvas);
+
+  useSyncColecao("obras",           obras,           setObrasNuvem,      syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("trabalhadores",   trabalhadores,   setTrabNuvem,       syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("equips",          equips,          setEquipsNuvem,     syncAtivo, { ordenar: porIdAsc });
+  // Dono da empresa (empresas/{id}.gestorUid): o cartão dele fica travado em Usuários e acessos
+  // e a sessão dele nunca fica limitada (ver verificarAcessoNuvem)
+  useEffect(() => {
+    if (!syncAtivo || usuario?.perfil !== "gestor") return;
+    let vivo = true;
+    carregarDonoEmpresa().then(uid => {
+      if (!vivo) return;
+      setDonoUid(uid);
+      const u = usuarioRef.current;
+      if (uid && mesmoId(u?.firebaseUid, uid) && u.acessos != null) verificarAcessoNuvem(u); // dono limitado: se restaura
+    });
+    return () => { vivo = false; };
+  }, [syncAtivo, usuario?.perfil, empresaIdState]);
+  // O perfil da própria pessoa mudou na nuvem (alguém ajustou em Usuários e acessos): vale na
+  // hora, sem sair e entrar — áreas novas, ou rebaixado para a equipe de campo (vira encarregado
+  // já nesta sessão, nunca "Tudo"). O dono, se aparecer limitado, confere e se restaura.
+  const aplicarAcessosDaNuvem = (perfis) => {
+    const u = usuarioRef.current;
+    if (!u?.firebaseUid || u.perfil !== "gestor") return;
+    const eu = (perfis || []).find(p => mesmoId(p.firebaseUid, u.firebaseUid));
+    if (!eu || !("acessos" in eu)) return;
+    const limitado = eu.perfil !== "gestor" || eu.acessos !== null;
+    if (limitado && mesmoId(donoUidRef.current, u.firebaseUid)) { verificarAcessoNuvem(u); return; }
+    aplicarPerfilDoEscritorio(u, eu);
+  };
   // Equipe com acesso ao app = perfis da nuvem (usuarios/) + convites pendentes (só o gestor vê).
   // Substitui a lista local: quem entra é quem tem conta Google com perfil na empresa.
+  // O convite continua na nuvem depois do 1º login: convite de e-mail que já tem perfil NÃO entra
+  // na lista (a pessoa já aparece pelo perfil; editar o convite não mudaria o acesso dela, e o
+  // cartão "Convite pendente" seria falso). Isso também tira da lista o convite da própria pessoa.
+  // O convite escondido não é uma porta dos fundos: ele acompanha o perfil (tipo, áreas e ativo,
+  // em alinharConviteAoPerfil), as regras exigem que o perfil refeito por ele tenha o e-mail da
+  // própria conta e quem foi desativado não apaga o próprio perfil para refazê-lo.
   useEffect(() => {
     if (!syncAtivo) return;
     let perfis = null, convites = [];
-    const publicar = () => { if (perfis) setUsuarios([...perfis, ...convites]); };
-    const paradas = [observarEquipeNuvem(ps => { perfis = ps; publicar(); })];
+    const publicar = () => {
+      if (!perfis) return;
+      const comPerfil = new Set(perfis.map(p => (p.email || "").toLowerCase()).filter(Boolean));
+      setUsuarios(normalizarColecao("usuarios", [...perfis, ...convites.filter(c => !comPerfil.has((c.email || "").toLowerCase()))])); // obraId canônico (usuários só sobem por ação)
+    };
+    const paradas = [observarEquipeNuvem(ps => { perfis = ps; publicar(); aplicarAcessosDaNuvem(ps); })];
     if (usuario?.perfil === "gestor") paradas.push(observarConvitesNuvem(cs => { convites = cs; publicar(); }));
     return () => paradas.forEach(p => { try { p && p(); } catch {} });
   }, [syncAtivo, usuario?.perfil, empresaIdState]);
-  useSyncColecao("fornecedores",    fornecedores,    setFornecedores,    syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("clientes",        clientes,        setClientes,        syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("ativos",          ativos,          setAtivos,          syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("ferramentas",     ferramentas,     setFerr,            syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("links",           links,           setLinks,           syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("ferias",          ferias,          setFerias,          syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("manutencoes",     manutencoes,     setManut,           syncAtivo, { ordenar: porIdAsc });
-  useSyncColecao("diario",          diario,          setDiario,          syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("abastecimentos",  abastecimentos,  setAbast,           syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("adiantamentos",   adiantamentos,   setAdiant,          syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("movimentacoes",   movimentacoes,   setMov,             syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("movEquip",        movEquip,        setMovEquip,        syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("despesasAvulsas", despesasAvulsas, setDespesasAvulsas, syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("recebimentos",    recebimentos,    setReceb,           syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("produtividade",   produtividade,   setProd,            syncAtivo, { ordenar: porIdDesc });
-  useSyncColecao("folhasSalvas",    folhasSalvas,    setFolhasSalvas,    syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("fornecedores",    fornecedores,    setFornNuvem,       syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("clientes",        clientes,        setClientesNuvem,   syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("ativos",          ativos,          setAtivosNuvem,     syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("ferramentas",     ferramentas,     setFerrNuvem,       syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("links",           links,           setLinks,           syncAtivo, { ordenar: porIdAsc }); // sem campos de código
+  useSyncColecao("ferias",          ferias,          setFeriasNuvem,     syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("manutencoes",     manutencoes,     setManutNuvem,      syncAtivo, { ordenar: porIdAsc });
+  useSyncColecao("diario",          diario,          setDiarioNuvem,     syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("abastecimentos",  abastecimentos,  setAbastNuvem,      syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("adiantamentos",   adiantamentos,   setAdiantNuvem,     syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("movimentacoes",   movimentacoes,   setMovNuvem,        syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("movEquip",        movEquip,        setMovEquipNuvem,   syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("despesasAvulsas", despesasAvulsas, setDespAvNuvem,     syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("recebimentos",    recebimentos,    setRecebNuvem,      syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("produtividade",   produtividade,   setProdNuvem,       syncAtivo, { ordenar: porIdDesc });
+  useSyncColecao("folhasSalvas",    folhasSalvas,    setFolhasNuvem,     syncAtivo, { ordenar: porIdDesc });
 
   // Empresa (objeto único → 1 doc "empresa" na coleção config). Vazia não sobe, pra não apagar a de outro aparelho.
   const empresaArr = useMemo(() => Object.keys(empresa || {}).length ? [{ id: "empresa", ...empresa }] : [], [empresa]);
@@ -649,7 +814,7 @@ export default function App() {
       return { ...h, [dataISO]: dia };
     });
     if (status === null) removerDocNuvem("presencas", `${dataISO}_${trabId}`);
-    else enviarDocNuvem("presencas", `${dataISO}_${trabId}`, { data: dataISO, trabId, status, criadoEm: Date.now(), editadoPorGestor: true });
+    else enviarDocNuvem("presencas", `${dataISO}_${trabId}`, { data: dataISO, trabId: normId(trabId), status, criadoEm: Date.now(), editadoPorGestor: true });
   };
 
   const salvarPresencas = (novas) => {
@@ -657,13 +822,13 @@ export default function App() {
     setHistorico(h => ({ ...h, [dia]: { ...(h[dia] || {}), ...novas } }));
     // Nuvem: 1 documento por dia+trabalhador (gestor vê de qualquer cidade)
     Object.entries(novas).forEach(([trabId, status]) => {
-      const tid = isNaN(Number(trabId)) ? trabId : Number(trabId);
+      const tid = normId(trabId);
       enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, status, criadoEm: Date.now() });
     });
   };
   const verTrabalhador = (t) => { setTrabSelecionado(t); setTela("trab_detalhe"); };
   const editarTrabalhador = (t) => {
-    setTrab(ts => ts.map(x => x.id === t.id ? t : x));
+    setTrab(ts => ts.map(x => mesmoId(x.id, t.id) ? t : x));
     setTrabSelecionado(t);
   };
   // Folha arquivada: marca os vales descontados (descontadoEm + folhaId) para não descontar de novo em outra folha
@@ -674,17 +839,18 @@ export default function App() {
   };
   // Restaurar backup = MESCLAR: registros do arquivo entram/atualizam (mesmo id vence), nada é apagado.
   // Com a nuvem ativa, apagar aqui apagaria na empresa inteira — por isso não substitui listas.
-  const mesclarPorId = (atual, novos) => {
-    if (!Array.isArray(novos)) return atual;
+  const mesclarPorId = (atual, novos0, nome) => {
+    if (!Array.isArray(novos0)) return atual;
+    const novos = normalizarColecao(nome, novos0); // códigos do arquivo entram canônicos
     const m = new Map((Array.isArray(atual) ? atual : []).map(x => [String(x?.id), x]));
     novos.forEach(x => { if (x && x.id !== undefined && x.id !== null) m.set(String(x.id), x); });
     return [...m.values()];
   };
   const restaurarBackup = (dados) => {
-    if (dados.obras) setObras(a => mesclarPorId(a, dados.obras));
-    if (dados.trabalhadores) setTrab(a => mesclarPorId(a, dados.trabalhadores));
-    if (dados.equips) setEquips(a => mesclarPorId(a, dados.equips));
-    if (dados.pedidos) setPedidos(a => mesclarPorId(a, dados.pedidos));
+    if (dados.obras) setObras(a => mesclarPorId(a, dados.obras, "obras"));
+    if (dados.trabalhadores) setTrab(a => mesclarPorId(a, dados.trabalhadores, "trabalhadores"));
+    if (dados.equips) setEquips(a => mesclarPorId(a, dados.equips, "equips"));
+    if (dados.pedidos) setPedidos(a => mesclarPorId(a, dados.pedidos, "pedidos"));
     if (dados.historico) {
       // Mescla por dia+trabalhador (não substitui o dia inteiro) e envia cada presença à nuvem,
       // para o ponto importado aparecer em todos os aparelhos e na folha.
@@ -696,38 +862,38 @@ export default function App() {
       if (usuario?.firebaseUid) {
         Object.entries(dados.historico).forEach(([dia, m]) => Object.entries(m || {}).forEach(([trabId, status]) => {
           if (!status) return;
-          const tid = isNaN(Number(trabId)) ? trabId : Number(trabId);
+          const tid = normId(trabId);
           enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, status, criadoEm: Date.now(), importado: true });
         }));
       }
     }
-    if (dados.usuarios) setUsuarios(a => mesclarPorId(a, dados.usuarios));
-    if (dados.mensagens) setMensagens(a => mesclarPorId(a, dados.mensagens));
-    if (dados.diario) setDiario(a => mesclarPorId(a, dados.diario));
-    if (dados.ativos) setAtivos(a => mesclarPorId(a, dados.ativos));
-    if (dados.abastecimentos) setAbast(a => mesclarPorId(a, dados.abastecimentos));
-    if (dados.ferias) setFerias(a => mesclarPorId(a, dados.ferias));
-    if (dados.rdosEmitidos) setRdos(a => mesclarPorId(a, dados.rdosEmitidos));
+    if (dados.usuarios) setUsuarios(a => mesclarPorId(a, dados.usuarios, "usuarios"));
+    if (dados.mensagens) setMensagens(a => mesclarPorId(a, dados.mensagens, "mensagens"));
+    if (dados.diario) setDiario(a => mesclarPorId(a, dados.diario, "diario"));
+    if (dados.ativos) setAtivos(a => mesclarPorId(a, dados.ativos, "ativos"));
+    if (dados.abastecimentos) setAbast(a => mesclarPorId(a, dados.abastecimentos, "abastecimentos"));
+    if (dados.ferias) setFerias(a => mesclarPorId(a, dados.ferias, "ferias"));
+    if (dados.rdosEmitidos) setRdos(a => mesclarPorId(a, dados.rdosEmitidos, "rdosEmitidos"));
     if (dados.empresa) setEmpresa(e => ({ ...e, ...dados.empresa }));
-    if (dados.produtividade) setProd(a => mesclarPorId(a, dados.produtividade));
-    if (dados.recebimentos) setReceb(a => mesclarPorId(a, dados.recebimentos));
-    if (dados.movimentacoes) setMov(a => mesclarPorId(a, dados.movimentacoes));
-    if (dados.ferramentas) setFerr(a => mesclarPorId(a, dados.ferramentas));
-    if (dados.links) setLinks(a => mesclarPorId(a, dados.links));
-    if (dados.adiantamentos) setAdiant(a => mesclarPorId(a, dados.adiantamentos));
-    if (dados.manutencoes) setManut(a => mesclarPorId(a, dados.manutencoes));
-    if (dados.folhasSalvas) setFolhasSalvas(a => mesclarPorId(a, dados.folhasSalvas));
+    if (dados.produtividade) setProd(a => mesclarPorId(a, dados.produtividade, "produtividade"));
+    if (dados.recebimentos) setReceb(a => mesclarPorId(a, dados.recebimentos, "recebimentos"));
+    if (dados.movimentacoes) setMov(a => mesclarPorId(a, dados.movimentacoes, "movimentacoes"));
+    if (dados.ferramentas) setFerr(a => mesclarPorId(a, dados.ferramentas, "ferramentas"));
+    if (dados.links) setLinks(a => mesclarPorId(a, dados.links, "links"));
+    if (dados.adiantamentos) setAdiant(a => mesclarPorId(a, dados.adiantamentos, "adiantamentos"));
+    if (dados.manutencoes) setManut(a => mesclarPorId(a, dados.manutencoes, "manutencoes"));
+    if (dados.folhasSalvas) setFolhasSalvas(a => mesclarPorId(a, dados.folhasSalvas, "folhasSalvas"));
     if (dados.cronogramas) setCronog(c => ({ ...c, ...dados.cronogramas }));
-    if (dados.movEquip) setMovEquip(a => mesclarPorId(a, dados.movEquip));
-    if (dados.despesasAvulsas) setDespesasAvulsas(a => mesclarPorId(a, dados.despesasAvulsas));
-    if (dados.fotosObras) setFotosObras(a => mesclarPorId(a, dados.fotosObras));
-    if (dados.fornecedores) setFornecedores(a => mesclarPorId(a, dados.fornecedores));
-    if (dados.clientes) setClientes(a => mesclarPorId(a, dados.clientes));
+    if (dados.movEquip) setMovEquip(a => mesclarPorId(a, dados.movEquip, "movEquip"));
+    if (dados.despesasAvulsas) setDespesasAvulsas(a => mesclarPorId(a, dados.despesasAvulsas, "despesasAvulsas"));
+    if (dados.fotosObras) setFotosObras(a => mesclarPorId(a, dados.fotosObras, "fotosObras"));
+    if (dados.fornecedores) setFornecedores(a => mesclarPorId(a, dados.fornecedores, "fornecedores"));
+    if (dados.clientes) setClientes(a => mesclarPorId(a, dados.clientes, "clientes"));
   };
 
   const upsertUsuarioLista = (lista, u) => {
     const arr = Array.isArray(lista) ? lista : [];
-    const idx = arr.findIndex(x => String(x.id) === String(u.id) || (u.firebaseUid && x.firebaseUid === u.firebaseUid && x.perfil === u.perfil));
+    const idx = arr.findIndex(x => mesmoId(x.id, u.id) || (mesmoId(x.firebaseUid, u.firebaseUid) && x.perfil === u.perfil));
     if (idx === -1) return [...arr, u];
     return arr.map((x, i) => i === idx ? { ...x, ...u } : x);
   };
@@ -735,10 +901,45 @@ export default function App() {
   // Depois de "Entrar com Google": perfil → entra; convite → cria o perfil e entra; nada → primeiro acesso
   const concluirLoginGoogle = async (userGoogle) => {
     const r = await resolverEntradaGoogle(userGoogle);
-    if (r.tipo === "perfil") { await login(r.usuario); return { ok: true }; }
+    if (r.tipo === "perfil") { await login(r.usuario); return { ok: true }; } // r.usuario já traz acessos (store.js)
     if (r.tipo === "sem_convite") { setUsuarioGoogle(userGoogle); setTelaRaw("primeiro_acesso"); return { ok: true, semConvite: true }; }
+    // Escritório com convite de OUTRA empresa (criou a própria antes de ser convidado): a pessoa escolhe
+    if (r.tipo === "convite_outra_empresa") { abrirEscolhaConvite({ usuario: r.usuario, convite: r.convite, userGoogle }); return { ok: true, escolha: true }; }
     if (r.desativado) { try { await logoutFirebase(); } catch {} }
-    return { ok: false, erro: r.erro, codigo: r.codigo || "", email: r.email || "" };
+    // O e-mail EXATO da conta Google vai junto em todo erro (a tela de entrada mostra para a pessoa conferir)
+    return { ok: false, erro: r.erro, codigo: r.codigo || "", email: r.email || userGoogle?.email || "" };
+  };
+
+  // Convite de outra empresa para quem já tem a própria (login e sessão aberta neste aparelho)
+  const abrirEscolhaConvite = (escolha) => {
+    setEscolhaConvite(escolha);
+    setHistoricoTelas([]);
+    setTelaRaw("convite_empresa");
+  };
+  // Sessão já aberta (não passa por resolverEntradaGoogle): faz a mesma pergunta, em segundo plano
+  const oferecerConviteOutraEmpresa = async (u) => {
+    if (!u?.firebaseUid || u.perfil !== "gestor" || !u.empresaId) return;
+    const convite = await conviteDeOutraEmpresa(u.email, u, u.firebaseUid); // só dono de empresa vazia (store.js)
+    if (!convite || !mesmoId(usuarioRef.current?.firebaseUid, u.firebaseUid)) return; // saiu ou trocou de conta no meio
+    abrirEscolhaConvite({ usuario: u, convite, userGoogle: { uid: u.firebaseUid, email: u.email, nome: u.nome, foto: u.foto } });
+  };
+  const entrarNoConvite = async () => {
+    const e = escolhaConvite;
+    if (!e) return { ok: false, erro: "Entre com o Google de novo." };
+    const r = await trocarParaConvite(e.userGoogle, e.convite);
+    if (!r.ok) return { ok: false, erro: r.erro, codigo: r.codigo || "", email: e.usuario?.email || "" };
+    await login(r.usuario); // empresa nova: grava a sessão e recarrega já nela
+    return { ok: true };
+  };
+  const continuarNaMinhaEmpresa = async () => {
+    const e = escolhaConvite;
+    if (!e) { setTelaRaw("login"); return; }
+    guardarRecusaConvite(e.usuario?.email, e.convite); // não pergunta de novo por este convite neste aparelho
+    setEscolhaConvite(null);
+    // Sessão já aberta: volta para onde estava (o usuário em memória já foi conferido na nuvem)
+    const atual = usuarioRef.current;
+    if (atual && mesmoId(atual.firebaseUid, e.usuario?.firebaseUid)) { setTelaRaw(telaInicialPermitida(atual)); return; }
+    await login(e.usuario);
   };
 
   const login = async (u) => {
@@ -768,16 +969,11 @@ export default function App() {
     // Guarda/atualiza o perfil na lista deste aparelho (pra próxima vez entrar por PIN / "Continuar como")
     setUsuarios(us => upsertUsuarioLista(us, u));
     store.set("usuarioLogado", u);
-    if (u.perfil === "gestor") setTela("gestor");
-    else setTela("home");
+    setTela(telaInicialPermitida(u)); // Painel, a primeira área liberada (escritório) ou home (campo)
   };
 
-  // Helper: pra onde voltar baseado no perfil
-  const telaInicial = () => {
-    if (!usuario) return "login";
-    if (usuario.perfil === "gestor") return "gestor";
-    return "home";
-  };
+  // Helper: pra onde voltar baseado no perfil (e nas áreas liberadas do escritório)
+  const telaInicial = () => telaInicialPermitida(usuario);
   const sairDaConta = async () => {
     try { await Promise.race([desligarNotificacoes(), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
     try { await logoutFirebase(); } catch (e) {}
@@ -812,23 +1008,23 @@ export default function App() {
     if (confirmado) return sairDaConta(); // veio do modal de Minha Conta: já confirmou lá
     confirmar("Sair da conta?\n\nPara entrar de novo você vai precisar de internet e da mesma conta Google.", () => sairDaConta());
   };
-  const trabObra = trabalhadores.filter(t => t.obraId === obraAtual?.id);
+  const trabObra = trabalhadores.filter(t => mesmoId(t.obraId, obraAtual?.id));
 
   const todoEstado = { obras, trabalhadores, equips, pedidos, historico, usuarios, mensagens, diario, ativos, abastecimentos, ferias, rdosEmitidos, empresa, produtividade, recebimentos, movimentacoes, ferramentas, links, adiantamentos, manutencoes, folhasSalvas, cronogramas, movEquip, despesasAvulsas, fotosObras, fornecedores, clientes };
 
   // Aprovar movimentação: se for "definitivo" muda obra do trabalhador
   const salvarManutencao = (m) => {
     setManut(ms => {
-      const existe = ms.find(x => x.id === m.id);
-      if (existe) return ms.map(x => x.id === m.id ? m : x);
+      const existe = ms.find(x => mesmoId(x.id, m.id));
+      if (existe) return ms.map(x => mesmoId(x.id, m.id) ? m : x);
       return [...ms, m];
     });
   };
 
   const aprovarMov = (m) => {
-    setMov(ms => ms.map(x => x.id === m.id ? { ...x, status: "Aprovado" } : x));
+    setMov(ms => ms.map(x => mesmoId(x.id, m.id) ? { ...x, status: "Aprovado" } : x));
     if (m.tipo === "definitivo") {
-      setTrab(ts => ts.map(t => t.id === m.trabId ? { ...t, obraId: m.obraDestino } : t));
+      setTrab(ts => ts.map(t => mesmoId(t.id, m.trabId) ? { ...t, obraId: m.obraDestino } : t));
     }
     // Para "hoje" registramos transferência temporária no histórico (apenas marca)
   };
@@ -839,52 +1035,52 @@ export default function App() {
     // Se já vem aprovado (gestor), aplica mudança imediata
     if (m.status === "Aprovado") {
       if (m.tipoItem === "equipamento") {
-        setEquips(es => es.map(e => e.id === m.itemId ? { ...e, obraId: m.obraDestinoId } : e));
+        setEquips(es => es.map(e => mesmoId(e.id, m.itemId) ? { ...e, obraId: m.obraDestinoId } : e));
       } else if (m.tipoItem === "ferramenta") {
-        setFerr(fs => fs.map(f => f.id === m.itemId ? { ...f, obraId: m.obraDestinoId } : f));
+        setFerr(fs => fs.map(f => mesmoId(f.id, m.itemId) ? { ...f, obraId: m.obraDestinoId } : f));
       }
     }
   };
 
   const movEquipAprovar = (id) => {
-    const m = movEquip.find(x => x.id === id);
+    const m = movEquip.find(x => mesmoId(x.id, id));
     if (!m) return;
-    setMovEquip(arr => arr.map(x => x.id === id ? { ...x, status: "Aprovado" } : x));
+    setMovEquip(arr => arr.map(x => mesmoId(x.id, id) ? { ...x, status: "Aprovado" } : x));
     // Move o item pra obra destino
     if (m.tipoItem === "equipamento") {
-      setEquips(es => es.map(e => e.id === m.itemId ? { ...e, obraId: m.obraDestinoId } : e));
+      setEquips(es => es.map(e => mesmoId(e.id, m.itemId) ? { ...e, obraId: m.obraDestinoId } : e));
     } else if (m.tipoItem === "ferramenta") {
-      setFerr(fs => fs.map(f => f.id === m.itemId ? { ...f, obraId: m.obraDestinoId } : f));
+      setFerr(fs => fs.map(f => mesmoId(f.id, m.itemId) ? { ...f, obraId: m.obraDestinoId } : f));
     }
   };
 
   const movEquipNegar = (id) => {
-    setMovEquip(arr => arr.map(x => x.id === id ? { ...x, status: "Negado" } : x));
+    setMovEquip(arr => arr.map(x => mesmoId(x.id, id) ? { ...x, status: "Negado" } : x));
   };
 
   const movEquipDevolver = (id, transferencia = false) => {
-    const m = movEquip.find(x => x.id === id);
+    const m = movEquip.find(x => mesmoId(x.id, id));
     if (!m) return;
-    setMovEquip(arr => arr.map(x => x.id === id ? { ...x, status: transferencia ? "Concluído" : "Devolvido", dataDevolucao: new Date().toLocaleDateString("pt-BR") } : x));
+    setMovEquip(arr => arr.map(x => mesmoId(x.id, id) ? { ...x, status: transferencia ? "Concluído" : "Devolvido", dataDevolucao: new Date().toLocaleDateString("pt-BR") } : x));
     // Se for empréstimo (não transferência), volta o item pra obra origem
     if (!transferencia) {
       if (m.tipoItem === "equipamento") {
-        setEquips(es => es.map(e => e.id === m.itemId ? { ...e, obraId: m.obraOrigemId } : e));
+        setEquips(es => es.map(e => mesmoId(e.id, m.itemId) ? { ...e, obraId: m.obraOrigemId } : e));
       } else if (m.tipoItem === "ferramenta") {
-        setFerr(fs => fs.map(f => f.id === m.itemId ? { ...f, obraId: m.obraOrigemId } : f));
+        setFerr(fs => fs.map(f => mesmoId(f.id, m.itemId) ? { ...f, obraId: m.obraOrigemId } : f));
       }
     }
   };
 
   // Modo escritório: gestor logado em tela larga (>= 1024 px) vê menu lateral à esquerda
   // e a tela à direita. No celular (ou nas telas de entrada) nada muda.
-  const escritorio = modoEscritorio && !!usuario && usuario.perfil === "gestor" && !["login", "registro", "primeiro_acesso"].includes(tela);
+  const escritorio = modoEscritorio && !!usuario && usuario.perfil === "gestor" && !["login", "registro", "primeiro_acesso", "convite_empresa"].includes(tela);
   // Só recalcula quando os dados mudam (gerarAlertas percorre várias coleções)
   const badgesMenu = useMemo(() => escritorio ? {
     pedidos: (pedidos || []).filter(p => p.status === "Aguardando").length,
     aprovar_mov: (movimentacoes || []).filter(m => m.status === "Aguardando").length,
     mov_equip: (movEquip || []).filter(m => m.status === "Aguardando").length,
-    mensagens: (mensagens || []).filter(m => m.para === usuario.id && !m.lida).length,
+    mensagens: (mensagens || []).filter(m => mesmoId(m.para, usuario.id) && !m.lida).length,
     avisos: avisosNaoLidos,
     alertas: gerarAlertas({ obras, trabalhadores, equips, pedidos, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos }).length,
   } : {}, [escritorio, avisosNaoLidos, pedidos, movimentacoes, mensagens, usuario, obras, trabalhadores, equips, historico, manutencoes, cronogramas, movEquip, ativos, abastecimentos]);
@@ -896,7 +1092,7 @@ export default function App() {
   const escritorioCtx = useMemo(() => escritorio ? { tela } : null, [escritorio, tela]);
   // Telas de entrada (sem sessão): no PC ocupam a largura toda (painel dividido em auth.jsx),
   // sem a coluna de 420 px do celular. Depende só da largura porque aqui não há gestor nem contexto.
-  const telaEntrada = ["login", "primeiro_acesso", "registro"].includes(tela);
+  const telaEntrada = ["login", "primeiro_acesso", "registro", "convite_empresa"].includes(tela);
 
   // Toque na notificação: com o app aberto, o service worker avisa (push-sw.js);
   // com o app fechado, ele abre /app/?aviso=ID — nos dois casos vai para a tela Avisos.
@@ -931,6 +1127,22 @@ export default function App() {
     }, Math.max(0, minimo - decorrido));
     return () => clearTimeout(t);
   }, [carregando]);
+
+  // 🔒 ÁREAS DE ACESSO (usuario.acessos; regras em menuGrupos.js): gestor com áreas limitadas que
+  // cair numa tela fora delas (atalho, ?tela= da demo, voltar, notificação) vai para a tela inicial
+  // dele e vê um aviso curto. O menu, a busca e o Painel já escondem o que não é dele.
+  const telaBloqueada = !carregando && usuario?.perfil === "gestor" && !telaPermitida(usuario, tela);
+  useEffect(() => {
+    if (!telaBloqueada) return;
+    setHistoricoTelas([]);
+    setTelaRaw(telaInicialPermitida(usuario));
+    setAvisoAcesso(Date.now());
+  }, [telaBloqueada, usuario, tela]);
+  useEffect(() => {
+    if (!avisoAcesso) return;
+    const t = setTimeout(() => setAvisoAcesso(null), 5000);
+    return () => clearTimeout(t);
+  }, [avisoAcesso]);
 
   if (carregando) return null; // o splash do index.html ainda está na frente
 
@@ -969,6 +1181,7 @@ export default function App() {
   // 🏗️ Telas de campo precisam de obra: equipe sem obra vinculada vê aviso em vez de tela branca
   const TELAS_COM_OBRA = new Set(["fluxo", "material", "fotos_solo", "equip_solo", "diario"]);
   const render = () => {
+    if (telaBloqueada) return null; // a guarda das áreas já está trocando de tela (sem piscar a proibida)
     if (usuario && !usuarioEhGestor && !obraAtual && TELAS_COM_OBRA.has(tela)) {
       return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
@@ -992,27 +1205,30 @@ export default function App() {
       case "login":      return <TelaEntrar onGoogle={concluirLoginGoogle} erroInicial={erroEntrada} />;
       case "primeiro_acesso": return <TelaPrimeiroAcesso usuarioGoogle={usuarioGoogle} onCriarEmpresa={() => setTelaRaw("registro")} onVerificar={() => usuarioGoogle ? concluirLoginGoogle(usuarioGoogle) : Promise.resolve({ ok: false, erro: "Entre com o Google de novo." })} onSair={async () => { try { await logoutFirebase(); } catch {} setUsuarioGoogle(null); setTelaRaw("login"); }} />;
       case "registro":   return <TelaRegistro usuarioGoogle={usuarioGoogle} onBack={() => setTelaRaw("primeiro_acesso")} onRegistrado={login} />;
+      case "convite_empresa": return escolhaConvite
+        ? <TelaConviteOutraEmpresa usuario={escolhaConvite.usuario} convite={escolhaConvite.convite} onEntrar={entrarNoConvite} onContinuar={continuarNaMinhaEmpresa} />
+        : <TelaEntrar onGoogle={concluirLoginGoogle} erroInicial={erroEntrada} />;
       case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} />;
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
       case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={criarPedidoSync} />;
-      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => f.obraId === obraAtual?.id).length} onBack={() => setTela("home")} onSalvar={salvarFotoObraSync} />;
-      case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} usuario={usuario} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => f.id !== id))} />;
-      case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => x.id !== id))} />;
-      case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => u.id === e.id); return u || e; }))} />;
-      case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => d.id !== id))} onSalvarFotoObra={salvarFotoObraSync} />;
+      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => mesmoId(f.obraId, obraAtual?.id)).length} onBack={() => setTela("home")} onSalvar={salvarFotoObraSync} />;
+      case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} usuario={usuario} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => !mesmoId(f.id, id)))} />;
+      case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => mesmoId(x.id, f.id) ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => !mesmoId(x.id, id)))} />;
+      case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => mesmoId(u.id, e.id)); return u || e; }))} />;
+      case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => !mesmoId(d.id, id)))} onSalvarFotoObra={salvarFotoObraSync} />;
       case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
-      case "obras":      return <TelaObras usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
+      case "obras":      return <TelaObras usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "mov_equip":  return <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} onVerDetalhe={m => { setMovEquipSel(m); setTela("mov_equip_detalhe"); }} />;
-      case "mov_equip_detalhe": return movEquipSel ? <TelaMovEquipDetalhe mov={movEquip.find(x => x.id === movEquipSel.id) || movEquipSel} obras={obras} equips={equips} ferramentas={ferramentas} usuario={usuario} onBack={voltar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} /> : <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} />;
+      case "mov_equip_detalhe": return movEquipSel ? <TelaMovEquipDetalhe mov={movEquip.find(x => mesmoId(x.id, movEquipSel.id)) || movEquipSel} obras={obras} equips={equips} ferramentas={ferramentas} usuario={usuario} onBack={voltar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} /> : <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} />;
       case "equipe":     return <TelaEquipe obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onAdd={(t) => {
         setTrab(ts => [...ts, t]);
         // Acesso ao app é separado: Sistema → Usuários e acessos (Gmail da pessoa)
       }} onRemove={(id) => {
         // Remove trabalhador
-        const trab = trabalhadores.find(t => t.id === id);
-        setTrab(ts => ts.filter(t => t.id !== id));
+        const trab = trabalhadores.find(t => mesmoId(t.id, id));
+        setTrab(ts => ts.filter(t => !mesmoId(t.id, id)));
         // Verifica se tem usuário com mesmo nome (login no sistema)
         if (trab) {
           const usuarioVinculado = usuarios.find(u => u.nome.toLowerCase().trim() === trab.nome.toLowerCase().trim() && u.perfil !== "gestor");
@@ -1032,43 +1248,43 @@ export default function App() {
       case "dashboard":  return <TelaDashboard obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} historico={historico} onBack={voltar} />;
       case "alertas":    return <TelaAlertas obras={obras} trabalhadores={trabalhadores} equips={equips} pedidos={pedidos} historico={historico} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
       case "pedidos":    return <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} usuario={usuario} fornecedores={fornecedores} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} onCriar={criarPedidoSync} />;
-      case "pedido_detalhe": return pedidoSelecionado ? <TelaPedidoDetalhe pedido={pedidos.find(x => x.id === pedidoSelecionado.id) || pedidoSelecionado} obras={obras} empresa={empresa} onBack={voltar} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} onEditar={editarPedidoSync} /> : <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} />;
+      case "pedido_detalhe": return pedidoSelecionado ? <TelaPedidoDetalhe pedido={pedidos.find(x => mesmoId(x.id, pedidoSelecionado.id)) || pedidoSelecionado} obras={obras} empresa={empresa} onBack={voltar} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} onEditar={editarPedidoSync} /> : <TelaPedidos obras={obras} pedidos={pedidos} empresa={empresa} onBack={voltar} onVerDetalhe={p => { setPedidoSelecionado(p); setTela("pedido_detalhe"); }} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} onRemover={removerPedidoSync} />;
       case "mapa":       return <TelaMapa obras={obras} trabalhadores={trabalhadores} onBack={voltar} onEditar={() => setTela("obras")} />;
-      case "clientes":  return <TelaClientes clientes={clientes} onBack={voltar} onAdd={c => setClientes(cs => [...cs, c])} onEditar={c => setClientes(cs => cs.map(x => x.id === c.id ? c : x))} onRemover={id => setClientes(cs => cs.filter(x => x.id !== id))} />;
+      case "clientes":  return <TelaClientes clientes={clientes} onBack={voltar} onAdd={c => setClientes(cs => [...cs, c])} onEditar={c => setClientes(cs => cs.map(x => mesmoId(x.id, c.id) ? c : x))} onRemover={id => setClientes(cs => cs.filter(x => !mesmoId(x.id, id)))} />;
       case "trab_detalhe": return <TelaTrabalhadorDetalhe trabalhador={trabSelecionado} obras={obras} historico={historico} rdosEmitidos={rdosEmitidos} empresa={empresa} usuario={usuario} onBack={voltar} onEditar={editarTrabalhador} onEditarPresenca={editarPresencaDia} />;
       case "avisos":     return <TelaAvisos usuario={usuario} usuarios={usuarios} obras={obras} avisos={avisosVisiveis} ultimaLeitura={ultimaLeituraAvisos} onEnviar={enviarAviso} onMarcarLidos={marcarAvisosLidosAgora} onNav={setTela} onBack={voltar} />;
       case "mensagens":  return <TelaMensagens usuario={usuario} usuarios={usuarios} mensagens={mensagens} onBack={voltar} onEnviar={enviarMensagemSync} onMarcarLida={marcarLidaSync} />;
       case "calendario": return <TelaCalendario obras={obras} trabalhadores={trabalhadores} historico={historico} onBack={voltar} />;
-      case "equip_gestao":return <TelaEquipamentosGestao obras={obras} equips={equips} onBack={voltar} onAdd={eq => setEquips(es => [...es, eq])} onEditar={eq => setEquips(es => es.map(x => x.id === eq.id ? eq : x))} onRemover={id => setEquips(es => es.filter(e => e.id !== id))} />;
-      case "ativos":     return <TelaAtivos obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onAdd={a => setAtivos(as => [...as, a])} onEditar={a => setAtivos(as => as.map(x => x.id === a.id ? a : x))} onRemover={id => setAtivos(as => as.filter(a => a.id !== id))} onAbastecer={a => setAbast(abs => [a, ...abs])} />;
+      case "equip_gestao":return <TelaEquipamentosGestao obras={obras} equips={equips} onBack={voltar} onAdd={eq => setEquips(es => [...es, eq])} onEditar={eq => setEquips(es => es.map(x => mesmoId(x.id, eq.id) ? eq : x))} onRemover={id => setEquips(es => es.filter(e => !mesmoId(e.id, id)))} />;
+      case "ativos":     return <TelaAtivos obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onAdd={a => setAtivos(as => [...as, a])} onEditar={a => setAtivos(as => as.map(x => mesmoId(x.id, a.id) ? a : x))} onRemover={id => setAtivos(as => as.filter(a => !mesmoId(a.id, id)))} onAbastecer={a => setAbast(abs => [a, ...abs])} />;
       case "frota":      return <TelaFrota obras={obras} ativos={ativos} abastecimentos={abastecimentos} onBack={voltar} onNav={setTela} />;
-      case "pagamentos": return <TelaPagamentos obras={obras} onBack={voltar} onEditarObra={o => setObras(os => os.map(x => x.id === o.id ? o : x))} />;
+      case "pagamentos": return <TelaPagamentos obras={obras} onBack={voltar} onEditarObra={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} />;
       case "custos":     return <TelaCustos obras={obras} trabalhadores={trabalhadores} historico={historico} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} despesasAvulsas={despesasAvulsas} onBack={voltar} />;
-      case "despesas":   return <TelaDespesasAvulsas obras={obras} despesas={despesasAvulsas} onBack={voltar} onAdd={d => setDespesasAvulsas(arr => [d, ...arr])} onEditar={d => setDespesasAvulsas(arr => arr.map(x => x.id === d.id ? d : x))} onRemover={id => setDespesasAvulsas(arr => arr.filter(x => x.id !== id))} />;
-      case "ferias":     return <TelaFerias obras={obras} trabalhadores={trabalhadores} ferias={ferias} onBack={voltar} onAdd={f => setFerias(fs => [...fs, f])} onRemove={id => setFerias(fs => fs.filter(f => f.id !== id))} />;
-      case "rdo":        return <TelaRDO obras={obras} trabalhadores={trabalhadores} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} historico={historico} diario={diario} usuario={usuario} empresa={empresa} rdosEmitidos={rdosEmitidos} recebimentos={recebimentos} fotosObras={fotosObras} despesasAvulsas={despesasAvulsas} movimentacoes={movimentacoes} movEquip={movEquip} produtividade={produtividade} cronogramas={cronogramas} onBack={voltar} onEmitirRDO={emitirRDOSync} onUpdateRDO={updateRDOSync} onRemoveRDO={removeRDOSync} />;
+      case "despesas":   return <TelaDespesasAvulsas obras={obras} despesas={despesasAvulsas} onBack={voltar} onAdd={d => setDespesasAvulsas(arr => [d, ...arr])} onEditar={d => setDespesasAvulsas(arr => arr.map(x => mesmoId(x.id, d.id) ? d : x))} onRemover={id => setDespesasAvulsas(arr => arr.filter(x => !mesmoId(x.id, id)))} />;
+      case "ferias":     return <TelaFerias obras={obras} trabalhadores={trabalhadores} ferias={ferias} onBack={voltar} onAdd={f => setFerias(fs => [...fs, f])} onRemove={id => setFerias(fs => fs.filter(f => !mesmoId(f.id, id)))} />;
+      case "rdo":        return <TelaRDO obras={obras} trabalhadores={trabalhadores} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} historico={historico} diario={diario} usuario={usuario} empresa={empresa} rdosEmitidos={rdosEmitidos} recebimentos={recebimentos} fotosObras={fotosObras} despesasAvulsas={despesasAvulsas} movimentacoes={movimentacoes} movEquip={movEquip} produtividade={produtividade} cronogramas={cronogramas} onBack={voltar} onEmitirRDO={emitirRDOSync} onUpdateRDO={updateRDOSync} onRemoveRDO={removeRDOSync} podeCriarRdoDia={ehAdministrador} />;
       case "empresa":    return <TelaConfigEmpresa empresa={empresa} onSave={setEmpresa} onBack={voltar} />;
       case "minha_conta": return <TelaMinhaConta usuario={usuario} empresa={empresa} demo={modoDemo} onBack={voltar} onLogout={logout} />;
       case "ajuda":      return <TelaAjuda empresa={empresa} onBack={voltar} />;
-      case "acessos":    return <TelaAcessosApp usuario={usuario} usuarios={usuarios} obras={obras} empresa={empresa} demo={modoDemo} onBack={voltar} />;
-      case "produtividade": return <TelaProdutividade obras={obras} usuario={usuario} produtividade={produtividade} onBack={voltar} onAdd={p => setProd(ps => [p, ...ps])} onRemove={id => setProd(ps => ps.filter(p => p.id !== id))} />;
+      case "acessos":    return <TelaAcessosApp usuario={usuario} usuarios={usuarios} obras={obras} empresa={empresa} demo={modoDemo} donoUid={modoDemo ? donoDemo : donoUid} onBack={voltar} />;
+      case "produtividade": return <TelaProdutividade obras={obras} usuario={usuario} produtividade={produtividade} onBack={voltar} onAdd={p => setProd(ps => [p, ...ps])} onRemove={id => setProd(ps => ps.filter(p => !mesmoId(p.id, id)))} />;
       case "recebimento":   return <TelaRecebimento obras={obras} pedidos={pedidos} usuario={usuario} recebimentos={recebimentos} onBack={voltar} onAdd={r => setReceb(rs => [r, ...rs])} />;
       case "folha": // alias antigo ("Folha Mensal"): o menu e os tiles apontam para folha_quinzenal
       case "folha_quinzenal": return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} onMarcarValesDescontados={marcarValesDescontados} />;
-      case "hist_folha":      return <TelaHistFolha obras={obras} trabalhadores={trabalhadores} folhasSalvas={folhasSalvas} onBack={voltar} onRemover={id => { setFolhasSalvas(fs => fs.filter(f => f.id !== id)); setAdiant(ads => ads.map(a => String(a.folhaId) === String(id) ? { ...a, descontadoEm: null, folhaId: null, folhaPeriodo: null, descontado: false } : a)); }} />;
-      case "manutencao":      return <TelaManutencao obras={obras} ativos={ativos} ferramentas={ferramentas} equips={equips} manutencoes={manutencoes} onBack={voltar} onAdd={salvarManutencao} onRemover={id => setManut(ms => ms.filter(m => m.id !== id))} />;
+      case "hist_folha":      return <TelaHistFolha obras={obras} trabalhadores={trabalhadores} folhasSalvas={folhasSalvas} onBack={voltar} onRemover={id => { setFolhasSalvas(fs => fs.filter(f => !mesmoId(f.id, id))); setAdiant(ads => ads.map(a => mesmoId(a.folhaId, id) ? { ...a, descontadoEm: null, folhaId: null, folhaPeriodo: null, descontado: false } : a)); }} />;
+      case "manutencao":      return <TelaManutencao obras={obras} ativos={ativos} ferramentas={ferramentas} equips={equips} manutencoes={manutencoes} onBack={voltar} onAdd={salvarManutencao} onRemover={id => setManut(ms => ms.filter(m => !mesmoId(m.id, id)))} />;
       case "solicitar_mov": return <TelaSolicitarMov obras={obras} trabalhadores={trabalhadores} usuario={usuario} onBack={() => setTela("home")} onSolicitar={m => setMov(ms => [m, ...ms])} />;
-      case "aprovar_mov":   return <TelaAprovarMov obras={obras} trabalhadores={trabalhadores} movimentacoes={movimentacoes} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => m.id === id ? { ...m, status: "Negado" } : m))} onVerDetalhe={m => { setMovPessSel(m); setTela("mov_pess_detalhe"); }} />;
-      case "mov_pess_detalhe": return movPessSel ? <TelaMovPessoalDetalhe mov={movimentacoes.find(x => x.id === movPessSel.id) || movPessSel} obras={obras} trabalhadores={trabalhadores} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => m.id === id ? { ...m, status: "Negado" } : m))} /> : <TelaAprovarMov obras={obras} trabalhadores={trabalhadores} movimentacoes={movimentacoes} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => m.id === id ? { ...m, status: "Negado" } : m))} />;
-      case "ferramentas":   return <TelaFerramentas obras={obras} ferramentas={ferramentas} onBack={voltar} onAdd={f => setFerr(fs => [...fs, f])} onEditar={f => setFerr(fs => fs.map(x => x.id === f.id ? f : x))} onRemover={id => setFerr(fs => fs.filter(f => f.id !== id))} />;
+      case "aprovar_mov":   return <TelaAprovarMov obras={obras} trabalhadores={trabalhadores} movimentacoes={movimentacoes} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => mesmoId(m.id, id) ? { ...m, status: "Negado" } : m))} onVerDetalhe={m => { setMovPessSel(m); setTela("mov_pess_detalhe"); }} />;
+      case "mov_pess_detalhe": return movPessSel ? <TelaMovPessoalDetalhe mov={movimentacoes.find(x => mesmoId(x.id, movPessSel.id)) || movPessSel} obras={obras} trabalhadores={trabalhadores} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => mesmoId(m.id, id) ? { ...m, status: "Negado" } : m))} /> : <TelaAprovarMov obras={obras} trabalhadores={trabalhadores} movimentacoes={movimentacoes} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => mesmoId(m.id, id) ? { ...m, status: "Negado" } : m))} />;
+      case "ferramentas":   return <TelaFerramentas obras={obras} ferramentas={ferramentas} onBack={voltar} onAdd={f => setFerr(fs => [...fs, f])} onEditar={f => setFerr(fs => fs.map(x => mesmoId(x.id, f.id) ? f : x))} onRemover={id => setFerr(fs => fs.filter(f => !mesmoId(f.id, id)))} />;
       case "rh":            return <TelaRH obras={obras} trabalhadores={trabalhadores} onBack={voltar} onVerTrabalhador={verTrabalhador} />;
       case "exames":        return <TelaExames obras={obras} trabalhadores={trabalhadores} onBack={voltar} onVerTrabalhador={verTrabalhador} />;
-      case "links":         return <TelaLinks links={links} empresa={empresa} onBack={voltar} onAdd={l => setLinks(ls => [...ls, l])} onRemover={id => setLinks(ls => ls.filter(l => l.id !== id))} />;
+      case "links":         return <TelaLinks links={links} empresa={empresa} onBack={voltar} onAdd={l => setLinks(ls => [...ls, l])} onRemover={id => setLinks(ls => ls.filter(l => !mesmoId(l.id, id)))} />;
       case "diagnostico":   return <TelaDiagnostico onNav={setTela} onBack={voltar} />;
       case "contatos":      return <TelaContatos obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onVerTrabalhador={verTrabalhador} />;
-      case "adiantamentos": return <TelaAdiantamentos obras={obras} trabalhadores={trabalhadores} adiantamentos={adiantamentos} onBack={voltar} onAdd={a => setAdiant(ads => [a, ...ads])} onRemove={id => setAdiant(ads => ads.filter(a => a.id !== id))} />;
+      case "adiantamentos": return <TelaAdiantamentos obras={obras} trabalhadores={trabalhadores} adiantamentos={adiantamentos} onBack={voltar} onAdd={a => setAdiant(ads => [a, ...ads])} onRemove={id => setAdiant(ads => ads.filter(a => !mesmoId(a.id, id)))} />;
       case "backup":     return <TelaBackup todoEstado={todoEstado} onRestaurar={restaurarBackup} onBack={voltar} />;
-      case "anexos_obra": return obraAnexos ? <TelaAnexosObra obra={obraAnexos} usuario={usuario} onBack={voltar} /> : <TelaObras usuarios={usuarios} obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => x.id === o.id ? o : x))} onRemover={id => setObras(os => os.filter(o => o.id !== id))} onNav={setTela} />;
+      case "anexos_obra": return obraAnexos ? <TelaAnexosObra obra={obraAnexos} usuario={usuario} onBack={voltar} /> : <TelaObras usuarios={usuarios} obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={setTela} />;
 
       case "zerar_tudo": return <TelaZerarTudo
         onBack={voltar}
@@ -1202,6 +1418,20 @@ export default function App() {
         }
       `}</style>
       {modoDemo && <FaixaDemo onSair={sairDemo} />}
+      {avisoAcesso && (
+        <div key={avisoAcesso} className="km-aviso-acesso" role="status" onClick={() => setAvisoAcesso(null)} style={{
+          position: "fixed", top: `calc(env(safe-area-inset-top, 0px) + ${modoDemo ? 44 : 12}px)`, left: "50%", transform: "translateX(-50%)", zIndex: 10001,
+          width: "max-content", maxWidth: "min(92vw, 440px)", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 12,
+          background: NAVY, color: "#fff", border: `2px solid ${GOLD}`, borderRadius: 14, padding: "10px 16px",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.25)", fontFamily: DEFAULT_FONT, cursor: "pointer", textAlign: "left",
+        }}>
+          <Icone nome="lock" tamanho={18} cor={GOLD} />
+          <span>
+            <span style={{ display: "block", fontWeight: 800, fontSize: 13 }}>Sua conta não tem acesso a esta área</span>
+            <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>Se precisar, peça a quem cuida dos acessos da empresa.</span>
+          </span>
+        </div>
+      )}
       {avisoNaTela && tela !== "avisos" && (
         <button onClick={() => { setAvisoNaTela(null); setTela("avisos"); }} style={{
           position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 10px)", left: "50%", transform: "translateX(-50%)", zIndex: 9999,

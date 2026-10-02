@@ -7,6 +7,7 @@ import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComo
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, useEscritorio } from "../components/ui.jsx";
+import { normId, mesmoId } from "../lib/ids.js";
 
 /* Data ISO (AAAA-MM-DD) → DD/MM/AAAA; sem data ou inválida fica "—" */
 const dataBR = (iso) => {
@@ -27,8 +28,8 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
   const abrirEdit = (o) => { setEditandoId(o.id); setForm({ ...o, clienteId: o.clienteId || "", cliente: o.cliente || "", clienteDoc: o.clienteDoc || "" }); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.local) return;
-    const apontadorId = form.apontadorId ? (isNaN(Number(form.apontadorId)) ? form.apontadorId : Number(form.apontadorId)) : "";
-    const clienteId = form.clienteId ? (isNaN(Number(form.clienteId)) ? form.clienteId : Number(form.clienteId)) : "";
+    const apontadorId = normId(form.apontadorId) ?? "";
+    const clienteId = normId(form.clienteId) ?? "";
     const dados = { ...form, apontadorId, clienteId };
     if (editandoId) onEditar({ ...dados, id: editandoId });
     else onAdd({ id: Date.now(), ...dados });
@@ -88,11 +89,11 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
               </thead>
               <tbody>
                 {obras.map(o => {
-                  const nomeCliente = clientes.find(c => String(c.id) === String(o.clienteId))?.nome || o.cliente || "—";
-                  const encarregado = usuarios.find(u => u.id === o.apontadorId)?.nome
-                    || usuarios.find(u => u.obraId != null && String(u.obraId) === String(o.id) && u.perfil !== "gestor")?.nome
+                  const nomeCliente = clientes.find(c => mesmoId(c.id, o.clienteId))?.nome || o.cliente || "—";
+                  const encarregado = usuarios.find(u => mesmoId(u.id, o.apontadorId))?.nome
+                    || usuarios.find(u => mesmoId(u.obraId, o.id) && u.perfil !== "gestor")?.nome
                     || "—";
-                  const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
+                  const nTrab = trabalhadores.filter(t => mesmoId(t.obraId, o.id)).length;
                   return (
                     <tr key={o.id} data-test={`obra-linha-${o.id}`} onClick={() => setObraSelecionada(o)} style={{ borderTop: `1px solid ${T.borda}`, cursor: "pointer" }}>
                       <td style={{ padding: "9px 12px", fontWeight: 700, color: T.titulo }}>{o.nome}</td>
@@ -113,9 +114,9 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
         {obras.length > 0 && (
         <Grade min={320} gap={10} style={{ marginBottom: 10 }}>
         {obras.map(o => {
-          const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
-          const nAtivos = (ativos || []).filter(a => a.obraId === o.id).length;
-          const nPedidos = (pedidos || []).filter(p => p.obraId === o.id).length;
+          const nTrab = trabalhadores.filter(t => mesmoId(t.obraId, o.id)).length;
+          const nAtivos = (ativos || []).filter(a => mesmoId(a.obraId, o.id)).length;
+          const nPedidos = (pedidos || []).filter(p => mesmoId(p.obraId, o.id)).length;
           const cron = (cronogramas || {})[o.id] || [];
           const progresso = cron.length > 0 ? Math.round(cron.reduce((s, e) => s + (e.progresso || 0), 0) / cron.length) : 0;
           return (
@@ -125,7 +126,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
                   <div style={{ fontWeight: 700, color: T.titulo, fontSize: 15 }}>{o.nome}</div>
                   <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>📍 {o.local}</div>
                   {o.apontadorId && (
-                    <div style={{ fontSize: 11, color: T.texto, marginTop: 4 }}>👷 Apontador: {usuarios.find(u => u.id === o.apontadorId)?.nome || "Não encontrado"}</div>
+                    <div style={{ fontSize: 11, color: T.texto, marginTop: 4 }}>👷 Apontador: {usuarios.find(u => mesmoId(u.id, o.apontadorId))?.nome || "Não encontrado"}</div>
                   )}
                   {progresso > 0 && (
                     <div style={{ marginTop: 8, marginBottom: 4 }}>
@@ -188,7 +189,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
         </select>
 
         <label style={labelS}>👷 Apontador</label>
-        <select value={form.apontadorId || ""} onChange={e => set("apontadorId", e.target.value)} style={selS}>
+        <select value={form.apontadorId || ""} onChange={e => set("apontadorId", normId(e.target.value) ?? "")} style={selS}>
           <option value="">Selecionar apontador</option>
           {usuarios.filter(u => u.perfil !== "gestor").map(u => (
             <option key={u.id} value={u.id}>{u.nome}{u.cargo ? ` • ${u.cargo}` : ""}</option>
@@ -198,8 +199,8 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
         <label style={labelS}>👤 Cliente</label>
         <select data-test="select-cliente-obras" value={form.clienteId || ""} onChange={e => {
           const value = e.target.value;
-          const clienteId = value ? (isNaN(Number(value)) ? value : Number(value)) : "";
-          const cliente = clientes.find(c => c.id === clienteId);
+          const clienteId = normId(value) ?? "";
+          const cliente = clientes.find(c => mesmoId(c.id, clienteId));
           if (cliente) {
             setForm(f => ({ ...f, clienteId, cliente: cliente.nome || "", clienteDoc: cliente.documento || "" }));
           } else {
@@ -308,17 +309,17 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
 ════════════════════════════════════ */
 
 export function TelaObraDetalhe({ obra, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onEditar, onNav }) {
-  const apontador = usuarios.find(u => u.id === obra.apontadorId);
-  const cliente = clientes.find(c => String(c.id) === String(obra.clienteId));
-  const trabObra = trabalhadores.filter(t => t.obraId === obra.id);
-  const ativosObra = (ativos || []).filter(a => a.obraId === obra.id);
-  const equipsObra = (equips || []).filter(e => e.obraId === obra.id);
-  const ferramentasObra = (ferramentas || []).filter(f => f.obraId === obra.id);
-  const pedidosObra = (pedidos || []).filter(p => p.obraId === obra.id);
-  const abastObra = (abastecimentos || []).filter(a => a.obraId === obra.id);
-  const manutObra = (manutencoes || []).filter(m => m.obraId === obra.id || ativosObra.some(a => a.id == m.itemId && m.tipoItem === "ativo"));
-  const recebObra = (recebimentos || []).filter(r => r.obraId === obra.id);
-  const rdosObra = (rdosEmitidos || []).filter(r => r.obraId === obra.id);
+  const apontador = usuarios.find(u => mesmoId(u.id, obra.apontadorId));
+  const cliente = clientes.find(c => mesmoId(c.id, obra.clienteId));
+  const trabObra = trabalhadores.filter(t => mesmoId(t.obraId, obra.id));
+  const ativosObra = (ativos || []).filter(a => mesmoId(a.obraId, obra.id));
+  const equipsObra = (equips || []).filter(e => mesmoId(e.obraId, obra.id));
+  const ferramentasObra = (ferramentas || []).filter(f => mesmoId(f.obraId, obra.id));
+  const pedidosObra = (pedidos || []).filter(p => mesmoId(p.obraId, obra.id));
+  const abastObra = (abastecimentos || []).filter(a => mesmoId(a.obraId, obra.id));
+  const manutObra = (manutencoes || []).filter(m => mesmoId(m.obraId, obra.id) || ativosObra.some(a => mesmoId(a.id, m.itemId) && m.tipoItem === "ativo"));
+  const recebObra = (recebimentos || []).filter(r => mesmoId(r.obraId, obra.id));
+  const rdosObra = (rdosEmitidos || []).filter(r => mesmoId(r.obraId, obra.id));
   const cron = (cronogramas || {})[obra.id] || [];
   const progresso = cron.length > 0 ? Math.round(cron.reduce((s, e) => s + (e.progresso || 0), 0) / cron.length) : 0;
 
@@ -665,7 +666,7 @@ export function TelaMapa({ obras, trabalhadores, onBack, onEditar }) {
         {/* Lista de obras com info detalhada */}
         <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 8, fontSize: 14 }}>📋 Obras Cadastradas</div>
         {obras.map(o => {
-          const nTrab = trabalhadores.filter(t => t.obraId === o.id).length;
+          const nTrab = trabalhadores.filter(t => mesmoId(t.obraId, o.id)).length;
           return (
             <div key={o.id} onClick={() => onEditar && onEditar(o)} style={{ background: T.superficie, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", boxShadow: T.sombra, cursor: "pointer", borderLeft: `5px solid ${o.status === "Ativa" ? GREEN : T.desabilitado}` }}>
               <div style={{ fontSize: 28, marginRight: 12 }}>📍</div>
