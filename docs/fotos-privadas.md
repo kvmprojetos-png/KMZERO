@@ -11,9 +11,11 @@
 
 ## Ativação e compatibilidade
 
+Pré-requisito: configurar `FIREBASE_SERVICE_ACCOUNT` como segredo apenas no ambiente de produção da hospedagem e conferir a API autenticada antes de iniciar esta sequência. Não colocar a chave no cliente, Git, logs ou chat. Uma resposta anônima 401 prova a exigência de login, mas **não** prova que a credencial administrativa está configurada. Sem ela, o serviço falha fechado com 503 e backup, migração e fotos privadas ficam indisponíveis.
+
 1. Publicar a API e o cliente compatível com `fotoPath` e URLs antigas interpretadas como caminho. Confirmar login, galeria e PDF.
-2. Com o proprietário ativo, abrir a tela Segurança, criar backup privado e verificar integridade.
-3. Publicar as regras que negam acesso direto ao Storage e a escrita direta de metadados de fotos, impedindo clientes antigos de emitir novos tokens. A API usa Admin e sua própria autorização por empresa, papel e obra.
+2. Publicar as regras restritivas do Firestore e as regras que negam acesso direto ao Storage. Elas protegem os documentos administrativos de backup/migração, negam a escrita direta de metadados de fotos e impedem clientes antigos de emitir novos tokens. A API usa Admin e sua própria autorização por empresa, papel e obra.
+3. Com essas regras ativas e o proprietário ativo, abrir a tela Segurança, criar backup privado e verificar integridade antes de iniciar a migração.
 4. Executar a migração por páginas usando `/api/seguranca`. Cada página revalida proprietário e backup. O cursor e a trava ficam em `empresas/{id}/_seguranca/estado`, inacessível pelo SDK do cliente.
 5. Concluir as páginas: projeções mínimas de trabalhadores, obras e perfis; identificação das presenças sem obra; escopo dos avisos automáticos; revogação de tokens; conversão de referências de fotos. A execução publica versão 1 no estado privado apenas quando todas as páginas terminarem sem falhas.
 

@@ -5,6 +5,7 @@ import { T, NAVY, GREEN } from '../theme.js';
 
 export function TelaSeguranca({empresaId,dono,demo,onBack}) {
   const [status,setStatus] = useState(null), [ocupado,setOcupado] = useState(false), [erro,setErro] = useState(''), [progresso,setProgresso] = useState('');
+  const [servidorPronto,setServidorPronto] = useState(false), [conferindo,setConferindo] = useState(true), [consulta,setConsulta] = useState(0);
   const chamada = async body => {
     if (!auth.currentUser || demo) throw new Error('Entre na conta proprietária da empresa.');
     const token = await auth.currentUser.getIdToken();
@@ -13,14 +14,20 @@ export function TelaSeguranca({empresaId,dono,demo,onBack}) {
       ...(body ? {body:JSON.stringify({empresaId,...body})}:{}), cache:'no-store',
     });
     const dados = await resposta.json().catch(() => ({}));
+    if (resposta.status === 503) {
+      setServidorPronto(false);
+      throw new Error('Serviço de segurança indisponível. A configuração do servidor precisa ser concluída antes do backup e da migração.');
+    }
     if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível concluir. Tente novamente.');
     return dados;
   };
   useEffect(() => {
     let vivo = true;
-    if (dono && !demo) chamada().then(d => {if(vivo)setStatus(d);}).catch(e => {if(vivo)setErro(e.message);});
+    setServidorPronto(false); setStatus(null); setErro(''); setConferindo(true);
+    if (dono && !demo) chamada().then(d => {if(vivo){setStatus(d);setServidorPronto(true);}}).catch(e => {if(vivo)setErro(e.message);}).finally(() => {if(vivo)setConferindo(false);});
+    else setConferindo(false);
     return () => {vivo=false;};
-  },[empresaId,dono,demo]);
+  },[empresaId,dono,demo,consulta]);
   const backup = async () => {
     setOcupado(true); setErro(''); setProgresso('Criando e conferindo a cópia privada…');
     try { const r=await chamada({acao:'backup'}); setStatus(s => ({...s,backup:r.backup})); setProgresso('Cópia privada criada e integridade conferida.'); }
@@ -48,10 +55,12 @@ export function TelaSeguranca({empresaId,dono,demo,onBack}) {
         <p>A cópia abaixo fica privada na nuvem da empresa. Ela é conferida antes de atualizar registros antigos e invalidar links de fotos.</p>
         {status?.backup && <p role="status">Última cópia verificada: {new Date(status.backup.criadoEm).toLocaleString('pt-BR')}.</p>}
         {status?.estado?.versao === 1 && status?.estado?.status === 'concluido' && <p>Proteção dos registros existentes: concluída.</p>}
-        <Btn label={ocupado ? 'Processando…' : 'Criar cópia privada de segurança'} color={NAVY} onClick={ocupado ? undefined : backup}/>
-        {status?.backup?.verificado && <Btn label="Concluir proteção dos dados antigos" color={GREEN} onClick={ocupado ? undefined : migrar}/>}
+        {conferindo && <p role="status">Conferindo disponibilidade do serviço…</p>}
+        <Btn label={ocupado ? 'Processando…' : 'Criar cópia privada de segurança'} color={NAVY} disabled={ocupado || !servidorPronto} onClick={backup}/>
+        {status?.backup?.verificado && <Btn label="Concluir proteção dos dados antigos" color={GREEN} disabled={ocupado || !servidorPronto} onClick={migrar}/>}
         {progresso && <p role="status">{progresso}</p>}
         {erro && <p role="alert" style={{color:T.erroTexto || '#b42318'}}>{erro}</p>}
+        {!servidorPronto && !conferindo && <Btn label="Conferir serviço novamente" color={NAVY} disabled={ocupado} onClick={()=>setConsulta(v=>v+1)}/>}
       </>}
       <p>Ao sair em um aparelho compartilhado, use a opção de guardar uma cópia e limpar os dados locais. A autenticação em duas etapas da hospedagem deve ser configurada com o autenticador do proprietário.</p>
     </main><KMFooter/>

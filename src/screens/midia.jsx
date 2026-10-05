@@ -15,6 +15,7 @@ export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 
   const [fotos, setFotos] = useState([]);
   const [legenda, setLegenda] = useState("");
   const [ok, setOk] = useState(false);
+  const [confirmadasNuvem, setConfirmadasNuvem] = useState(0);
 
   const handleArquivo = (e) => {
     const files = Array.from(e.target.files || []);
@@ -36,6 +37,7 @@ export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 
       const dataAtual = new Date().toLocaleDateString("pt-BR");
       const horaAtual = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       const autorNome = usuario?.nome || "Encarregado";
+      let confirmadas = 0;
 
       // Carimba cada foto antes de salvar
       for (let i = 0; i < fotos.length; i++) {
@@ -48,7 +50,7 @@ export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 
           hora: horaAtual,
         });
 
-        onSalvar({
+        const resultado = await onSalvar({
           id: agora + i,
           numero: numeroSequencial,
           obraId: normId(obra.id),
@@ -59,7 +61,9 @@ export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 
           data: dataAtual,
           hora: horaAtual,
         });
+        if (resultado?.fotoPath) confirmadas++;
       }
+      setConfirmadasNuvem(confirmadas);
       setOk(true);
     } catch (e) {
       alert("⚠️ Erro ao processar fotos: " + e.message);
@@ -74,8 +78,8 @@ export function TelaFotos({ obra, usuario, onBack, onSalvar, totalFotosObra = 0 
         {ok ? (
           <div style={{ textAlign: "center", padding: 32 }}>
             <div style={{ fontSize: 64 }}>✅</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: GREEN, marginTop: 12 }}>{fotos.length} foto(s) enviada(s)!</div>
-            <div style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>Salvas na galeria da obra. Você e o gestor podem acessá-las depois.</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: GREEN, marginTop: 12 }}>{fotos.length} foto(s) registrada(s)!</div>
+            <div role="status" style={{ fontSize: 12, color: T.texto2, marginTop: 4 }}>{confirmadasNuvem === fotos.length ? "Envio à nuvem confirmado. As fotos estão disponíveis para a equipe autorizada da obra." : "Gravadas na galeria deste aparelho. Aguardando confirmação da sincronização com a nuvem."}</div>
             <Btn label="📷 Mais Fotos" color={BLUE} onClick={() => { setOk(false); setFotos([]); setLegenda(""); }} style={{ marginTop: 24 }} />
             <Btn label="Voltar" color="#eee" text={NAVY} onClick={onBack} style={{ marginTop: 8 }} />
           </div>
@@ -180,6 +184,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Galeria de Fotos" sub={`${fotos.length} foto(s) total`} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        {fotos.some(f => f.fotoIndisponivel) && <div role="status" style={{ background: T.infoFundo, color: T.infoTexto, borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 13 }}>Fotos da nuvem temporariamente indisponíveis. As fotos pendentes continuam neste aparelho.</div>}
 
         {/* KPI */}
         <div style={{ background: `linear-gradient(135deg,${BLUE},#0d4f8c)`, color: "#fff", borderRadius: 14, padding: 14, marginBottom: 12 }}>
