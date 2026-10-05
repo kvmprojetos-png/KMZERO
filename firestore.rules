@@ -66,18 +66,42 @@ service cloud.firestore {
     // Áreas do escritório (campo "acessos" de usuarios/ e convites/):
     //   null ou ausente = acesso total (todo gestor antigo continua assim);
     //   lista de ids de grupos do menu (ex.: ['visao', 'financeiro']) = só essas áreas.
-    // Quem esconde as telas é o app. Aqui: o formato; ninguém muda as PRÓPRIAS áreas;
+    // As áreas limitam menus E consultas/escritas no servidor; ninguém muda as próprias áreas.
     // só quem administra os acessos (Tudo ou a área 'sistema') convida e muda tipo,
     // áreas ou ativo de outra pessoa; ninguém limita, rebaixa ou desativa o dono;
     // quem foi desativado não volta sozinho (não apaga o próprio perfil para refazê-lo
     // pelo convite, e o convite de quem foi desativado fica com ativo: false).
-    // ATENÇÃO: as áreas NÃO trancam os dados. Todo usuário ativo da empresa segue lendo
-    // e gravando empresas/{id}/* (ver o fim do arquivo).
     function acessosDe(d) {
       return d.get('acessos', null);
     }
     function acessosValidos(d) {
-      return acessosDe(d) == null || acessosDe(d) is list;
+      return acessosDe(d) == null || (acessosDe(d) is list
+        && acessosDe(d).hasOnly(['visao', 'obras', 'equipe', 'campo', 'suprimentos', 'equipamentos', 'financeiro', 'sistema']));
+    }
+    function temArea(area) {
+      return souGestor() && (acessosDe(perfil()) == null || area in acessosDe(perfil()));
+    }
+    function recebeArea(area) {
+      return area in ['equipe', 'campo', 'obras', 'suprimentos', 'equipamentos', 'financeiro', 'sistema', 'total']
+        && (area == 'total' ? (souGestor() && acessosDe(perfil()) == null) : temArea(area));
+    }
+    function gerenciaEquipe() {
+      return temArea('equipe') || temArea('sistema');
+    }
+    function campo() {
+      return perfilAtivo() && perfil().perfil == 'encarregado';
+    }
+    function mesmoId(a, b) {
+      return a != null && b != null && string(a) != '' && string(a) == string(b);
+    }
+    function idsIguaisOuVazios(a, b) {
+      return (a == null || a == '') ? (b == null || b == '') : mesmoId(a, b);
+    }
+    function obraDoCampo(d, chave) {
+      return campo() && mesmoId(d.get(chave, null), perfil().get('obraId', null));
+    }
+    function mantemObra() {
+      return idsIguaisOuVazios(request.resource.data.get('obraId', null), resource.data.get('obraId', null));
     }
     function mantemAcessos() {
       return acessosDe(request.resource.data) == acessosDe(resource.data);
@@ -85,8 +109,7 @@ service cloud.firestore {
     // Gestor que administra os acessos da empresa: acesso total ou com a área Sistema
     // (é quem abre Sistema → Usuários e acessos no app)
     function possoAdministrar() {
-      return souGestor()
-        && (perfil().get('acessos', null) == null || 'sistema' in perfil().get('acessos', null));
+      return temArea('sistema');
     }
     // O e-mail do perfil liga o perfil ao convite (convites/{email}): o app nunca o troca
     function mantemEmail() {
@@ -123,18 +146,19 @@ service cloud.firestore {
         && get(caminhoConvite()).data.get('ativo', true) != false
         && get(caminhoConvite()).data.empresaId == novo.empresaId
         && get(caminhoConvite()).data.perfil == novo.perfil
+        && idsIguaisOuVazios(get(caminhoConvite()).data.get('obraId', null), novo.get('obraId', null))
         && get(caminhoConvite()).data.get('acessos', null) == acessosDe(novo);
     }
 
     // ── Perfis de login ─────────────────────────────────────────────────────
     match /usuarios/{uid} {
-      // Ler um perfil: o próprio usuário, ou o gestor da mesma empresa
+      // Ler um perfil: o próprio usuário, ou RH/Sistema da mesma empresa.
       allow get: if logado() && (
         request.auth.uid == uid
-        || (souGestor() && resource.data.empresaId == minhaEmpresa())
+        || (gerenciaEquipe() && resource.data.empresaId == minhaEmpresa())
       );
-      // Listar a equipe: qualquer usuário ativo da empresa, filtrando pela própria empresa
-      allow list: if logado() && perfilAtivo() && resource.data.empresaId == minhaEmpresa();
+      // E-mails e dados cadastrais: somente RH/Sistema, filtrando pela própria empresa.
+      allow list: if gerenciaEquipe() && resource.data.empresaId == minhaEmpresa();
 
       // Criar:
       //  (a) gestor concluindo o cadastro da própria empresa (empresa já criada por ele)
@@ -159,14 +183,14 @@ service cloud.firestore {
 
       // Atualizar (nunca muda a empresa; acessos, quando vier, é null = tudo ou lista):
       //  - perfil de OUTRA pessoa da empresa, por um gestor:
-      //      nome, cargo, obra, telefone: qualquer gestor;
-      //      desligar alguém da equipe de campo: qualquer gestor;
+      //      nome, cargo, obra, telefone: RH/Sistema;
+      //      desligar alguém da equipe de campo: RH/Sistema;
       //      tipo, áreas, religar, desligar gestor: só quem administra os acessos;
       //      do dono da empresa, ninguém muda tipo, áreas nem ativo;
       //  - o PRÓPRIO perfil: dados simples (não muda perfil, ativo nem áreas), menos
       //    o dono, que pode se devolver o acesso total (donoSeRestaurando)
       allow update: if logado() && acessosValidos(request.resource.data) && (
-        (souGestor()
+        (gerenciaEquipe()
           && uid != request.auth.uid
           && resource.data.empresaId == minhaEmpresa()
           && request.resource.data.empresaId == resource.data.empresaId
@@ -175,15 +199,17 @@ service cloud.firestore {
               && (soDesligaCampo() || possoAdministrar()))))
         || (request.auth.uid == uid
           && request.resource.data.empresaId == resource.data.empresaId
+          && mantemObra()
           && (mantemPoderes() || donoSeRestaurando(uid)))
       );
 
-      // Apagar: o próprio, enquanto ativo (direito de exclusão; quem foi desativado pede a quem
-      // administra, senão apagaria o perfil desligado e o refaria ativo pelo convite), ou quem
-      // administra os acessos (nunca o dono)
+      // Somente o dono ativo pode apagar seu perfil (troca de empresa vazia do app).
+      // Outros perfis passam pelo administrador: apagar/recriar sozinho poderia recuperar
+      // áreas de um convite antigo cujo alinhamento ainda não terminou.
       allow delete: if logado() && (
         (request.auth.uid == uid
-          && (resource == null || resource.data.get('ativo', true) != false))
+          && resource != null && resource.data.get('ativo', true) != false
+          && ehDono(resource.data.empresaId, uid))
         || (possoAdministrar()
           && resource.data.empresaId == minhaEmpresa()
           && !ehDono(resource.data.empresaId, uid))
@@ -195,9 +221,9 @@ service cloud.firestore {
       // A pessoa convidada lê o convite do PRÓPRIO e-mail; o gestor lê os da sua empresa
       allow get: if logado() && (
         email == meuEmail()
-        || (souGestor() && resource.data.empresaId == minhaEmpresa())
+        || (gerenciaEquipe() && resource.data.empresaId == minhaEmpresa())
       );
-      allow list: if logado() && souGestor() && resource.data.empresaId == minhaEmpresa();
+      allow list: if gerenciaEquipe() && resource.data.empresaId == minhaEmpresa();
       // Só quem administra os acessos convida, sempre para a própria empresa, e a chave tem de
       // ser o e-mail do documento. Ninguém cria nem edita o convite do PRÓPRIO e-mail (senão
       // apagaria o próprio perfil e o refaria pelo caminho (b) com mais áreas)
@@ -249,7 +275,18 @@ service cloud.firestore {
 
       // O app publica uma vez; somente o servidor confirma/atualiza o disparo.
       match /avisos/{avisoId} {
-        allow read: if souDaEmpresa(empresaId);
+        function destinatario() {
+          let p = resource.data.para;
+          return resource.data.get('de', null) == request.auth.uid
+            || p.tipo == 'todos'
+            || (p.tipo == 'gestores' && souGestor())
+            || (p.tipo == 'encarregados' && campo())
+            || (p.tipo == 'area' && recebeArea(p.get('area', null)))
+            || (p.tipo == 'pessoa' && p.get('uid', null) == request.auth.uid)
+            || (p.tipo == 'obra' && mesmoId(p.obraId, perfil().get('obraId', null))
+              && (p.perfil == null || p.perfil == perfil().perfil));
+        }
+        allow read: if souDaEmpresa(empresaId) && destinatario();
         allow create: if souDaEmpresa(empresaId)
           && request.resource.data.keys().hasOnly(['id', 'criadoEm', 'de', 'deNome', 'tipo', 'titulo', 'texto', 'para', 'navegarPara'])
           && request.resource.data.id == avisoId
@@ -261,8 +298,10 @@ service cloud.firestore {
           && request.resource.data.texto is string
           && request.resource.data.texto.size() <= 10000
           && request.resource.data.para is map
-          && request.resource.data.para.tipo in ['todos', 'gestores', 'encarregados', 'obra', 'pessoa']
-          && (souGestor() || request.resource.data.para.tipo in ['gestores', 'pessoa']);
+          && request.resource.data.para.tipo in ['todos', 'gestores', 'encarregados', 'obra', 'pessoa', 'area']
+          && (request.resource.data.para.tipo == 'area'
+            ? (recebeArea(request.resource.data.para.area) || (campo() && request.resource.data.para.area in ['campo', 'suprimentos']))
+            : (souGestor() || request.resource.data.para.tipo in ['gestores', 'pessoa']));
         allow update, delete: if false;
       }
 
@@ -281,12 +320,192 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
-      // Demais dados da empresa: qualquer usuário ativo DA empresa. As áreas do escritório
-      // (acessos) NÃO valem aqui: um gestor "Financeiro" ainda lê e grava obras, folha,
-      // pedidos... por fora do app. Separar por área é outro projeto.
+      function camposTrabalhador() { return ['id', 'nome', 'cargo', 'obraId', 'ativo']; }
+      function camposObra() { return ['id', 'nome', 'local', 'status', 'tipo', 'apontadorId']; }
+      function trabalhadorProjetadoConfere(id, original) {
+        let p = getAfter(/databases/$(database)/documents/empresas/$(empresaId)/trabalhadoresCampo/$(id)).data;
+        return mesmoId(p.get('id', null), original.get('id', id))
+          && !p.diff(original).affectedKeys().hasAny(['nome', 'cargo', 'obraId', 'ativo']);
+      }
+      function obraProjetadaConfere(id, original) {
+        let p = getAfter(/databases/$(database)/documents/empresas/$(empresaId)/obrasCampo/$(id)).data;
+        return mesmoId(p.get('id', null), original.get('id', id))
+          && !p.diff(original).affectedKeys().hasAny(['nome', 'local', 'status', 'tipo', 'apontadorId']);
+      }
+
+      // Projeções e originais precisam concordar após o batch. Clientes antigos não
+      // transferem trabalhadores nem apagam cadastros deixando cópias operacionais antigas.
+      match /trabalhadores/{id} {
+        allow read: if souDaEmpresa(empresaId) && temArea('equipe');
+        allow create: if souDaEmpresa(empresaId) && temArea('equipe')
+          && trabalhadorProjetadoConfere(id, request.resource.data);
+        allow update: if souDaEmpresa(empresaId) && temArea('equipe')
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(camposTrabalhador())
+            || trabalhadorProjetadoConfere(id, request.resource.data));
+        allow delete: if souDaEmpresa(empresaId) && temArea('equipe')
+          && !existsAfter(/databases/$(database)/documents/empresas/$(empresaId)/trabalhadoresCampo/$(id));
+      }
+
+      // Projeções operacionais: os documentos completos de RH/contratos nunca descem ao campo.
+      match /trabalhadoresCampo/{id} {
+        allow read: if souDaEmpresa(empresaId) && (souGestor() || obraDoCampo(resource.data, 'obraId'));
+        allow create, update: if souDaEmpresa(empresaId) && temArea('equipe')
+          && request.resource.data.keys().hasOnly(['id', 'nome', 'cargo', 'obraId', 'ativo'])
+          && string(request.resource.data.id) == id
+          && trabalhadorProjetadoConfere(id, getAfter(/databases/$(database)/documents/empresas/$(empresaId)/trabalhadores/$(id)).data);
+        allow delete: if souDaEmpresa(empresaId) && temArea('equipe')
+          && !existsAfter(/databases/$(database)/documents/empresas/$(empresaId)/trabalhadores/$(id));
+      }
+      match /obrasCampo/{id} {
+        allow read: if souDaEmpresa(empresaId);
+        allow create, update: if souDaEmpresa(empresaId) && temArea('obras')
+          && request.resource.data.keys().hasOnly(['id', 'nome', 'local', 'status', 'tipo', 'apontadorId'])
+          && string(request.resource.data.id) == id
+          && obraProjetadaConfere(id, getAfter(/databases/$(database)/documents/empresas/$(empresaId)/obras/$(id)).data);
+        allow delete: if souDaEmpresa(empresaId) && temArea('obras')
+          && !existsAfter(/databases/$(database)/documents/empresas/$(empresaId)/obras/$(id));
+      }
+      match /perfisCampo/{uid} {
+        function projecaoConfere() {
+          let p = getAfter(/databases/$(database)/documents/usuarios/$(uid)).data;
+          let d = request.resource.data;
+          return p.empresaId == empresaId && d.nome == p.get('nome', '') && d.perfil == p.perfil
+            && d.get('obraId', null) == p.get('obraId', null) && d.ativo == p.get('ativo', true);
+        }
+        allow read: if souDaEmpresa(empresaId);
+        allow create, update: if logado() && (request.auth.uid == uid || (souDaEmpresa(empresaId) && gerenciaEquipe()))
+          && request.resource.data.keys().hasOnly(['id', 'firebaseUid', 'nome', 'perfil', 'obraId', 'ativo'])
+          && request.resource.data.id == uid && request.resource.data.firebaseUid == uid
+          && projecaoConfere();
+        allow delete: if souDaEmpresa(empresaId) && gerenciaEquipe();
+      }
+
+      match /obras/{id} {
+        function contrato() {
+          return ['cliente', 'clienteDoc', 'valorContrato', 'dataInicioContrato', 'dataFimContrato', 'formaPagContrato', 'obsContrato'];
+        }
+        allow read: if souDaEmpresa(empresaId) && (temArea('obras') || temArea('financeiro'));
+        allow create: if souDaEmpresa(empresaId) && temArea('obras')
+          && (temArea('financeiro') || !request.resource.data.keys().hasAny(contrato()))
+          && obraProjetadaConfere(id, request.resource.data);
+        allow update: if souDaEmpresa(empresaId) && (
+          (temArea('obras') && (temArea('financeiro') || !request.resource.data.diff(resource.data).affectedKeys().hasAny(contrato())))
+          || (temArea('financeiro') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(contrato())))
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(camposObra())
+            || obraProjetadaConfere(id, request.resource.data));
+        allow delete: if souDaEmpresa(empresaId) && temArea('obras') && temArea('financeiro')
+          && !existsAfter(/databases/$(database)/documents/empresas/$(empresaId)/obrasCampo/$(id));
+      }
+
+      match /presencas/{id} {
+        function trabalhadorDaObra(d) {
+          return mesmoId(d.get('obraId', null), get(/databases/$(database)/documents/empresas/$(empresaId)/trabalhadoresCampo/$(string(d.trabId))).data.get('obraId', null));
+        }
+        function pontoCampo(d) {
+          return obraDoCampo(d, 'obraId') && trabalhadorDaObra(d)
+            && d.keys().hasOnly(['data', 'trabId', 'status', 'criadoEm', 'obraId', 'editadoPorGestor'])
+            && d.get('editadoPorGestor', false) != true
+            && d.status in ['Presente', 'Falta', 'Atestado', 'Meia'];
+        }
+        allow read: if souDaEmpresa(empresaId) && (temArea('equipe') || temArea('campo') || obraDoCampo(resource.data, 'obraId'));
+        allow create: if souDaEmpresa(empresaId) && (temArea('equipe') || pontoCampo(request.resource.data));
+        allow update: if souDaEmpresa(empresaId) && (temArea('equipe')
+          || (pontoCampo(request.resource.data) && obraDoCampo(resource.data, 'obraId')
+            && resource.data.get('editadoPorGestor', false) != true && request.resource.data.trabId == resource.data.trabId));
+        allow delete: if souDaEmpresa(empresaId) && temArea('equipe');
+      }
+
+      match /pedidos/{id} {
+        allow read: if souDaEmpresa(empresaId) && (temArea('suprimentos') || temArea('financeiro') || obraDoCampo(resource.data, 'obraId'));
+        allow create: if souDaEmpresa(empresaId) && (temArea('suprimentos')
+          || (obraDoCampo(request.resource.data, 'obraId')
+            && request.resource.data.status == 'Aguardando'
+            && request.resource.data.criadoPorUid == request.auth.uid
+            && !request.resource.data.keys().hasAny(['valor', 'valorTotal', 'formaPagamento', 'prazoEntrega', 'aprovadoPor', 'aprovadoEm'])));
+        allow update, delete: if souDaEmpresa(empresaId) && temArea('suprimentos');
+      }
+      match /recebimentos/{id} {
+        allow read: if souDaEmpresa(empresaId) && (temArea('suprimentos') || temArea('financeiro') || obraDoCampo(resource.data, 'obraId'));
+        allow create: if souDaEmpresa(empresaId) && (temArea('suprimentos') || obraDoCampo(request.resource.data, 'obraId'));
+        allow update, delete: if souDaEmpresa(empresaId) && temArea('suprimentos');
+      }
+
+      match /movimentacoes/{id} {
+        allow read: if souDaEmpresa(empresaId) && (temArea('equipe') || obraDoCampo(resource.data, 'obraOrigem') || obraDoCampo(resource.data, 'obraDestino'));
+        allow create: if souDaEmpresa(empresaId) && (temArea('equipe')
+          || (obraDoCampo(request.resource.data, 'obraOrigem') && request.resource.data.status == 'Aguardando'
+            && mesmoId(request.resource.data.obraOrigem, get(/databases/$(database)/documents/empresas/$(empresaId)/trabalhadoresCampo/$(string(request.resource.data.trabId))).data.obraId)));
+        allow update, delete: if souDaEmpresa(empresaId) && temArea('equipe');
+      }
+      match /movEquip/{id} {
+        allow read: if souDaEmpresa(empresaId) && (temArea('equipamentos') || temArea('financeiro') || obraDoCampo(resource.data, 'obraOrigemId') || obraDoCampo(resource.data, 'obraDestinoId'));
+        allow create: if souDaEmpresa(empresaId) && (temArea('equipamentos')
+          || (obraDoCampo(request.resource.data, 'obraOrigemId') && request.resource.data.status == 'Aguardando'));
+        allow update, delete: if souDaEmpresa(empresaId) && temArea('equipamentos');
+      }
+
+      match /mensagens/{id} {
+        function participante() {
+          return resource.data.de == request.auth.uid || resource.data.para == request.auth.uid;
+        }
+        allow read: if souDaEmpresa(empresaId) && participante();
+        allow create: if souDaEmpresa(empresaId)
+          && request.resource.data.keys().hasOnly(['id', 'de', 'para', 'texto', 'ts', 'lida'])
+          && string(request.resource.data.id) == id && request.resource.data.de == request.auth.uid
+          && request.resource.data.texto is string && request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 10000
+          && request.resource.data.lida == false && request.resource.data.ts is number
+          && get(/databases/$(database)/documents/usuarios/$(request.resource.data.para)).data.empresaId == empresaId
+          && get(/databases/$(database)/documents/usuarios/$(request.resource.data.para)).data.get('ativo', true) != false;
+        allow update: if souDaEmpresa(empresaId) && resource.data.para == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida']) && request.resource.data.lida == true;
+        allow delete: if false;
+      }
+
+      // Fotos são carregadas/gravadas por API autenticada: nunca gerar novos download tokens no cliente.
+      match /fotosObras/{id} {
+        allow read: if souDaEmpresa(empresaId) && (temArea('campo') || obraDoCampo(resource.data, 'obraId'));
+        allow write: if false;
+      }
+
+      // Coleções restantes com contrato explícito. Sem wildcard que libere coleções futuras.
       match /{colecao}/{docId} {
-        allow read, write: if !(colecao in ['pushTokens', 'avisos', 'avisosLeitura', 'avisosEnviados'])
-          && logado() && souDaEmpresa(empresaId);
+        function rh() { return colecao in ['ferias', 'adiantamentos', 'folhasSalvas']; }
+        function campoCol() { return colecao in ['rdos', 'diario', 'produtividade']; }
+        function equipamento() { return colecao in ['equips', 'ativos', 'ferramentas', 'manutencoes', 'abastecimentos']; }
+        allow read: if souDaEmpresa(empresaId) && (
+          (rh() && temArea('equipe'))
+          || (colecao == 'clientes' && temArea('obras'))
+          || (colecao == 'fornecedores' && (temArea('suprimentos') || temArea('financeiro')))
+          || (colecao == 'despesasAvulsas' && temArea('financeiro'))
+          || (colecao == 'cronogramas' && (temArea('obras') || temArea('campo') || obraDoCampo(resource.data, 'obraId')))
+          || (campoCol() && (temArea('campo') || obraDoCampo(resource.data, 'obraId')))
+          || (equipamento() && (temArea('equipamentos') || temArea('financeiro') || obraDoCampo(resource.data, 'obraId')))
+          || colecao in ['config', 'links']);
+        allow create: if souDaEmpresa(empresaId) && (
+          (rh() && temArea('equipe'))
+          || (colecao in ['clientes', 'cronogramas'] && temArea('obras'))
+          || (colecao == 'fornecedores' && temArea('suprimentos'))
+          || (colecao == 'despesasAvulsas' && temArea('financeiro'))
+          || (campoCol() && (temArea('campo') || obraDoCampo(request.resource.data, 'obraId')))
+          || (equipamento() && temArea('equipamentos'))
+          || (colecao in ['config', 'links'] && temArea('sistema')));
+        allow update: if souDaEmpresa(empresaId) && (
+          (rh() && temArea('equipe'))
+          || (colecao in ['clientes', 'cronogramas'] && temArea('obras'))
+          || (colecao == 'fornecedores' && temArea('suprimentos'))
+          || (colecao == 'despesasAvulsas' && temArea('financeiro'))
+          || (campoCol() && (temArea('campo') || (obraDoCampo(resource.data, 'obraId') && obraDoCampo(request.resource.data, 'obraId'))))
+          || (equipamento() && temArea('equipamentos'))
+          || (colecao == 'equips' && obraDoCampo(resource.data, 'obraId') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+          || (colecao in ['config', 'links'] && temArea('sistema')));
+        allow delete: if souDaEmpresa(empresaId) && (
+          (rh() && temArea('equipe'))
+          || (colecao in ['clientes', 'cronogramas'] && temArea('obras'))
+          || (colecao == 'fornecedores' && temArea('suprimentos'))
+          || (colecao == 'despesasAvulsas' && temArea('financeiro'))
+          || (campoCol() && temArea('campo'))
+          || (equipamento() && temArea('equipamentos'))
+          || (colecao in ['config', 'links'] && temArea('sistema')));
       }
     }
   }

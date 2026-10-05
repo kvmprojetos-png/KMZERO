@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, waitForPendingWrites, terminate, clearIndexedDbPersistence, doc, getDocFromServer } from "firebase/firestore";
 
 const firebaseConfig = {
      apiKey: "AIzaSyDzyxMJHHktgj8NLg4Rg_FaYv6KevBhtkE",
@@ -118,6 +118,42 @@ export async function logoutFirebase() {
      } catch (e) {
             return { ok: false, erro: e.message };
      }
+}
+
+/* Logout protegido usa a confirmação do servidor, não navigator.onLine (que só
+   informa se existe alguma rede). Um timeout mantém a conta e os dados locais. */
+export async function aguardarGravacoesFirebase(timeoutMs = 15000) {
+     let timer;
+     try {
+            await Promise.race([
+                   waitForPendingWrites(db),
+                   new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Ainda há gravações aguardando a nuvem. Aguarde a sincronização e tente sair novamente.")), timeoutMs); }),
+            ]);
+     } finally { clearTimeout(timer); }
+}
+
+/* Só chamar depois do backup confirmado e da guarda entre abas. Se outra aba
+   antiga ainda usa IndexedDB, o SDK recusa a limpeza. Não fingir sucesso nem
+   apagar os anexos nesse caso. Após terminate, é necessário recarregar o app. */
+export async function limparCacheFirestoreParaSaida() {
+     await terminate(db);
+     try { await clearIndexedDbPersistence(db); }
+     catch (e) {
+            const erro = new Error("Não foi possível limpar o cache da nuvem. Feche as outras abas do KMZERO e recarregue para tentar novamente. Seus dados locais foram preservados.");
+            erro.code = e?.code || "cache-nao-limpo";
+            erro.recarregar = true;
+            throw erro;
+     }
+}
+
+export async function confirmarDonoNoServidor(empresaId, uid) {
+     if (!auth.currentUser || auth.currentUser.uid !== uid || typeof empresaId !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(empresaId)) return false;
+     const [empresa, perfil] = await Promise.all([
+            getDocFromServer(doc(db, "empresas", empresaId)),
+            getDocFromServer(doc(db, "usuarios", uid)),
+     ]);
+     return auth.currentUser?.uid === uid && empresa.exists() && empresa.data().gestorUid === uid
+            && perfil.exists() && perfil.data().empresaId === empresaId && perfil.data().ativo !== false;
 }
 
 export function observarAutenticacao(callback) {

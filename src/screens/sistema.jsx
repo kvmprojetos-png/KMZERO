@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso } from "../utils.js";
-import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store } from "../lib/store.js";
-import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
+import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store, getEmpresaId } from "../lib/store.js";
+import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo, restaurarAnexosLocais } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { reduzirImagem } from "../lib/imagem.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
@@ -114,37 +114,41 @@ export function TelaBackup({ todoEstado, onRestaurar, onBack }) {
     window.location.href = `mailto:?subject=${encodeURIComponent("Backup KMZERO - " + dataHoje)}&body=${corpo}`;
   };
 
+  const restaurarDados = async dados => {
+    if (!Array.isArray(dados?.obras) || !Array.isArray(dados?.trabalhadores)) throw new Error("Arquivo inválido. Verifique se é um backup do KMZERO.");
+    const meta = dados._kmzeroBackup;
+    if (meta && (meta.tipo !== "kmzero-saida-v1" || meta.empresaId !== getEmpresaId())) throw new Error("Este backup de saída pertence a outra empresa e não pode ser restaurado nesta conta.");
+    if (!confirm("Restaurar este backup?\n\nOs registros serão MESCLADOS aos atuais (mesmo id: vale o do backup). Nada é apagado.\n\nCom a nuvem ativa, o resultado vale para toda a empresa e todos os aparelhos. Anexos locais permanecem neste aparelho.")) return;
+    if (meta) await restaurarAnexosLocais(dados.anexosLocais || [], meta.empresaId);
+    await onRestaurar(dados);
+    setSucesso("✅ Backup mesclado com sucesso, incluindo os anexos locais quando presentes.");
+  };
+
   const importarArquivo = (e) => {
     setErro(""); setSucesso("");
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const dados = JSON.parse(ev.target.result);
-        if (!dados.obras || !dados.trabalhadores) throw new Error("inválido");
-        if (!confirm("Restaurar este backup?\n\nOs registros do arquivo serão MESCLADOS aos atuais (mesmo id: vale o do arquivo). Nada é apagado.\n\nCom a nuvem ativa, o resultado vale para toda a empresa e todos os aparelhos.")) return;
-        onRestaurar(dados);
-        setSucesso("✅ Backup mesclado com sucesso!");
-      } catch {
-        setErro("⚠️ Arquivo inválido. Verifique se é um backup do KMZERO.");
+        await restaurarDados(dados);
+      } catch (erro) {
+        setErro("⚠️ " + (erro.message || "Arquivo inválido. Verifique se é um backup do KMZERO."));
       }
     };
     reader.readAsText(file);
     e.target.value = "";
   };
 
-  const importarTexto = () => {
+  const importarTexto = async () => {
     setErro(""); setSucesso("");
     try {
       const dados = JSON.parse(textoImport);
-      if (!dados.obras || !dados.trabalhadores) throw new Error("inválido");
-      if (!confirm("Restaurar este backup?\n\nOs registros serão MESCLADOS aos atuais (mesmo id: vale o do backup). Nada é apagado.\n\nCom a nuvem ativa, o resultado vale para toda a empresa e todos os aparelhos.")) return;
-      onRestaurar(dados);
-      setSucesso("✅ Backup mesclado!");
+      await restaurarDados(dados);
       setTextoImport("");
-    } catch {
-      setErro("⚠️ JSON inválido.");
+    } catch (erro) {
+      setErro("⚠️ " + (erro.message || "JSON inválido."));
     }
   };
 

@@ -5,7 +5,8 @@
      pushTokens/{hash}    um doc por aparelho com notificação ligada { uid, token }
    O disparo para os celulares é feito pelo servidor (api/notificar.js). */
 import { doc, setDoc, deleteDoc, onSnapshot, collection, query, where } from "firebase/firestore";
-import { cloudRefs, getEmpresaId, semUndefined } from "./store.js";
+import { cloudRefs, getEmpresaId, getPerfilDados, semUndefined } from "./store.js";
+import { variantesId } from './permissoesDados.js';
 import { auth, firebaseApp } from "../firebase.js";
 
 const DIAS_NA_TELA = 45; // avisos mais velhos que isso não descem para o aparelho
@@ -19,10 +20,26 @@ const refEmpresa = (...caminho) => {
 
 export function observarAvisosNuvem(callback) {
   const fb = cloudRefs(); const eid = getEmpresaId();
-  if (!fb || !eid) return () => {};
+  const p = getPerfilDados(), uid = p?.firebaseUid || p?.id;
+  if (!fb || !eid || !uid) return () => {};
   const desde = Date.now() - DIAS_NA_TELA * 86400000;
-  const q = query(collection(fb.db, "empresas", eid, "avisos"), where("criadoEm", ">=", desde));
-  return onSnapshot(q, snap => callback(snap.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.warn("observarAvisosNuvem:", e));
+  const base = collection(fb.db,'empresas',eid,'avisos');
+  const filtros = [[where('de','==',uid)],[where('para.tipo','==','todos')],
+    [where('para.tipo','==',p.perfil === 'gestor' ? 'gestores':'encarregados')],
+    [where('para.tipo','==','pessoa'),where('para.uid','==',uid)]];
+  if (p.perfil === 'gestor') {
+    const areas = p.acessos == null ? ['equipe','campo','obras','suprimentos','equipamentos','financeiro','sistema','total'] : (Array.isArray(p.acessos) ? p.acessos.filter(a => a !== 'visao') : []);
+    if (areas.length) filtros.push([where('para.tipo','==','area'),where('para.area','in',areas)]);
+  }
+  const ids = variantesId(p.obraId);
+  if (ids.length) for(const papel of [null,p.perfil]) filtros.push([where('para.tipo','==','obra'),where('para.obraId','in',ids),where('para.perfil','==',papel)]);
+  const partes = new Map();
+  const paradas = filtros.map((f,i) => onSnapshot(query(base,...f),snap => {
+    partes.set(i,snap.docs.map(d => ({...d.data(),id:d.id})).filter(d => Number(d.criadoEm) >= desde));
+    const todos = new Map([...partes.values()].flat().map(d => [d.id,d]));
+    callback([...todos.values()]);
+  }, e => console.warn('observarAvisosNuvem:',e.code)));
+  return () => paradas.forEach(parar => parar());
 }
 
 export function observarLeituraAvisos(uid, callback) {
@@ -40,6 +57,7 @@ export function marcarAvisosLidos(uid, quando = Date.now()) {
    Sem internet: o Firestore guarda na fila; quando subir, o app (se aberto) dispara,
    e se o app fechar antes, o servidor dispara na verificação da noite. */
 export async function publicarAviso(aviso) {
+  if (aviso.para?.tipo === 'obra') aviso = {...aviso,para:{...aviso.para,perfil:aviso.para.perfil || null}};
   const ref = refEmpresa("avisos", String(aviso.id));
   if (!ref) return { ok: false, erro: "Sem conexão com a nuvem." };
   // Sem sinal o setDoc só termina quando a internet volta: não deixa a tela travada

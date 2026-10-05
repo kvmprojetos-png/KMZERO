@@ -1,4 +1,4 @@
 {
-  "indexes": [],
+  "indexes": [{"collectionGroup":"avisos","queryScope":"COLLECTION","fields":[{"fieldPath":"para.tipo","order":"ASCENDING"},{"fieldPath":"para.obraId","order":"ASCENDING"},{"fieldPath":"para.perfil","order":"ASCENDING"}]}],
   "fieldOverrides": []
 }

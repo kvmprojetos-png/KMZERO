@@ -13,7 +13,7 @@
    se a chave já existe, não repete. */
 import { firebaseAdmin } from "./_lib/firebaseAdmin.js";
 import { enviarPush } from "./_lib/enviarAviso.js";
-import { isoNoFuso, somarDias, diasEntre, dataBR, dataBRAno, proximoPagamento } from "../src/lib/avisosRegras.js";
+import { isoNoFuso, somarDias, diasEntre, dataBR, dataBRAno, proximoPagamento, podeEnviarAviso } from "../src/lib/avisosRegras.js";
 import { feriadoEm } from "../src/utils.js";
 
 const diaUtil = iso => {
@@ -85,7 +85,7 @@ export async function verificarEmpresa(db, mensageiro, empresaId, etapa, hoje) {
         await marcar(chave);
       }
     } else if (semPonto.length && !jaFoi.has(`ponto_${hoje}_gestores`)) {
-      await criar({ tipo: "ponto", titulo: `📋 Ponto não lançado hoje (${semPonto.length} obra${semPonto.length > 1 ? "s" : ""})`, texto: semPonto.map(o => `• ${o.nome}`).join("\n"), para: { tipo: "gestores" }, navegarPara: "calendario" });
+      await criar({ tipo: "ponto", titulo: `📋 Ponto não lançado hoje (${semPonto.length} obra${semPonto.length > 1 ? "s" : ""})`, texto: semPonto.map(o => `• ${o.nome}`).join("\n"), para: { tipo: "area", area: "campo" }, navegarPara: "calendario" });
       await marcar(`ponto_${hoje}_gestores`);
     }
   }
@@ -117,7 +117,7 @@ export async function verificarEmpresa(db, mensageiro, empresaId, etapa, hoje) {
       tipo: "folha",
       titulo: `💰 ${quando} tem pagamento — ≈ ${reais(total)}`,
       texto: Object.entries(grupos).map(([g, x]) => `• ${g}: ${x.n} pessoa${x.n > 1 ? "s" : ""} (${dataBR(x.data)}) ≈ ${reais(x.valor)}`).join("\n") + "\nEstimativa pelas diárias lançadas, antes de vales.",
-      para: { tipo: "gestores" }, navegarPara: "folha",
+      para: { tipo: "area", area: "equipe" }, navegarPara: "folha",
     });
     await marcar(chaveFolha);
   }
@@ -167,7 +167,8 @@ export async function verificarEmpresa(db, mensageiro, empresaId, etapa, hoje) {
   if (linhas.length) {
     const mostrar = linhas.slice(0, 12);
     if (linhas.length > 12) mostrar.push(`… e mais ${linhas.length - 12}. Veja em Alertas.`);
-    await criar({ tipo: "prazo", titulo: `⚠️ ${linhas.length} alerta${linhas.length > 1 ? "s" : ""} novo${linhas.length > 1 ? "s" : ""}`, texto: mostrar.join("\n"), para: { tipo: "gestores" }, navegarPara: "alertas" });
+    // O resumo reúne RH, contratos e equipamentos: somente acesso total pode lê-lo.
+    await criar({ tipo: "prazo", titulo: `⚠️ ${linhas.length} alerta${linhas.length > 1 ? "s" : ""} novo${linhas.length > 1 ? "s" : ""}`, texto: mostrar.join("\n"), para: { tipo: "area", area: "total" }, navegarPara: "alertas" });
     const lote = db.batch(); // várias chaves de uma vez (a Quadra sozinha tem 17 etapas)
     novos.forEach(x => lote.set(chavesRef.doc(x.chave), { chave: x.chave, em: Date.now() }));
     await lote.commit();
@@ -180,7 +181,7 @@ export async function verificarEmpresa(db, mensageiro, empresaId, etapa, hoje) {
     .filter(x => !x.a.push?.disparadoEm && x.a.de && x.a.de !== "sistema");
   for (const { ref, a } of pendentes) {
     const autor = (await db.collection("usuarios").doc(a.de).get()).data();
-    const pode = autor && autor.ativo !== false && autor.empresaId === empresaId && (autor.perfil === "gestor" || ["gestores", "pessoa"].includes(a.para?.tipo));
+    const pode = autor && autor.ativo !== false && autor.empresaId === empresaId && podeEnviarAviso(autor,a.para);
     await ref.update({ "push.disparadoEm": Date.now(), ...(pode ? {} : { "push.recusado": true }) });
     if (!pode) continue;
     const r = await enviarPush(db, mensageiro, empresaId, a, { excetoUid: a.de });

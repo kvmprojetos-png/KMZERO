@@ -1,3 +1,4 @@
+import { temAreaDados } from './permissoesDados.js';
 /* Regras dos AVISOS (notificações) — usadas no app E no servidor (api/), por isso
    este arquivo é JavaScript puro: nada de React, navegador ou Firebase aqui.
 
@@ -20,6 +21,14 @@ export const TIPOS_AVISO = {
 };
 
 export const uidDe = u => String((u && (u.firebaseUid || u.id)) || "");
+export function podeEnviarAviso(u, para) {
+  if (!u || u.ativo === false || !para) return false;
+  if (para.tipo === 'area') {
+    if (u.perfil === 'encarregado') return ['campo','suprimentos'].includes(para.area);
+    return para.area === 'total' ? u.perfil === 'gestor' && u.acessos == null : temAreaDados(u,para.area);
+  }
+  return u.perfil === 'gestor' || ['gestores','pessoa'].includes(para.tipo);
+}
 
 // Este aviso é para esta pessoa? (u = perfil: { firebaseUid|id, perfil, obraId })
 export function avisoEhPara(aviso, u) {
@@ -27,6 +36,7 @@ export function avisoEhPara(aviso, u) {
   const p = aviso.para || { tipo: "todos" };
   const gestor = u.perfil === "gestor";
   switch (p.tipo) {
+    case 'area': return p.area === 'total' ? gestor && u.acessos == null : temAreaDados(u,p.area);
     case "todos":        return true;
     case "gestores":     return gestor;
     case "encarregados": return !gestor;
@@ -39,6 +49,7 @@ export function avisoEhPara(aviso, u) {
 // Texto curto do destinatário ("Todos", "Obra IFES", "João")
 export function descreverPara(para, { obras = [], usuarios = [] } = {}) {
   const p = para || { tipo: "todos" };
+  if (p.tipo === 'area') return `Área: ${p.area === 'total' ? 'administração completa' : p.area}`;
   if (p.tipo === "todos") return "Todos";
   if (p.tipo === "gestores") return "Gestores e diretores";
   if (p.tipo === "encarregados") return "Encarregados";

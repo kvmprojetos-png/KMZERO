@@ -5,7 +5,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
-import { ref, uploadBytes, getBytes, deleteObject } from "firebase/storage";
+import { ref, uploadBytes, getBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { testarRbac } from "./testar-rbac-cenarios.mjs";
 
 for (const [key, expected] of Object.entries({ FIRESTORE_EMULATOR_HOST: "127.0.0.1:8180", FIREBASE_STORAGE_EMULATOR_HOST: "127.0.0.1:9299" })) {
   if (process.env[key] !== expected) throw new Error(`${key} precisa ser ${expected}. Nenhum acesso remoto permitido.`);
@@ -41,12 +42,13 @@ try {
       setDoc(doc(ad, "empresas/empresa-a"), { gestorUid: "gestor" }),
       setDoc(doc(ad, "empresas/empresa-b"), { gestorUid: "externo" }),
       ...[ ["gestor", "empresa-a", "gestor", true], ["campo", "empresa-a", "encarregado", true], ["externo", "empresa-b", "gestor", true], ["desligado", "empresa-a", "encarregado", false] ]
-        .map(([uid, empresaId, perfil, ativo]) => setDoc(doc(ad, "usuarios", uid), { empresaId, perfil, ativo, email: `${uid}@example.test` })),
+        .map(([uid, empresaId, perfil, ativo]) => setDoc(doc(ad, "usuarios", uid), { empresaId, perfil, ativo, obraId: 101, email: `${uid}@example.test` })),
       setDoc(doc(ad, path("pushTokens", "gestor-token")), token("gestor")),
       setDoc(doc(ad, path("avisos", "enviado")), { ...aviso("enviado", "campo"), push: { disparadoEm: 1000 } }),
       setDoc(doc(ad, path("avisosLeitura", "gestor")), { uid: "gestor", ultimaLeitura: 1000 }),
       setDoc(doc(ad, path("avisosEnviados", "pagamento-teste")), { enviadoEm: 1000 }),
       setDoc(doc(ad, path("obras", "obra1")), { nome: "Obra fictícia" }),
+      setDoc(doc(ad, path("obrasCampo", "101")), { id: 101, nome: "Obra fictícia" }),
     ]);
   });
   await check("campo registra seu aparelho", () => assertSucceeds(setDoc(target("pushTokens", "campo-token"), token("campo"))));
@@ -74,13 +76,15 @@ try {
   await check("cliente não apaga aviso para recriar", () => assertFails(deleteDoc(target("avisos", "enviado"))));
   await check("cliente não limpa idempotência do cron", () => assertFails(deleteDoc(target("avisosEnviados", "pagamento-teste"))));
   await check("cliente não forja idempotência do cron", () => assertFails(setDoc(target("avisosEnviados", "forjado"), { enviadoEm: 1000 })));
-  await check("consulta legítima de avisos continua permitida", () => assertSucceeds(getDocs(query(collection(db, "empresas/empresa-a/avisos"), where("criadoEm", ">=", 0)))));
+  await check("consulta legítima de avisos próprios continua permitida", () => assertSucceeds(getDocs(query(collection(db, "empresas/empresa-a/avisos"), where("de", "==", "campo")))));
+  await check("consulta ampla não lê avisos de outros destinatários", () => assertFails(getDocs(query(collection(db, "empresas/empresa-a/avisos"), where("criadoEm", ">=", 0)))));
 
   await check("campo marca seus avisos lidos", () => assertSucceeds(setDoc(target("avisosLeitura", "campo"), { uid: "campo", ultimaLeitura: 2000 })));
   await check("campo lê sua marca de leitura", () => assertSucceeds(getDoc(target("avisosLeitura", "campo"))));
   await check("campo não marca leitura alheia", () => assertFails(setDoc(target("avisosLeitura", "gestor"), { uid: "gestor", ultimaLeitura: 3000 })));
   await check("campo não lê marca alheia", () => assertFails(getDoc(target("avisosLeitura", "gestor"))));
-  await check("sincronização de obra da empresa segue permitida", () => assertSucceeds(getDoc(target("obras", "obra1"))));
+  await check("campo lê o diretório mínimo de obras", () => assertSucceeds(getDoc(target("obrasCampo", "101"))));
+  await check("campo não lê contrato completo da obra", () => assertFails(getDoc(target("obras", "obra1"))));
   await check("isolamento entre empresas permanece", () => assertFails(getDoc(doc(externo.firestore(), path("obras", "obra1")))));
   await check("campo não se promove a gestor", () => assertFails(updateDoc(doc(db, "usuarios/campo"), { perfil: "gestor" })));
   await check("dono não deixa dados órfãos apagando somente a empresa", () => assertFails(deleteDoc(doc(owner.firestore(), "empresas/empresa-a"))));
@@ -143,9 +147,10 @@ try {
 
   const object = "empresas/empresa-a/fotosObras/foto.jpg";
   const bytes = new Uint8Array([255, 216, 255, 217]);
-  await check("campo envia foto JPEG no caminho permitido", () => assertSucceeds(uploadBytes(ref(campo.storage(), object), bytes, { contentType: "image/jpeg" })));
-  await check("campo envia foto PNG no caminho permitido", () => assertSucceeds(uploadBytes(ref(campo.storage(), object + ".png"), bytes, { contentType: "image/png" })));
-  await check("campo lê foto autenticada", () => assertSucceeds(getBytes(ref(campo.storage(), object))));
+  await env.withSecurityRulesDisabled(async admin => { await uploadBytes(ref(admin.storage(), object), bytes, { contentType: "image/jpeg" }); });
+  await check("campo não cria JPEG direto nem download token", () => assertFails(uploadBytes(ref(campo.storage(), object), bytes, { contentType: "image/jpeg" })));
+  await check("campo não cria PNG direto nem download token", () => assertFails(uploadBytes(ref(campo.storage(), object + ".png"), bytes, { contentType: "image/png" })));
+  await check("campo usa API privada, SDK direto não baixa foto", () => assertFails(getBytes(ref(campo.storage(), object))));
   await check("SVG ativo não pode ser enviado", () => assertFails(uploadBytes(ref(campo.storage(), object + ".svg"), bytes, { contentType: "image/svg+xml" })));
   await check("HTML não pode ser enviado", () => assertFails(uploadBytes(ref(campo.storage(), object + ".html"), bytes, { contentType: "text/html" })));
   await check("caminho arbitrário não recebe upload", () => assertFails(uploadBytes(ref(campo.storage(), "empresas/empresa-a/outros/foto.jpg"), bytes, { contentType: "image/jpeg" })));
@@ -154,7 +159,9 @@ try {
   await check("anônimo não baixa foto pela API autenticada", () => assertFails(getBytes(ref(anon.storage(), object))));
   await check("campo desativado não baixa foto pela API autenticada", () => assertFails(getBytes(ref(desligado.storage(), object))));
   await check("campo não exclui foto", () => assertFails(deleteObject(ref(campo.storage(), object))));
-  await check("gestor pode excluir foto", () => assertSucceeds(deleteObject(ref(owner.storage(), object))));
+  await check("gestor também usa API privada e não exclui direto", () => assertFails(deleteObject(ref(owner.storage(), object))));
+  await check("gestor não recebe URL portadora por getDownloadURL", () => assertFails(getDownloadURL(ref(owner.storage(), object))));
+  await testarRbac(env, check);
 } finally {
   await env.cleanup();
 }

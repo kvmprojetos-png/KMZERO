@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   enviarDocNuvem, removerDocNuvem, observarColecaoNuvem,
   semDataUrl, mesclarAnexosLocais, jsonEstavel, lerIdsSync, salvarIdsSync,
+  getPerfilDados, getEmpresaId,
 } from "./store.js";
+import { politicaColecao } from './permissoesDados.js';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    useSyncColecao — espelha um array de objetos (cada um com `id`) na coleção
@@ -29,6 +31,10 @@ import {
    ───────────────────────────────────────────────────────────────────────────── */
 export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
   const { ordenar } = opcoes;
+  const perfil = getPerfilDados();
+  const acesso = politicaColecao(perfil, colecao);
+  const contexto = JSON.stringify([getEmpresaId(),perfil?.firebaseUid,perfil?.perfil,perfil?.obraId,perfil?.acessos]);
+  ativo = ativo && acesso.leitura;
   const nuvemRef = useRef(new Map());        // id → JSON estável do doc como está na nuvem
   const conhecidosRef = useRef(new Set());   // ids já vistos no servidor (persistido)
   const prontoRef = useRef(false);           // já recebeu o 1º snapshot?
@@ -89,11 +95,11 @@ export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
       setVersaoNuvem(v => v + 1);
     });
     return () => { try { parar(); } catch {} };
-  }, [colecao, ativo]);
+  }, [colecao, ativo, contexto]);
 
   // 2) Envia para a nuvem o que mudou localmente
   useEffect(() => {
-    if (!ativo || !prontoRef.current) return;
+    if (!ativo || !acesso.escrita || !prontoRef.current) return;
     const arr = Array.isArray(itens) ? itens : [];
     const idsAtuais = new Set();
 
@@ -118,7 +124,7 @@ export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
       });
     }
     idsAnterioresRef.current = idsAtuais;
-  }, [itens, ativo, versaoNuvem, colecao]);
+  }, [itens, ativo, versaoNuvem, colecao, contexto, acesso.escrita]);
 }
 
 /* Ordenações prontas (ids são Date.now(), então id maior = mais novo) */

@@ -3,19 +3,29 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "overrides": {
-    "@firebase/firestore": { "@grpc/grpc-js": "^1.14.5" },
-    "gaxios@6": { "uuid": "^11.1.1" },
-    "google-gax@4": { "uuid": "^11.1.1" },
-    "teeny-request@9": { "uuid": "^11.1.1" }
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "^1.14.5"
+    },
+    "gaxios@6": {
+      "uuid": "^11.1.1"
+    },
+    "google-gax@4": {
+      "uuid": "^11.1.1"
+    },
+    "teeny-request@9": {
+      "uuid": "^11.1.1"
+    }
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test:security": "node --test tests/*.test.mjs",
-    "test:security:rules": "npx firebase-tools@15 emulators:exec --project demo-kmzero-security --config firebase.security-tests.json --only firestore,storage \"node scripts/testar-regras-seguranca.mjs\"",
+    "test:security:rules": "npx firebase-tools@15 emulators:exec --project demo-kmzero-security --config firebase.security-tests.json --only firestore,storage \"node scripts/testar-seguranca-emuladores.mjs\"",
     "firebase:login": "npx -y firebase-tools@15 login",
     "firebase:deploy-regras": "npx -y firebase-tools@15 deploy --only firestore:rules,storage",
     "firebase:testar": "node scripts/testar-firebase.mjs"

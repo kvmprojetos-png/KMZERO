@@ -4,6 +4,7 @@
    dispara para gestores ou para uma pessoa; cada aviso só é disparado uma vez. */
 import { firebaseAdmin } from "./_lib/firebaseAdmin.js";
 import { enviarPush } from "./_lib/enviarAviso.js";
+import { podeEnviarAviso } from '../src/lib/avisosRegras.js';
 
 const ERROS_LOGIN = new Set([
   "auth/argument-error", "auth/invalid-id-token", "auth/id-token-expired",
@@ -67,7 +68,7 @@ export async function tratarNotificar({ db, auth, mensageiro }, req, res) {
       if (!s.exists) return { erro: 404 };
       const a = s.data();
       if (a.de !== eu.uid) return { erro: 403 };
-      if (perfil.perfil !== "gestor" && !["gestores", "pessoa"].includes(a.para?.tipo)) return { erro: 403 };
+      if (!podeEnviarAviso(perfil,a.para)) return { erro: 403 };
       if (a.push?.disparadoEm) return { erro: 409 };
       tx.update(ref, { "push.disparadoEm": Date.now() });
       return { ...a, id: String(avisoId) };

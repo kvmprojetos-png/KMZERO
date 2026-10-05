@@ -8,6 +8,8 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, useEscritorio } from "../components/ui.jsx";
 import { normId, mesmoId } from "../lib/ids.js";
+import { temAreaDados } from "../lib/permissoesDados.js";
+import { prepararObraParaSalvar } from "../lib/obraPermissoes.js";
 
 /* Data ISO (AAAA-MM-DD) → DD/MM/AAAA; sem data ou inválida fica "—" */
 const dataBR = (iso) => {
@@ -16,21 +18,21 @@ const dataBR = (iso) => {
   return isNaN(d) ? "—" : d.toLocaleDateString("pt-BR");
 };
 
-export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
+export function TelaObras({ usuario, obras, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
   const [modal, setModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [obraSelecionada, setObraSelecionada] = useState(null);
   const [form, setForm] = useState({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const escritorio = !!useEscritorio(); // modo escritório (gestor em tela larga): mostra a tabela-resumo acima dos cartões
+  const podeEditarContrato = temAreaDados(usuario, "financeiro");
 
   const abrirNovo = () => { setEditandoId(null); setForm({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" }); setModal(true); };
   const abrirEdit = (o) => { setEditandoId(o.id); setForm({ ...o, clienteId: o.clienteId || "", cliente: o.cliente || "", clienteDoc: o.clienteDoc || "" }); setModal(true); };
   const salvar = () => {
     if (!form.nome || !form.local) return;
-    const apontadorId = normId(form.apontadorId) ?? "";
-    const clienteId = normId(form.clienteId) ?? "";
-    const dados = { ...form, apontadorId, clienteId };
+    const atual = editandoId ? obras.find(o => mesmoId(o.id, editandoId)) : null;
+    const dados = prepararObraParaSalvar(form, atual, usuario);
     if (editandoId) onEditar({ ...dados, id: editandoId });
     else onAdd({ id: Date.now(), ...dados });
     setModal(false);
@@ -197,7 +199,7 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
         </select>
 
         <label style={labelS}>👤 Cliente</label>
-        <select data-test="select-cliente-obras" value={form.clienteId || ""} onChange={e => {
+        <select data-test="select-cliente-obras" disabled={!podeEditarContrato} value={form.clienteId || ""} onChange={e => {
           const value = e.target.value;
           const clienteId = normId(value) ?? "";
           const cliente = clientes.find(c => mesmoId(c.id, clienteId));
@@ -212,16 +214,17 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
             <option key={c.id} value={c.id}>{c.nome}{c.cidade ? ` • ${c.cidade}` : ""}</option>
           ))}
         </select>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        {podeEditarContrato && <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <button data-test="gerenciar-clientes" onClick={() => onNav && onNav("clientes")} style={{ flex: 1, background: T.infoFundo, border: `1px solid ${T.infoBorda}`, color: T.titulo, borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontWeight: 700 }}>Gerenciar clientes</button>
           <div style={{ flex: 2, background: T.superficie2, borderRadius: 10, padding: 10, border: `1px solid ${T.borda}`, fontSize: 11, color: T.texto2 }}>
             Se o cliente não existir, crie-o em Clientes e depois selecione aqui. Caso queira manter um nome livre, deixe em branco e preencha o campo abaixo.
           </div>
-        </div>
+        </div>}
 
         {/* ════ CONTRATO DA OBRA ════ */}
-        <div style={{ background: T.avisoFundo, border: `1px solid ${GOLD}30`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.avisoTexto, letterSpacing: 1, marginBottom: 8 }}>📋 CONTRATO DA OBRA</div>
+        <fieldset disabled={!podeEditarContrato} aria-label="Contrato da obra" style={{ background: T.avisoFundo, border: `1px solid ${GOLD}30`, borderRadius: 10, padding: 12, margin: "0 0 12px", minWidth: 0 }}>
+          <legend style={{ fontSize: 11, fontWeight: 800, color: T.avisoTexto, letterSpacing: 1 }}>📋 CONTRATO DA OBRA</legend>
+          {!podeEditarContrato && <p role="note" style={{ fontSize: 12, color: T.texto2, marginTop: 0 }}>Os dados do contrato são editados pela equipe financeira. Você pode salvar os dados da obra normalmente.</p>}
 
           <label style={labelS}>Cliente / Contratante</label>
           <input
@@ -288,14 +291,14 @@ export function TelaObras({ obras, usuarios = [], clientes = [], trabalhadores, 
             placeholder="Cláusulas especiais, garantias, multas, retenções..."
             style={{ ...inputS, fontFamily: "inherit", resize: "none" }}
           />
-        </div>
+        </fieldset>
 
         <label style={labelS}>Status</label>
         <select value={form.status} onChange={e => set("status", e.target.value)} style={selS}>
           <option>Ativa</option><option>Pausada</option><option>Concluída</option>
         </select>
 
-        {editandoId && (
+        {editandoId && podeEditarContrato && (
           <button onClick={() => { confirmar(`Remover ${form.nome}? Esta ação não pode ser desfeita.`, () => { onRemover(editandoId); setModal(false); }) }} style={{ width: "100%", padding: 10, background: T.erroFundo, color: RED, border: `1px solid ${RED}33`, borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>🗑️ Excluir Obra</button>
         )}
         <Btn label={editandoId ? "SALVAR" : "ADICIONAR"} color={GREEN} onClick={salvar} />

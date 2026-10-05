@@ -83,6 +83,7 @@ export const GRUPOS_MENU = [
     { nav: "consolidado", label: "Consolidado",      icone: "pie-chart",    busca: "relatório geral" },
   ] },
   { id: "sistema", titulo: "Sistema", itens: [
+    { nav: 'seguranca', label: 'Segurança e cópias', icone: 'lock', busca: 'backup privacidade proteção' },
     { nav: "acessos", label: "Usuários e acessos", icone: "key-round",  busca: "convites permissões encarregado" },
     { nav: "empresa", label: "Empresa",            icone: "building-2", busca: "cadastro cnpj logo" },
     { nav: "links",   label: "Links úteis",        icone: "link",       livre: true, busca: "sites sinapi preços referência" },
@@ -149,7 +150,7 @@ export function gruposVisiveis(email) {
    normalizarAcessos já a devolve, então lista antiga ou gravada sem ela também a recebe.
    Quem usa: MenuLateral (menu e busca Ctrl+K), KMZeroApp (guarda de navegação, tela inicial,
    ?acessos= da demo), home.jsx (atalhos do Painel) e a tela Usuários e acessos (auth.jsx).
-   As áreas só escondem menus e telas: não trancam os dados da empresa (firestore.rules). */
+   As regras do banco também restringem consultas e gravações por área e obra. */
 
 // Áreas que podem ser liberadas: todos os grupos, menos os de e-mail fixo (desenvolvedor)
 export const AREAS_ACESSO = GRUPOS_MENU.filter(g => !g.somenteEmail).map(g => g.id);

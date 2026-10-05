@@ -146,6 +146,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroData, setFiltroData] = useState("");
   const [fotoExpandida, setFotoExpandida] = useState(null);
+  const fotoExpandidaNaNuvem = !!(fotoExpandida?.fotoPath || fotoExpandida?.fotoUrl || /^https?:/i.test(fotoExpandida?.foto || ""));
   const escritorio = !!useEscritorio(); // celular: 3 miniaturas por linha (como sempre); escritório: quantas couberem de 160 px
 
   const fotosFiltradas = fotos
@@ -257,8 +258,9 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button onClick={() => baixarFoto(fotoExpandida)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 10, padding: 12, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>📥 Baixar</button>
-              {isGestor && <button onClick={() => { confirmar("Excluir esta foto da galeria?", () => { onRemover(fotoExpandida.id); setFotoExpandida(null); }) }} style={{ background: RED, color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>🗑️</button>}
+              {isGestor && <button disabled={fotoExpandidaNaNuvem} title={fotoExpandidaNaNuvem ? "A exclusão de fotos já enviadas ainda não está disponível." : "Excluir foto local"} onClick={() => { confirmar("Excluir esta foto local da galeria?", () => { onRemover(fotoExpandida.id); setFotoExpandida(null); }) }} style={{ background: RED, color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px", fontWeight: 700, cursor: fotoExpandidaNaNuvem ? "not-allowed" : "pointer", opacity: fotoExpandidaNaNuvem ? 0.5 : 1, fontSize: 13 }}>🗑️</button>}
             </div>
+            {isGestor && fotoExpandidaNaNuvem && <div style={{ color: "#ddd", fontSize: 12, marginTop: 8 }}>A exclusão de fotos já enviadas ainda não está disponível. A imagem permanece guardada na empresa.</div>}
           </div>
         </div>
       )}

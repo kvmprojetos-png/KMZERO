@@ -1,10 +1,33 @@
 import { getApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where, getCountFromServer, writeBatch } from "firebase/firestore";
-import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
+import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where, or, getCountFromServer, writeBatch } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import { usuarioAtual } from "../firebase.js";
 import { normId, normalizarColecao } from "./ids.js";
+import { enviarFotoPrivada, carregarFotoPrivada } from "./fotosSeguras.js";
+import { normalizarFotoLocalPrivada, referenciaFoto } from "./fotoCaminho.js";
+import { politicaColecao, temAreaDados, administraPessoas, variantesId, trabalhadorCampo, obraCampo, perfilCampo, filtrarCachePermitido } from "./permissoesDados.js";
 
 let _empresaId = null;
+let _perfilDados = null;
+let _persistenciaSuspensa = false;
+export function suspenderPersistencia(v) { _persistenciaSuspensa = !!v; }
+export function setPerfilDados(perfil) { _perfilDados = perfil; }
+export function getPerfilDados() { return _perfilDados; }
+export function consultaPermitida(fb, colecao) {
+  const p = politicaColecao(_perfilDados, colecao);
+  if (!p.leitura) return null;
+  const base = collection(fb.db, 'empresas', _empresaId, p.colecao);
+  if (!p.escopo) return base;
+  if (p.escopo === 'participantes') {
+    const uid = _perfilDados.firebaseUid || _perfilDados.id;
+    return query(base, or(where('de','==',uid),where('para','==',uid)));
+  }
+  const ids = variantesId(_perfilDados.obraId);
+  if (!ids.length) return null;
+  if (p.escopo === 'movPessoal') return query(base,or(where('obraOrigem','in',ids),where('obraDestino','in',ids)));
+  if (p.escopo === 'movEquip') return query(base,or(where('obraOrigemId','in',ids),where('obraDestinoId','in',ids)));
+  return query(base,where(p.escopo,'in',ids));
+}
 
 export function setEmpresaId(id) { _empresaId = id; }
 export function getEmpresaId() { return _empresaId; }
@@ -37,31 +60,68 @@ export async function enviarFotoNuvem(f) {
   const fb = cloudRefs();
   if (!fb || !_empresaId) return false;
   try {
-    const id = String(f.id);
-    const r = storageRef(fb.st, `empresas/${_empresaId}/fotosObras/${id}.jpg`);
-    await uploadString(r, f.foto, "data_url");
-    const url = await getDownloadURL(r);
-    const { foto, ...meta } = f;
-    await setDoc(doc(fb.db, "empresas", _empresaId, "fotosObras", id), {
-      ...meta, id, fotoUrl: url, criadoEm: Date.now(),
-    });
-    return url; // URL de download: quem chamou troca o base64 pela URL
+    return await enviarFotoPrivada(usuarioAtual(), _empresaId, f);
   } catch (e) {
-    console.error("enviarFotoNuvem:", e);
+    console.error("enviarFotoNuvem:", e.status || "falha-upload");
     return false;
   }
 }
 
 export function observarFotosNuvem(callback) {
   const fb = cloudRefs();
-  if (!fb || !_empresaId) return () => {};
+  const empresaId = _empresaId, pessoa = usuarioAtual();
+  if (!fb || !empresaId || !pessoa) return () => {};
+  const consulta = consultaPermitida(fb, "fotosObras");
+  if (!consulta) return () => {};
+  let parar = () => {}, versao = 0, encerrado = false, ultimoSnapshot = null, leituraAtual = null;
+  // Metadados ainda são ao vivo; os bytes sempre passam pela API autenticada.
+  // O cache abaixo pertence a este listener e é descartado ao sair/trocar conta.
+  const cache = new Map();
+  const carregar = async snap => {
+      if (encerrado) return;
+      ultimoSnapshot = snap;
+      leituraAtual?.abort();
+      const leitura = new AbortController();
+      leituraAtual = leitura;
+      const minhaVersao = ++versao;
+      const saida = new Array(snap.docs.length);
+      let indice = 0;
+      const ler = async () => {
+        while (indice < snap.docs.length && !leitura.signal.aborted) {
+          const posicao = indice++, d = snap.docs[posicao];
+          const registro = { ...d.data(), id: d.id };
+          const chave = JSON.stringify(registro);
+          if (cache.get(d.id)?.chave === chave) { saida[posicao] = cache.get(d.id).foto; continue; }
+          try {
+            const foto = await carregarFotoPrivada(pessoa, empresaId, registro, { signal: leitura.signal });
+            if (encerrado || leitura.signal.aborted) return;
+            cache.set(d.id, { chave, foto }); saida[posicao] = foto;
+          } catch (e) {
+            const { fotoUrl: _urlAntiga, foto: _fotoAntiga, ...meta } = registro;
+            const path = referenciaFoto(registro, empresaId);
+            const anterior = cache.get(d.id)?.foto;
+            const preservada = anterior?.fotoPath === path && String(anterior?.obraId) === String(registro.obraId)
+              && anterior?.foto?.startsWith("data:image/") ? anterior.foto : "";
+            saida[posicao] = { ...meta, ...(path ? { fotoPath: path } : {}), foto: preservada, fotoIndisponivel: true };
+            if (!leitura.signal.aborted) console.warn("Foto indisponível:", e.status || "falha-leitura");
+          }
+        }
+      };
+      await Promise.all([ler(), ler(), ler()]);
+      if (!encerrado && !leitura.signal.aborted && minhaVersao === versao) {
+        const ids = new Set(snap.docs.map(d => d.id));
+        for (const id of cache.keys()) if (!ids.has(id)) cache.delete(id);
+        callback(saida.filter(Boolean));
+      }
+  };
+  const aoReconectar = () => { if (ultimoSnapshot && !encerrado) carregar(ultimoSnapshot); };
   try {
-    return onSnapshot(
-      collection(fb.db, "empresas", _empresaId, "fotosObras"),
-      snap => callback(snap.docs.map(d => { const x = d.data(); return { ...x, foto: x.fotoUrl }; })),
-      e => console.error("observarFotosNuvem:", e)
-    );
-  } catch (e) { console.error(e); return () => {}; }
+    parar = onSnapshot(consulta, { includeMetadataChanges: true }, carregar,
+      e => console.error("observarFotosNuvem:", e.code || "falha-listener"));
+    if (typeof window !== "undefined") window.addEventListener("online", aoReconectar);
+  } catch (e) { console.error("observarFotosNuvem:", e.code || "falha-listener"); }
+  return () => { encerrado = true; leituraAtual?.abort(); parar(); cache.clear(); ultimoSnapshot = null;
+    if (typeof window !== "undefined") window.removeEventListener("online", aoReconectar); };
 }
 
 export const semUndefined = (o) => JSON.parse(JSON.stringify(o));
@@ -171,8 +231,14 @@ export function jsonEstavel(v) {
 export async function enviarDocNuvem(colecao, id, dados) {
   const fb = cloudRefs();
   if (!fb || !_empresaId) return false;
+  if (!politicaColecao(_perfilDados, colecao).escrita) return false;
   try {
-    await setDoc(doc(fb.db, "empresas", _empresaId, colecao, String(id)), semUndefined(dados));
+    const alvo = doc(fb.db, "empresas", _empresaId, colecao, String(id));
+    const lote = writeBatch(fb.db);
+    lote.set(alvo, semUndefined(dados));
+    if (colecao === 'trabalhadores') lote.set(doc(fb.db,'empresas',_empresaId,'trabalhadoresCampo',String(id)), trabalhadorCampo(dados));
+    if (colecao === 'obras' && temAreaDados(_perfilDados,'obras')) lote.set(doc(fb.db,'empresas',_empresaId,'obrasCampo',String(id)), obraCampo(dados));
+    await lote.commit();
     return true;
   } catch (e) {
     console.error("enviarDocNuvem", colecao, e);
@@ -183,7 +249,14 @@ export async function enviarDocNuvem(colecao, id, dados) {
 export async function removerDocNuvem(colecao, id) {
   const fb = cloudRefs();
   if (!fb || !_empresaId) return false;
-  try { await deleteDoc(doc(fb.db, "empresas", _empresaId, colecao, String(id))); return true; }
+  if (!politicaColecao(_perfilDados, colecao).escrita) return false;
+  try {
+    const lote = writeBatch(fb.db);
+    lote.delete(doc(fb.db, "empresas", _empresaId, colecao, String(id)));
+    if (colecao === 'trabalhadores') lote.delete(doc(fb.db,'empresas',_empresaId,'trabalhadoresCampo',String(id)));
+    if (colecao === 'obras') lote.delete(doc(fb.db,'empresas',_empresaId,'obrasCampo',String(id)));
+    await lote.commit(); return true;
+  }
   catch (e) { console.error("removerDocNuvem", colecao, e); return false; }
 }
 
@@ -193,8 +266,10 @@ export function observarColecaoNuvem(colecao, callback, onErro) {
   const fb = cloudRefs();
   if (!fb || !_empresaId) return () => {};
   try {
+    const consulta = consultaPermitida(fb, colecao);
+    if (!consulta) { callback([], { fromCache:false, hasPendingWrites:false }); return () => {}; }
     return onSnapshot(
-      collection(fb.db, "empresas", _empresaId, colecao),
+      consulta,
       { includeMetadataChanges: false },
       snap => callback(snap.docs.map(d => d.data()), { fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites }),
       e => { console.error("observarColecaoNuvem", colecao, e); if (onErro) onErro(e); }
@@ -208,7 +283,7 @@ export const aplicarPerfilNuvem = (u, p) => !p ? u : ({
   nome: p.nome || u.nome || "Equipe",
   perfil: p.perfil || u.perfil || "encarregado",
   cargo: p.cargo || u.cargo || "Encarregado",
-  obraId: normId((p.obraId !== undefined && p.obraId !== null) ? p.obraId : u.obraId),
+  obraId: normId(p.obraId),
   tel: p.tel || u.tel || "",
   acessos: lerAcessos(p), // áreas do escritório (null = tudo)
 });
@@ -239,6 +314,7 @@ export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, em
       ativo: true,
       criadoEm: Date.now(),
     });
+    lote.set(doc(fb.db,'empresas',empresaId,'perfisCampo',firebaseUid),perfilCampo({nome:nomeGestor,perfil:'gestor',ativo:true},firebaseUid));
     await lote.commit();
     return empresaId;
   } catch (e) {
@@ -330,7 +406,14 @@ export async function atualizarPerfilNuvem(firebaseUid, dados) {
   if (d.acessos !== undefined) d.acessos = acessosParaNuvem(d.acessos);
   if (d.perfil === "encarregado") d.acessos = null;
   try {
-    await setDoc(doc(fb.db, "usuarios", firebaseUid), semUndefined(d), { merge: true });
+    const perfilRef = doc(fb.db,'usuarios',firebaseUid);
+    const anterior = await getDoc(perfilRef);
+    if (!anterior.exists()) return false;
+    const completo = {...anterior.data(),...semUndefined(d)};
+    const lote = writeBatch(fb.db);
+    lote.set(perfilRef,semUndefined(d),{merge:true});
+    lote.set(doc(fb.db,'empresas',completo.empresaId,'perfisCampo',firebaseUid),perfilCampo(completo,firebaseUid));
+    await lote.commit();
   } catch (e) { console.error("atualizarPerfilNuvem:", e); return false; }
   if (d.acessos !== undefined || d.perfil || d.ativo !== undefined) alinharConviteAoPerfil(fb, firebaseUid); // em segundo plano
   return true;
@@ -404,7 +487,10 @@ export async function aceitarConvite(userGoogle, convite) {
     criadoEm: Date.now(),
   });
   try {
-    await setDoc(doc(fb.db, "usuarios", userGoogle.uid), perfil);
+    const lote = writeBatch(fb.db);
+    lote.set(doc(fb.db,'usuarios',userGoogle.uid),perfil);
+    lote.set(doc(fb.db,'empresas',perfil.empresaId,'perfisCampo',userGoogle.uid),perfilCampo(perfil,userGoogle.uid));
+    await lote.commit();
     return { ok: true, perfil };
   } catch (e) {
     console.error("aceitarConvite:", e);
@@ -463,6 +549,7 @@ export async function removerConvite(email) {
 export function observarEquipeNuvem(callback, onErro) {
   const fb = cloudRefs();
   if (!fb || !_empresaId) return () => {};
+  if (!administraPessoas(_perfilDados)) return onSnapshot(collection(fb.db,'empresas',_empresaId,'perfisCampo'), snap => callback(snap.docs.map(d => ({...d.data(),id:d.id,firebaseUid:d.id}))), e => onErro?.(e));
   const q = query(collection(fb.db, "usuarios"), where("empresaId", "==", _empresaId));
   return onSnapshot(q, snap => {
     callback(snap.docs.map(d => ({
@@ -479,7 +566,7 @@ export function observarEquipeNuvem(callback, onErro) {
 /* Convites pendentes da empresa — so o gestor */
 export function observarConvitesNuvem(callback, onErro) {
   const fb = cloudRefs();
-  if (!fb || !_empresaId) return () => {};
+  if (!fb || !_empresaId || !administraPessoas(_perfilDados)) return () => {};
   const q = query(collection(fb.db, "convites"), where("empresaId", "==", _empresaId));
   return onSnapshot(q, snap => {
     callback(snap.docs.map(d => ({
@@ -493,6 +580,11 @@ export function observarConvitesNuvem(callback, onErro) {
 }
 
 /* Usuário da sessão (o que o app guarda e usa) a partir da conta Google + perfil da nuvem */
+export function observarMeuPerfil(callback, onErro) {
+  const fb = cloudRefs(), uid = usuarioAtual()?.uid;
+  if (!fb || !uid) return () => {};
+  return onSnapshot(doc(fb.db,'usuarios',uid), snap => callback(snap.exists() ? snap.data() : null), e => onErro?.(e));
+}
 export const montarUsuarioLogin = (userGoogle, perfil) => ({
   id: userGoogle.uid,
   firebaseUid: userGoogle.uid,
@@ -505,6 +597,7 @@ export const montarUsuarioLogin = (userGoogle, perfil) => ({
   tel: perfil.tel || "",
   acessos: lerAcessos(perfil), // áreas do escritório (null = tudo)
   empresaId: perfil.empresaId,
+  ativo: perfil.ativo !== false,
   ultimoLogin: Date.now(),
 });
 
@@ -721,6 +814,7 @@ export function lerIdsSync(colecao) {
   } catch { return []; }
 }
 export function salvarIdsSync(colecao, ids) {
+  if (_persistenciaSuspensa) return;
   try { localStorage.setItem(storePrefix() + "_syncIds_" + colecao, JSON.stringify(ids)); } catch {}
 }
 
@@ -728,8 +822,15 @@ export const store = {
   async get(key) {
     try {
       const v = localStorage.getItem(storePrefix() + key);
-      if (v) return JSON.parse(v);
-      if (typeof window !== "undefined" && window.storage && window.storage.get) {
+      if (v) {
+        const valor = JSON.parse(v);
+        if (_modoDemo || key === 'usuarioLogado' || key.startsWith('_')) return valor;
+        const trabalhadores = key === 'historico' ? (await this.get('trabalhadores') || []) : [];
+        const permitido = filtrarCachePermitido(_perfilDados,key,valor,trabalhadores);
+        return key === "fotosObras" && Array.isArray(permitido)
+          ? permitido.map(f => normalizarFotoLocalPrivada(f, _empresaId)).filter(Boolean) : permitido;
+      }
+      if (_modoDemo && typeof window !== "undefined" && window.storage && window.storage.get) {
         const r = await window.storage.get(key);
         return r ? JSON.parse(r.value) : null;
       }
@@ -737,10 +838,16 @@ export const store = {
     } catch (e) { console.warn("store.get error:", e); return null; }
   },
   async set(key, val) {
+    if (_persistenciaSuspensa || (!_modoDemo && !_perfilDados && key !== 'usuarioLogado')) return;
     try {
+      if (key === 'fotosObras' && Array.isArray(val)) val = val.map(f => {
+        if (!f.fotoPath) return f;
+        const {foto, fotoUrl, ...meta} = f;
+        return meta;
+      });
       const json = JSON.stringify(val);
       localStorage.setItem(storePrefix() + key, json);
-      if (typeof window !== "undefined" && window.storage && window.storage.set) {
+      if (_modoDemo && typeof window !== "undefined" && window.storage && window.storage.set) {
         try { await window.storage.set(key, json); } catch {}
       }
     } catch (e) {

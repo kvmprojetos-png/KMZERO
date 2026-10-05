@@ -717,6 +717,10 @@ const _brDeIso = iso => { const [a, m, d] = String(iso || "").split("-"); return
 const _nRDO = n => String(n ?? "").padStart(3, "0");
 
 export function gerarPDFRDORabnt({ numero, obra, data, clima, observacoes, presencas, trabalhadores, ativos, abastecimentos, pedidos, ocorrencias, encarregado, empresa, horasTrabalhadas, horimetros, fotos, alimentacao, totalAlimentacao, recebimentos, fotosObras }) {
+  if ((fotosObras || []).some(f => f?.fotoPath && !f.foto && mesmoId(f.obraId, obra.id) && _isoFotoGaleria(f) === _isoDeBR(data))) {
+    alert("As fotos deste relatório ainda não terminaram de carregar. Aguarde o carregamento com a internet conectada e tente gerar o PDF novamente.");
+    return;
+  }
   presencas = presencas || {};
   empresa = empresa || {};
   const trabObra = (trabalhadores || []).filter(t => mesmoId(t.obraId, obra.id));
@@ -1134,6 +1138,11 @@ export function TelaRDO({ obras, trabalhadores, ativos, abastecimentos, pedidos,
         return dt >= segReal && dt <= sexReal;
       } catch { return false; }
     }).sort((a, b) => _isoFotoGaleria(a).localeCompare(_isoFotoGaleria(b)) || _minutosDoc(a.hora) - _minutosDoc(b.hora) || (Number(a.numero) || 0) - (Number(b.numero) || 0)); // ordem do dia e da hora (a galeria guarda a mais nova primeiro)
+
+    if (fotosSem.some(f => f.fotoPath && !f.foto)) {
+      alert("As fotos deste relatório ainda não terminaram de carregar. Aguarde o carregamento com a internet conectada e tente gerar o PDF novamente.");
+      return;
+    }
 
     // 📦 PEDIDOS do período
     const pedidosSem = (pedidos || []).filter(p => {

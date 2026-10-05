@@ -1,7 +1,7 @@
 import { LINKS_PADRAO } from "./screens/equipe.jsx";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { logoutFirebase, resultadoRedirecionamento, aguardarSessao } from "./firebase.js";
+import { logoutFirebase, resultadoRedirecionamento, aguardarSessao, confirmarDonoNoServidor } from "./firebase.js";
 
 /* ── Blocos extraídos (refatoração: separação por camada) ── */
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T, DEFAULT_FONT, ESCURO } from "./theme.js";
@@ -18,7 +18,11 @@ import { useModoEscritorio } from "./lib/useLargura.js";
 import { CHAVE_TEMA, aplicarTema } from "./lib/useTema.js";
 import { LARGURA_POR_TELA, tipoDaTela } from "./lib/layoutEscritorio.js";
 import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
+import { setPerfilDados, observarMeuPerfil, suspenderPersistencia } from './lib/store.js';
+import { politicaColecao, filtrarCachePermitido, administraPessoas, perfilCampo } from './lib/permissoesDados.js';
+import { registrarAbaProtegida, prepararSaida, baixarBackupSaida, executarSaida, donoCacheLocal, marcarDonoCacheLocal, lerLimpezaPendente, concluirLimpezaPendente, higienizarCachePermissoes, prepararRecuperacaoDono, concluirRecuperacaoDono } from './lib/saidaSegura.js';
 import { normId, mesmoId, normalizarColecao } from "./lib/ids.js";
+import { normalizarFotoLocalPrivada } from './lib/fotoCaminho.js';
 
 /* ── Telas separadas por domínio ── */
 import { TelaEntrar, TelaPrimeiroAcesso, TelaMinhaConta, TelaAcessosApp, TelaConviteOutraEmpresa } from "./screens/auth.jsx";
@@ -34,6 +38,7 @@ import { TelaCustos, TelaDespesasAvulsas, TelaPagamentos } from "./screens/finan
 import { TelaRDO, gerarPDFRDORabnt, TelaCronograma, TelaCronogramaPro, CurvaSChart, calcularKPIsCronograma, detectarInconsistenciasCronograma, calcularPctPrevistoEtapa, gerarPontosCurvaS, TelaProdutividade } from "./screens/rdo.jsx";
 import { TelaFotos, TelaGaleria, TelaAnexosObra, TelaMensagens, TelaLinks } from "./screens/midia.jsx";
 import { TelaAvisos } from "./screens/avisos.jsx";
+import { TelaSeguranca } from './screens/seguranca.jsx';
 import { observarAvisosNuvem, observarLeituraAvisos, marcarAvisosLidos, publicarAviso, renovarNotificacoes, desligarNotificacoes, situacaoNotificacoes } from "./lib/avisos.js";
 import { avisoEhPara, uidDe } from "./lib/avisosRegras.js";
 import { TelaConfigEmpresa, TelaEscritorio, TelaAjuda, TelaBackup, TelaGerarSimulacao, TelaDiagnostico, TelaZerarTudo } from "./screens/sistema.jsx";
@@ -161,6 +166,11 @@ export default function App() {
   const [modoDemo] = useState(detectarDemo);
   const [historicoTelas, setHistoricoTelas] = useState([]); // pilha de navegação
   const [usuario, setUsuario]     = useState(null);
+  const [saidaSegura, setSaidaSegura] = useState(null);
+  const [cacheBloqueado, setCacheBloqueado] = useState(null);
+  const [backupSaidaConfirmado, setBackupSaidaConfirmado] = useState(false);
+  if (usuario) setPerfilDados(usuario);
+  const assinaturaPermissoes = JSON.stringify([usuario?.firebaseUid,usuario?.perfil,usuario?.obraId,usuario?.acessos,usuario?.ativo]);
   // Largura da tela: >= 1024 px vira "modo escritório" (só para gestor, ver `escritorio` abaixo)
   const modoEscritorio = useModoEscritorio();
 
@@ -218,7 +228,7 @@ export default function App() {
     enviarAvisoRef.current?.({
       tipo: "pedido", titulo: `📦 Pedido de material — ${p.obra || "obra"}`,
       texto: `${p.enc || "Encarregado"} pediu: ${itens.slice(0, 4).join(", ") || p.material || ""}${itens.length > 4 ? ` e mais ${itens.length - 4}` : ""}`,
-      para: { tipo: "gestores" }, navegarPara: "pedidos",
+      para: { tipo: "area", area: "suprimentos" }, navegarPara: "pedidos",
     });
   }, []);
   const mudarStatusPedidoSync = useCallback((id, status, extras = {}) => {
@@ -265,7 +275,7 @@ export default function App() {
     }));
   }, []);
   useEffect(() => {
-    if (modoDemo || !usuario?.firebaseUid) return;
+    if (saidaSegura || modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("mensagens", nuvem => {
       setMensagens(loc => {
         const porId = new Map(loc.map(m => [String(m.id), m]));
@@ -273,7 +283,7 @@ export default function App() {
         return [...porId.values()].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
       });
     });
-  }, [usuario?.firebaseUid]);
+  }, [assinaturaPermissoes, !!saidaSegura]);
 
   // ── AVISOS (notificações): sininho no app + push no celular (api/notificar) ──
   const [avisos, setAvisos] = useState([]);
@@ -300,7 +310,7 @@ export default function App() {
   }, []);
   enviarAvisoRef.current = enviarAviso;
   useEffect(() => {
-    if (modoDemo || !usuario?.firebaseUid || !empresaIdState) return;
+    if (saidaSegura || modoDemo || !usuario?.firebaseUid || !empresaIdState) return;
     const pararA = observarAvisosNuvem(nuvem => setAvisos(loc => {
       const porId = new Map(loc.map(a => [String(a.id), a]));
       nuvem.forEach(n => porId.set(String(n.id), n));
@@ -309,7 +319,7 @@ export default function App() {
     const pararL = observarLeituraAvisos(usuario.firebaseUid, t => setUltimaLeituraAvisos(v => Math.max(v, t)));
     renovarNotificacoes(usuario);
     return () => { pararA(); pararL(); };
-  }, [usuario?.firebaseUid, empresaIdState]);
+  }, [assinaturaPermissoes, empresaIdState, !!saidaSegura]);
   const avisosVisiveis = useMemo(() => {
     if (!usuario) return [];
     const eu = uidDe(usuario);
@@ -367,9 +377,9 @@ export default function App() {
   // é mais nova (o encarregado fechou o dia de novo, o escritório editou, o fechamento caiu no RDO que o
   // administrador criou). As fotos ficam as deste aparelho (store.js mesclarRdosDaNuvem).
   useEffect(() => {
-    if (modoDemo || !usuario?.firebaseUid) return;
+    if (saidaSegura || modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("rdos", nuvem => setRdos(loc => mesclarRdosDaNuvem(loc, nuvem)));
-  }, [usuario?.firebaseUid]);
+  }, [assinaturaPermissoes, !!saidaSegura]);
   const [empresa, setEmpresa]     = useState({});
   const [produtividade, setProd]  = useState([]);
   const [recebimentos, setReceb]  = useState([]);
@@ -393,28 +403,39 @@ export default function App() {
   const salvarFotoObraSync = useCallback(f => {
     setFotosObras(fs => [f, ...fs]);
     // Depois do upload, troca o base64 pela URL da nuvem (o localStorage para de guardar a foto inteira)
-    enviarFotoNuvem(f).then(url => {
-      if (typeof url !== "string" || !url) return;
-      setFotosObras(fs => fs.map(x => mesmoId(x.id, f.id) ? { ...x, foto: url, fotoUrl: url } : x));
+    enviarFotoNuvem(f).then(resultado => {
+      if (!resultado?.fotoPath) return;
+      setFotosObras(fs => fs.map(x => mesmoId(x.id, f.id) ? { ...x, ...resultado, fotoUrl: undefined } : x));
     }).catch(e => console.error("salvarFotoObraSync:", e));
   }, []);
 
   // Recebe fotos dos outros aparelhos em tempo real (gestor vê fotos do encarregado)
   useEffect(() => {
-    if (modoDemo || !usuario?.firebaseUid) return;
+    if (saidaSegura || modoDemo || !usuario?.firebaseUid) return;
     const parar = observarFotosNuvem(nuvem => {
       setFotosObras(loc => {
-        const ids = new Set(loc.map(x => String(x.id)));
-        const novas = normalizarColecao("fotosObras", nuvem.filter(n => !ids.has(String(n.id))));
-        return novas.length ? [...novas, ...loc] : loc;
+        const porId = new Map(loc.filter(x => !x.fotoPath && !x.fotoUrl).map(x => [String(x.id),x]));
+        const anteriores = new Map(loc.map(x => [String(x.id),x]));
+        normalizarColecao('fotosObras',nuvem).forEach(x => {
+          const anterior = anteriores.get(String(x.id));
+          const imagemLocal = mesmoId(anterior?.obraId,x.obraId) && typeof anterior?.foto === 'string' && anterior.foto.startsWith('data:image/');
+          if (x.fotoIndisponivel && imagemLocal && !anterior.fotoPath && !anterior.fotoUrl) {
+            porId.set(String(x.id),anterior); // Mantém o envio ainda não confirmado sem adotar um caminho remoto.
+            return;
+          }
+          const bytesConhecidos = x.fotoIndisponivel && !!x.fotoPath && anterior?.fotoPath === x.fotoPath
+            && imagemLocal;
+          porId.set(String(x.id),bytesConhecidos ? {...x,foto:anterior.foto} : x);
+        });
+        return [...porId.values()].sort((a,b) => Number(b.id)-Number(a.id));
       });
     });
     return parar;
-  }, [usuario?.firebaseUid]);
+  }, [assinaturaPermissoes, !!saidaSegura]);
 
   // Recebe pedidos de todos os aparelhos (nuvem vence em caso de mesmo id — ex: aprovação do gestor)
   useEffect(() => {
-    if (modoDemo || !usuario?.firebaseUid) return;
+    if (saidaSegura || modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("pedidos", nuvem => {
       setPedidos(loc => {
         const porId = new Map(loc.map(p => [String(p.id), p]));
@@ -422,11 +443,11 @@ export default function App() {
         return [...porId.values()].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
       });
     });
-  }, [usuario?.firebaseUid]);
+  }, [assinaturaPermissoes, !!saidaSegura]);
 
   // Recebe presenças de todos os aparelhos (gestor enxerga o ponto lançado na obra)
   useEffect(() => {
-    if (modoDemo || !usuario?.firebaseUid) return;
+    if (saidaSegura || modoDemo || !usuario?.firebaseUid) return;
     return observarColecaoNuvem("presencas", docs => {
       setHistorico(local => {
         const novo = { ...local };
@@ -437,7 +458,7 @@ export default function App() {
         return novo;
       });
     });
-  }, [usuario?.firebaseUid]);
+  }, [assinaturaPermissoes, !!saidaSegura]);
   const [fornecedores, setFornecedores] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -450,29 +471,54 @@ export default function App() {
   const obraAtual = (usuarioEhGestor || !usuario) ? (obraVinculada || obras[0]) : obraVinculada;
   const presencasHoje = historico[hojeStr()] || {};
 
-  // Confere na nuvem se o acesso ainda vale (gestor pode ter removido) e atualiza obra/nome/cargo
+  const assinaturaEscopo = u => JSON.stringify([u?.perfil,u?.obraId,u?.acessos]);
+  const revogarSessaoLocal = async u => {
+    // Os dados locais podem conter edições únicas. Bloqueia leitura e novas
+    // gravações antes do signOut; a recuperação do cache é um fluxo separado.
+    suspenderPersistencia(true);
+    setPerfilDados(null);
+    setUsuario(null);
+    localStorage.removeItem('_kmzero_sessao');
+    setErroEntrada({codigo:'acesso-desativado',email:u?.email || ''});
+    setTelaRaw('login');
+    await logoutFirebase();
+  };
+  const aplicarPerfilVerificado = (u, p) => {
+    const novo = {...aplicarPerfilNuvem(u,p),ativo:true};
+    if (assinaturaEscopo(novo) !== assinaturaEscopo(u)) {
+      // Não aplicar uma área nova sobre os arrays da permissão anterior. O boot
+      // confere o cache antes de hidratar, preservando qualquer edição única.
+      store.set('usuarioLogado',novo);
+      suspenderPersistencia(true);
+      window.location.reload();
+      return;
+    }
+    if (jsonEstavel(novo) !== jsonEstavel(u)) {
+      setUsuario(novo);
+      store.set('usuarioLogado',novo);
+    }
+  };
+  const conferirCacheAntesDeAbrir = async u => {
+    const higiene = higienizarCachePermissoes(u);
+    if (higiene.ok) return true;
+    suspenderPersistencia(true);
+    setPerfilDados(null);
+    setUsuario(null);
+    const dono = await carregarDonoEmpresa();
+    setCacheBloqueado({empresaId:u.empresaId,perfil:u,dono:dono === u.firebaseUid,seguranca:false});
+    setCarregando(false);
+    return false;
+  };
+
+  // Confere na nuvem se o acesso ainda vale; qualquer mudança de escopo usa o
+  // mesmo caminho de recarga empregado pelo listener ao vivo.
   const verificarAcessoNuvem = async (u) => {
     if (!u?.firebaseUid) return;
     const p = await carregarPerfilNuvem(u.firebaseUid);
     if (!p.ok) return; // sem internet ou regras: mantém a sessão (offline-first)
-    if (!p.perfil || p.perfil.ativo === false) {
-      try { await logoutFirebase(); } catch {}
-      setUsuarios(us => us.filter(x => !mesmoId(x.id, u.id)));
-      store.set("usuarioLogado", null);
-      localStorage.removeItem("_kmzero_sessao");
-      setUsuario(null);
-      // A tela de entrada mostra o aviso (AvisoEntrada, com "Entrar com outra conta" e "Falar com o gestor")
-      setErroEntrada({ codigo: "acesso-desativado", email: u.email || "" });
-      setTelaRaw("login");
-      return;
-    }
+    if (!p.perfil || p.perfil.ativo === false || p.perfil.empresaId !== u.empresaId) return revogarSessaoLocal(u);
     if (u.perfil !== "gestor") {
-      const atualizado = aplicarPerfilNuvem(u, p.perfil);
-      if (jsonEstavel(atualizado) !== jsonEstavel(u)) {
-        setUsuarios(us => us.map(x => mesmoId(x.id, u.id) ? { ...x, ...atualizado } : x));
-        setUsuario(atualizado);
-        store.set("usuarioLogado", atualizado);
-      }
+      aplicarPerfilVerificado(u,p.perfil);
     } else {
       // Escritório. O dono da empresa nunca fica trancado para fora: se o perfil dele aparecer
       // limitado (áreas) ou rebaixado, volta sozinho para acesso total (as regras só deixam o
@@ -489,21 +535,7 @@ export default function App() {
   //  - deixou de ser "gestor" (rebaixado para a equipe de campo): vira encarregado JÁ nesta sessão
   //    e vai para o Início do app de campo. Nunca vira "Tudo" (na dúvida, menos acesso).
   const aplicarPerfilDoEscritorio = (u, perfilNuvem) => {
-    if (perfilNuvem.perfil !== "gestor") {
-      const campo = { ...aplicarPerfilNuvem(u, perfilNuvem), perfil: "encarregado", acessos: null };
-      setUsuarios(us => us.map(x => mesmoId(x.id, u.id) ? { ...x, ...campo } : x));
-      setUsuario(campo);
-      store.set("usuarioLogado", campo);
-      setHistoricoTelas([]);
-      setTelaRaw("home");
-      return;
-    }
-    // lerAcessos: valor estranho vira "só Visão geral", nunca "Tudo"
-    const atualizado = comAcessos(u, lerAcessos(perfilNuvem));
-    if (atualizado !== u) {
-      setUsuario(atualizado);
-      store.set("usuarioLogado", atualizado);
-    }
+    aplicarPerfilVerificado(u,perfilNuvem);
   };
 
   // Semente da demonstração: grava cada coleção com o MESMO nome de chave que o boot
@@ -525,6 +557,16 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      let perfilBoot = null;
+      if (!modoDemo) {
+        await registrarAbaProtegida();
+        if (lerLimpezaPendente()) {
+          await aguardarSessao();
+          const limpeza = await concluirLimpezaPendente();
+          if (!limpeza.ok) { setErroEntrada({mensagem:limpeza.erro}); setCarregando(false); return; }
+          window.location.reload(); return;
+        }
+      }
       if (modoDemo) {
         // Demo: empresa "demo" (prefixo demo_ / demo_files), nuvem desligada, nada de _kmzero_*
         setModoDemo(true);
@@ -544,6 +586,22 @@ export default function App() {
         if (cachedEmpresaId) {
           setEmpresaId(cachedEmpresaId);
           setEmpresaIdState(cachedEmpresaId);
+          const sessao = await aguardarSessao();
+          const anterior = await store.get('usuarioLogado');
+          const dono = donoCacheLocal(cachedEmpresaId) || anterior?.firebaseUid;
+          if (sessao && dono && sessao.uid !== dono) {
+            setErroEntrada({mensagem:'Este navegador guarda trabalho de outra conta. Entre com a conta anterior e use Sair e limpar para preservar uma cópia antes de trocar.'});
+            setCarregando(false); return;
+          }
+          if (sessao && anterior?.firebaseUid === sessao.uid) {
+            const resultado = await carregarPerfilNuvem(sessao.uid);
+            if (resultado.ok && resultado.perfil?.ativo !== false && resultado.perfil?.empresaId === cachedEmpresaId) {
+              perfilBoot = {...anterior,...aplicarPerfilNuvem(anterior,resultado.perfil),ativo:true};
+              setPerfilDados(perfilBoot);
+              if (!(await conferirCacheAntesDeAbrir(perfilBoot))) return;
+              marcarDonoCacheLocal(cachedEmpresaId,sessao.uid);
+            }
+          }
         }
       }
       const obras_   = await store.get("obras");
@@ -573,7 +631,7 @@ export default function App() {
       const fotos_   = await store.get("fotosObras");
       const forn_    = await store.get("fornecedores");
       const clientes_ = await store.get("clientes");
-      const userLogado = await store.get("usuarioLogado");
+      const userLogado = perfilBoot;
       // Códigos gravados como texto (select, versões antigas, nuvem) entram canônicos: normalizarColecao
       // (ids.js) em cada coleção, com os campos de CAMPOS_ID_COLECAO. Os efeitos store.set logo abaixo
       // regravam o localStorage já normalizado. Coleção sem campos de código volta igual.
@@ -645,7 +703,11 @@ export default function App() {
       // if (!hist_ || Object.keys(hist_).length === 0) { ... }
 
       setCarregando(false);
-    })();
+    })().catch(e => {
+      suspenderPersistencia(true);
+      setErroEntrada({mensagem:e?.message || 'Não foi possível conferir a sessão. Recarregue para tentar novamente.'});
+      setCarregando(false);
+    });
   }, []);
 
   useEffect(() => { if (!carregando) store.set("obras", obras); }, [obras, carregando]);
@@ -681,7 +743,19 @@ export default function App() {
   // O gestor cadastra a obra no escritório e o encarregado vê no celular; o que
   // o encarregado lança na obra aparece pro gestor. (pedidos, mensagens, RDOs,
   // presenças e fotos já tinham sync próprio acima — continuam iguais.)
-  const syncAtivo = !modoDemo && !carregando && !!usuario?.firebaseUid && !!empresaIdState;
+  const syncAtivo = !cacheBloqueado && !saidaSegura && !modoDemo && !carregando && !!usuario?.firebaseUid && !!empresaIdState;
+  useEffect(() => {
+    if (!syncAtivo) return;
+    return observarMeuPerfil(p => {
+      const atual = usuarioRef.current;
+      if (!atual) return;
+      if (!p || p.ativo === false || p.empresaId !== atual.empresaId) {
+        revogarSessaoLocal(atual);
+        return;
+      }
+      aplicarPerfilVerificado(atual,p);
+    });
+  },[syncAtivo,usuario?.firebaseUid,empresaIdState]);
 
   // O que chega da nuvem entra com os códigos canônicos (useSetterDaNuvem: sobe normalizado uma vez, sem laço)
   const setObrasNuvem    = useSetterDaNuvem("obras", setObras);
@@ -718,7 +792,7 @@ export default function App() {
       if (uid && mesmoId(u?.firebaseUid, uid) && u.acessos != null) verificarAcessoNuvem(u); // dono limitado: se restaura
     });
     return () => { vivo = false; };
-  }, [syncAtivo, usuario?.perfil, empresaIdState]);
+  }, [syncAtivo, assinaturaPermissoes, empresaIdState]);
   // O perfil da própria pessoa mudou na nuvem (alguém ajustou em Usuários e acessos): vale na
   // hora, sem sair e entrar — áreas novas, ou rebaixado para a equipe de campo (vira encarregado
   // já nesta sessão, nunca "Tudo"). O dono, se aparecer limitado, confere e se restaura.
@@ -747,10 +821,10 @@ export default function App() {
       const comPerfil = new Set(perfis.map(p => (p.email || "").toLowerCase()).filter(Boolean));
       setUsuarios(normalizarColecao("usuarios", [...perfis, ...convites.filter(c => !comPerfil.has((c.email || "").toLowerCase()))])); // obraId canônico (usuários só sobem por ação)
     };
-    const paradas = [observarEquipeNuvem(ps => { perfis = ps; publicar(); aplicarAcessosDaNuvem(ps); })];
+    const paradas = [observarEquipeNuvem(ps => { perfis = ps; publicar(); })];
     if (usuario?.perfil === "gestor") paradas.push(observarConvitesNuvem(cs => { convites = cs; publicar(); }));
     return () => paradas.forEach(p => { try { p && p(); } catch {} });
-  }, [syncAtivo, usuario?.perfil, empresaIdState]);
+  }, [syncAtivo, assinaturaPermissoes, empresaIdState]);
   useSyncColecao("fornecedores",    fornecedores,    setFornNuvem,       syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("clientes",        clientes,        setClientesNuvem,   syncAtivo, { ordenar: porIdAsc });
   useSyncColecao("ativos",          ativos,          setAtivosNuvem,     syncAtivo, { ordenar: porIdAsc });
@@ -814,7 +888,7 @@ export default function App() {
       return { ...h, [dataISO]: dia };
     });
     if (status === null) removerDocNuvem("presencas", `${dataISO}_${trabId}`);
-    else enviarDocNuvem("presencas", `${dataISO}_${trabId}`, { data: dataISO, trabId: normId(trabId), status, criadoEm: Date.now(), editadoPorGestor: true });
+    else enviarDocNuvem("presencas", `${dataISO}_${trabId}`, { data: dataISO, trabId: normId(trabId), obraId: trabalhadores.find(t => mesmoId(t.id,trabId))?.obraId ?? null, status, criadoEm: Date.now(), editadoPorGestor: true });
   };
 
   const salvarPresencas = (novas) => {
@@ -823,7 +897,7 @@ export default function App() {
     // Nuvem: 1 documento por dia+trabalhador (gestor vê de qualquer cidade)
     Object.entries(novas).forEach(([trabId, status]) => {
       const tid = normId(trabId);
-      enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, status, criadoEm: Date.now() });
+      enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, obraId: trabalhadores.find(t => mesmoId(t.id,trabId))?.obraId ?? null, status, criadoEm: Date.now() });
     });
   };
   const verTrabalhador = (t) => { setTrabSelecionado(t); setTela("trab_detalhe"); };
@@ -863,7 +937,7 @@ export default function App() {
         Object.entries(dados.historico).forEach(([dia, m]) => Object.entries(m || {}).forEach(([trabId, status]) => {
           if (!status) return;
           const tid = normId(trabId);
-          enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, status, criadoEm: Date.now(), importado: true });
+          enviarDocNuvem("presencas", `${dia}_${trabId}`, { data: dia, trabId: tid, obraId: (dados.trabalhadores || trabalhadores).find(t => mesmoId(t.id,trabId))?.obraId ?? null, status, criadoEm: Date.now(), importado: true });
         }));
       }
     }
@@ -886,7 +960,7 @@ export default function App() {
     if (dados.cronogramas) setCronog(c => ({ ...c, ...dados.cronogramas }));
     if (dados.movEquip) setMovEquip(a => mesclarPorId(a, dados.movEquip, "movEquip"));
     if (dados.despesasAvulsas) setDespesasAvulsas(a => mesclarPorId(a, dados.despesasAvulsas, "despesasAvulsas"));
-    if (dados.fotosObras) setFotosObras(a => mesclarPorId(a, dados.fotosObras, "fotosObras"));
+    if (dados.fotosObras) setFotosObras(a => mesclarPorId(a, dados.fotosObras.map(f => normalizarFotoLocalPrivada(f,getEmpresaId())), "fotosObras"));
     if (dados.fornecedores) setFornecedores(a => mesclarPorId(a, dados.fornecedores, "fornecedores"));
     if (dados.clientes) setClientes(a => mesclarPorId(a, dados.clientes, "clientes"));
   };
@@ -945,6 +1019,20 @@ export default function App() {
   const login = async (u) => {
     limparRestosDemo(); // login real: apaga demo_* e demo_files deixados pela demonstração
     const eidNovo = u.empresaId || null;
+    if (eidNovo) {
+      const anterior = donoCacheLocal(eidNovo);
+      if (anterior && anterior !== u.firebaseUid) {
+        setErroEntrada({mensagem:'Os dados deste aparelho pertencem a outra conta. Saia pela conta anterior e conclua a limpeza antes de trocar.'});
+        setTelaRaw('login'); return;
+      }
+      // A empresa atual precisa corresponder à que está sendo conferida.
+      setEmpresaId(eidNovo);
+      if (!(await conferirCacheAntesDeAbrir(u))) return;
+      marcarDonoCacheLocal(eidNovo,u.firebaseUid);
+    }
+    suspenderPersistencia(false);
+    setCacheBloqueado(null);
+    setPerfilDados(u);
     if (eidNovo !== (empresaCarregadaRef.current || null)) {
       // Os dados em memória são de outra empresa (ou de antes de existir empresa).
       // Grava o login no prefixo certo e recarrega, para nunca misturar dados entre empresas.
@@ -975,16 +1063,22 @@ export default function App() {
   // Helper: pra onde voltar baseado no perfil (e nas áreas liberadas do escritório)
   const telaInicial = () => telaInicialPermitida(usuario);
   const sairDaConta = async () => {
-    try { await Promise.race([desligarNotificacoes(), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
-    try { await logoutFirebase(); } catch (e) {}
-    setUsuario(null);
-    setEmpresaIdState(null);
-    store.set("usuarioLogado", null);
-    localStorage.removeItem("_kmzero_sessao");
-    setEmpresaId(null);
-    // Recarrega para limpar TODO o estado em memória (evita levar dados desta empresa
-    // para a nuvem de outra empresa se o próximo login for de outra conta)
-    window.location.reload();
+    suspenderPersistencia(true);
+    setBackupSaidaConfirmado(false);
+    setSaidaSegura({ocupado:true});
+    try {
+      const plano = await prepararSaida({empresaId:getEmpresaId(),uid:usuarioRef.current.firebaseUid,perfil:usuarioRef.current});
+      setSaidaSegura({plano,ocupado:false});
+    } catch (e) { setSaidaSegura({ocupado:false,erro:e.message}); }
+  };
+  const concluirSaidaSegura = async () => {
+    const plano = saidaSegura?.plano;
+    if (!plano) return;
+    setSaidaSegura(s => ({...s,ocupado:true,erro:null}));
+    try { await Promise.race([desligarNotificacoes(),new Promise(r => setTimeout(r,3000))]); } catch {}
+    const resultado = await executarSaida({plano,backupConfirmado:backupSaidaConfirmado});
+    if (resultado.ok) { setPerfilDados(null); window.location.reload(); return; }
+    setSaidaSegura(s => ({...s,ocupado:false,erro:resultado.erro,recarregar:resultado.recarregar}));
   };
   // Sair da demonstração: apaga tudo que é demo_* (localStorage), o banco demo_files e a
   // marca da semente, e volta para a vitrine. Sem isso, qualquer "Sair" recarregaria
@@ -1181,6 +1275,7 @@ export default function App() {
   // 🏗️ Telas de campo precisam de obra: equipe sem obra vinculada vê aviso em vez de tela branca
   const TELAS_COM_OBRA = new Set(["fluxo", "material", "fotos_solo", "equip_solo", "diario"]);
   const render = () => {
+    if (tela === 'seguranca') return <TelaSeguranca empresaId={empresaIdState} dono={ehAdministrador} demo={modoDemo} onBack={voltar}/>;
     if (telaBloqueada) return null; // a guarda das áreas já está trocando de tela (sem piscar a proibida)
     if (usuario && !usuarioEhGestor && !obraAtual && TELAS_COM_OBRA.has(tela)) {
       return (
@@ -1217,7 +1312,7 @@ export default function App() {
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => mesmoId(u.id, e.id)); return u || e; }))} />;
       case "diario":     return <TelaDiario obra={obraAtual} usuario={usuario} diario={diario} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => !mesmoId(d.id, id)))} onSalvarFotoObra={salvarFotoObraSync} />;
       case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
-      case "obras":      return <TelaObras usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
+      case "obras":      return <TelaObras usuario={usuario} usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
       case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "mov_equip":  return <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} onVerDetalhe={m => { setMovEquipSel(m); setTela("mov_equip_detalhe"); }} />;
@@ -1284,7 +1379,7 @@ export default function App() {
       case "contatos":      return <TelaContatos obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onVerTrabalhador={verTrabalhador} />;
       case "adiantamentos": return <TelaAdiantamentos obras={obras} trabalhadores={trabalhadores} adiantamentos={adiantamentos} onBack={voltar} onAdd={a => setAdiant(ads => [a, ...ads])} onRemove={id => setAdiant(ads => ads.filter(a => !mesmoId(a.id, id)))} />;
       case "backup":     return <TelaBackup todoEstado={todoEstado} onRestaurar={restaurarBackup} onBack={voltar} />;
-      case "anexos_obra": return obraAnexos ? <TelaAnexosObra obra={obraAnexos} usuario={usuario} onBack={voltar} /> : <TelaObras usuarios={usuarios} obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={setTela} />;
+      case "anexos_obra": return obraAnexos ? <TelaAnexosObra obra={obraAnexos} usuario={usuario} onBack={voltar} /> : <TelaObras usuario={usuario} usuarios={usuarios} obras={obras} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={setTela} />;
 
       case "zerar_tudo": return <TelaZerarTudo
         onBack={voltar}
@@ -1349,6 +1444,65 @@ export default function App() {
     }
   };
 
+  if (cacheBloqueado) {
+    if (cacheBloqueado.seguranca && cacheBloqueado.dono) return <TelaSeguranca empresaId={cacheBloqueado.empresaId} dono demo={false} onBack={() => setCacheBloqueado(s => ({...s,seguranca:false}))}/>;
+    const prepararRecuperacao = async () => {
+      setCacheBloqueado(s => ({...s,ocupado:true,erro:null}));
+      try {
+        const plano = await prepararRecuperacaoDono({empresaId:cacheBloqueado.empresaId,uid:cacheBloqueado.perfil.firebaseUid,perfil:cacheBloqueado.perfil});
+        setCacheBloqueado(s => ({...s,plano,ocupado:false,baixado:false,confirmado:false}));
+      } catch (e) { setCacheBloqueado(s => ({...s,ocupado:false,erro:e.message})); }
+    };
+    const baixarRecuperacao = async () => {
+      setCacheBloqueado(s => ({...s,ocupado:true,erro:null}));
+      try {
+        if (!(await confirmarDonoNoServidor(cacheBloqueado.empresaId,cacheBloqueado.perfil.firebaseUid))) throw new Error('O servidor não confirmou a conta proprietária.');
+        baixarBackupSaida(cacheBloqueado.plano);
+        setCacheBloqueado(s => ({...s,ocupado:false,baixado:true}));
+      } catch (e) { setCacheBloqueado(s => ({...s,ocupado:false,erro:e.message})); }
+    };
+    const recuperar = async () => {
+      setCacheBloqueado(s => ({...s,ocupado:true,erro:null}));
+      const r = await concluirRecuperacaoDono({plano:cacheBloqueado.plano,backupConfirmado:cacheBloqueado.confirmado});
+      if (r.ok) { window.location.reload(); return; }
+      setCacheBloqueado(s => ({...s,ocupado:false,erro:r.erro}));
+    };
+    return <main style={{minHeight:'100vh',background:NAVY,color:'#fff',padding:24,display:'grid',placeItems:'center'}}>
+      <section style={{maxWidth:620}}>
+        <h1>Preservar os dados deste aparelho</h1>
+        <p>Há registros de permissões anteriores. Eles foram preservados e o aplicativo interrompeu a abertura para evitar perder alterações ou mostrar dados fora do seu acesso.</p>
+        {cacheBloqueado.dono ? <>
+          <p>Como proprietário, você pode guardar uma cópia integral antes de ajustar o que este aparelho mostra. A cópia inclui dados empresariais: guarde-a em um local privado.</p>
+          <button disabled={cacheBloqueado.ocupado} style={bigBtn} onClick={prepararRecuperacao}>Preparar cópia de recuperação</button>
+          {cacheBloqueado.plano && <>
+            <button disabled={cacheBloqueado.ocupado} style={{...bigBtn,marginTop:12}} onClick={baixarRecuperacao}>Baixar cópia integral</button>
+            <label style={{display:'block',margin:'20px 0'}}><input type="checkbox" disabled={!cacheBloqueado.baixado || cacheBloqueado.ocupado} checked={!!cacheBloqueado.confirmado} onChange={e => setCacheBloqueado(s => ({...s,confirmado:e.target.checked}))}/> Confirmei que o arquivo foi salvo em um local seguro.</label>
+            <button disabled={!cacheBloqueado.confirmado || cacheBloqueado.ocupado} style={bigBtn} onClick={recuperar}>Ajustar acesso e abrir o aplicativo</button>
+          </>}
+          <button disabled={cacheBloqueado.ocupado} style={{...bigBtn,marginTop:16}} onClick={() => setCacheBloqueado(s => ({...s,seguranca:true}))}>Abrir segurança da empresa</button>
+        </> : <p>Peça ao proprietário que revise a recuperação dos registros. Este perfil não pode exportar os dados que deixaram de estar autorizados.</p>}
+        {cacheBloqueado.ocupado && <p role="status">Conferindo e preservando os dados…</p>}
+        {cacheBloqueado.erro && <p role="alert">{cacheBloqueado.erro}</p>}
+        <button disabled={cacheBloqueado.ocupado} style={{...bigBtn,marginTop:16}} onClick={() => window.location.reload()}>Conferir novamente</button>
+      </section>
+    </main>;
+  }
+
+  if (saidaSegura) return <main style={{minHeight:'100vh',background:NAVY,color:'#fff',padding:24,display:'grid',placeItems:'center'}}>
+    <section aria-labelledby="titulo-saida" style={{maxWidth:520}}>
+      <h1 id="titulo-saida">Sair e limpar este aparelho</h1>
+      <p>Guarde uma cópia antes de limpar. Ela inclui arquivos que podem existir somente neste aparelho.</p>
+      {saidaSegura.plano && <>
+        <p>{saidaSegura.plano.totalAnexos} anexo(s) local(is) incluído(s).</p>
+        <button disabled={saidaSegura.ocupado} onClick={() => {baixarBackupSaida(saidaSegura.plano);setSaidaSegura(s => ({...s,baixado:true}));}} style={bigBtn}>Baixar cópia dos dados deste aparelho</button>
+        <label style={{display:'block',margin:'20px 0'}}><input type="checkbox" disabled={!saidaSegura.baixado || saidaSegura.ocupado} checked={backupSaidaConfirmado} onChange={e => setBackupSaidaConfirmado(e.target.checked)}/> Confirmei que o arquivo foi salvo em um local seguro.</label>
+        <button disabled={saidaSegura.ocupado || (saidaSegura.plano.requerBackup && !backupSaidaConfirmado)} onClick={concluirSaidaSegura} style={bigBtn}>Sair e limpar dados locais</button>
+      </>}
+      {saidaSegura.ocupado && <p role="status">Preparando saída segura…</p>}
+      {saidaSegura.erro && <p role="alert">{saidaSegura.erro}</p>}
+      <button disabled={saidaSegura.ocupado} style={{...bigBtn,marginTop:16}} onClick={() => { if(saidaSegura.recarregar)window.location.reload();else{suspenderPersistencia(false);setSaidaSegura(null);} }}>{saidaSegura.recarregar ? 'Recarregar para tentar novamente':'Voltar ao aplicativo'}</button>
+    </section>
+  </main>;
   return (
     <UsuarioContext.Provider value={usuarioCtx}>
     <EscritorioContext.Provider value={escritorioCtx}>
@@ -1475,4 +1629,3 @@ export default function App() {
     </UsuarioContext.Provider>
   );
 }
-
