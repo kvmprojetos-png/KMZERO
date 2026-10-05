@@ -6,7 +6,9 @@
   "engines": { "node": ">=22" },
   "overrides": {
     "@firebase/firestore": { "@grpc/grpc-js": "^1.14.5" },
-    "gaxios@6": { "uuid": "^11.1.1" }
+    "gaxios@6": { "uuid": "^11.1.1" },
+    "google-gax@4": { "uuid": "^11.1.1" },
+    "teeny-request@9": { "uuid": "^11.1.1" }
   },
   "scripts": {
     "dev": "vite",
@@ -21,7 +23,7 @@
   "dependencies": {
     "dompurify": "^3.4.16",
     "firebase": "^12.19.0",
-    "firebase-admin": "^14.5.0",
+    "firebase-admin": "13.10.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "react": "^18.3.1",
