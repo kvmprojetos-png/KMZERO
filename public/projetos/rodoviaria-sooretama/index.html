@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <base href="/projetos/rodoviaria-sooretama/">
+  <link rel="canonical" href="https://kmzero.vercel.app/projetos/rodoviaria-sooretama/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Um lugar, seu olhar · Rodoviária de Sooretama · KMZERO">
+  <meta property="og:description" content="Explore o estudo preliminar R00 da rodoviária de Sooretama: escolha o caminho, mude a luz e crie seu próprio enquadramento.">
+  <meta property="og:url" content="https://kmzero.vercel.app/projetos/rodoviaria-sooretama/">
+  <meta property="og:image" content="https://kmzero.vercel.app/projetos/rodoviaria-sooretama/assets/render-01.jpg">
+  <meta property="og:image:alt" content="Vista aérea ilustrativa do estudo preliminar R00 da rodoviária de Sooretama.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#102331">
+  <meta name="description" content="Explore três olhares sobre o estudo preliminar do Terminal Rodoviário de Sooretama. Uma visita interativa da KMZERO: chegada, embarque e vista do conjunto.">
+  <title>Um lugar, seu olhar · Rodoviária de Sooretama · KMZERO</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23102331'/%3E%3Cpath d='M8 7v18M9 16L23 7M9 16l14 9' fill='none' stroke='%23d4b473' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="tour.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/?site#projetos" aria-label="Voltar ao site KMZERO">KM<span>ZERO</span><small>ENGENHARIA · ARQUITETURA</small></a>
+    <span class="project-label">SOORETAMA <span>/</span> TERMINAL RODOVIÁRIO</span>
+    <button class="text-button" id="aboutBtn">Sobre o estudo <span aria-hidden="true">↗</span></button>
+  </header>
+  <main id="inicio">
+    <section class="experience" aria-label="Visita ao terminal">
+      <div class="scene" id="scene">
+        <img id="render" src="assets/render-01.jpg" alt="Render ilustrativo da vista aérea: terminal, pátio de ônibus, praça e estacionamento.">
+        <div id="modelHost" hidden></div>
+        <div class="hero-copy" id="intro">
+          <span class="eyebrow">UM LUGAR, SEU OLHAR</span>
+          <h1>Entre no projeto.<br>Escolha o caminho.</h1>
+          <p>A rodoviária de Sooretama vista por quem chega, por quem embarca e por quem imagina o conjunto.</p>
+          <button class="primary" id="enterBtn">Assumir a câmera 3D <span aria-hidden="true">↗</span></button>
+          <button class="ghost" id="imagesBtn">Explorar as imagens <span aria-hidden="true">→</span></button>
+        </div>
+        <div class="scene-top" id="sceneTop" hidden>
+          <span class="pill" id="modeLabel">IMAGENS</span>
+          <button class="mode-button" id="switchMode">Abrir câmera 3D ↗</button>
+        </div>
+        <div class="loading" id="loading" role="status" hidden><span class="spinner"></span><strong>Preparando seu ponto de vista</strong><small>O 3D carrega somente quando você entra.</small><button class="ghost" id="cancelModel">Explorar imagens enquanto carrega</button></div>
+        <div class="scene-bottom" id="sceneBottom" hidden>
+          <span id="gesture">Arraste para trocar a vista.</span>
+          <span id="viewCount">01 / 09</span>
+        </div>
+      </div>
+      <div class="visit-controls" id="controls" hidden>
+        <div class="chapter-copy"><div><span class="eyebrow" id="chapterNumber">OLHAR 01</span><h2 id="chapterTitle">A chegada</h2><p id="chapterDescription">Observe a relação entre o terminal e seu entorno.</p></div><span class="progress" id="progress" aria-live="polite">0 de 3 olhares</span></div>
+        <nav class="chapters" aria-label="Escolha seu ponto de vista">
+          <button data-view="fachada" aria-pressed="false"><span>01</span> Chegar</button>
+          <button data-view="jardim" aria-pressed="false"><span>02</span> Embarcar</button>
+          <button data-view="aerea" aria-pressed="false"><span>03</span> Ver o conjunto</button>
+        </nav>
+        <div class="tools">
+          <div class="light-options" role="group" aria-label="Escolha a iluminação">
+            <button data-light="dia" aria-pressed="true">Dia</button><button data-light="tarde" aria-pressed="false">Tarde</button><button data-light="noite" aria-pressed="false">Noite</button>
+          </div>
+          <div class="model-tools" id="modelTools" hidden><button id="walkBtn" aria-pressed="false">Passeio livre</button><button id="photoBtn">Guardar meu olhar ↗</button></div>
+          <button class="audio-button" id="audioBtn" aria-pressed="false">Som desligado</button>
+          <div class="gallery-tools" id="galleryTools"><button id="prevBtn" aria-label="Vista anterior">←</button><button id="nextBtn" aria-label="Próxima vista">→</button></div>
+        </div>
+        <p class="live-status" id="status" role="status">Escolha por onde começar.</p>
+      </div>
+    </section>
+    <div class="study-note"><span class="status-dot"></span><strong>ESTUDO PRELIMINAR R00</strong><span>Imagens ilustrativas · terreno indicativo</span></div>
+    <section class="closing">
+      <span class="eyebrow">ARQUITETURA QUE SE EXPLORA</span>
+      <h2>O próximo enquadramento<br>pode ser o seu.</h2>
+      <p>Encontre uma vista, mude a luz e guarde uma imagem do seu passeio. Se compartilhar, marque <a href="https://www.instagram.com/kmzero10/" target="_blank" rel="noopener">@kmzero10</a> e conte o que chamou sua atenção.</p>
+      <a class="contact" href="mailto:kvmprojetos@gmail.com?subject=Projeto%20com%20a%20KMZERO">Vamos conversar sobre seu projeto <span aria-hidden="true">↗</span></a>
+      
+    </section>
+  </main>
+  <footer><span>KMZERO · Engenharia e gestão de obras</span><a href="/?site#projetos">← Voltar ao site KMZERO</a></footer>
+  <dialog id="about"><button class="dialog-close" id="closeAbout" aria-label="Fechar informações">×</button><span class="eyebrow">CONTEXTO DO PROJETO</span><h2>Uma visão do estudo.</h2><p>Maquete de apresentação do estudo preliminar R00. O terreno é indicativo (90 × 61,5 m) até o levantamento; níveis do sítio, acabamentos, mobiliário, pessoas, ônibus e iluminação são ilustrativos e não substituem as pranchas técnicas.</p><p>Pórticos, terreno, reserva de incêndio e ligação de drenagem na rede pública ainda dependem de confirmação. Esta apresentação não declara aprovação ou obra executada.</p><p class="small">A trilha instrumental é original, preparada para a KMZERO. O som só toca quando você ativa. Esta visita não usa cadastro ou rastreamento de visitantes.</p></dialog>
+  <audio id="audio" src="assets/trilha-original.m4a" loop preload="none"></audio>
+  <script src="tour.js"></script>
+</body>
+</html>

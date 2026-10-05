@@ -49,6 +49,10 @@
   ],
   "rewrites": [
     {
+      "source": "/projetos/rodoviaria-sooretama",
+      "destination": "/projetos/rodoviaria-sooretama/index.html"
+    },
+    {
       "source": "/__/auth/(.*)",
       "destination": "https://kmzero-aca24.firebaseapp.com/__/auth/$1"
     },

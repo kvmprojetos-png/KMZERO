@@ -195,6 +195,7 @@
       /* Link de texto abaixo dos botões do hero ("Ver como funciona") */
       .link-txt { display: inline-block; margin-top: 14px; font-size: 14px; font-weight: 600; color: var(--km-contorno); text-decoration: underline; text-underline-offset: 3px; padding: 6px 0; }
       .link-txt:hover { color: var(--km-titulo); }
+      .hero-links { display: flex; flex-wrap: wrap; gap: 0 22px; }
       .selos { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; font-weight: 500; color: var(--km-texto2); list-style: none; padding: 0; }
       .selos li { display: flex; align-items: center; gap: 8px; }
       .selos .ico { width: 16px; height: 16px; color: var(--verde); }
@@ -375,6 +376,16 @@
       .publico p { font-size: 14px; color: var(--km-texto2); }
       @media (max-width: 719px) { .publico .cartao { padding: 16px; } .publico h3 { font-size: 16px; } }
 
+      /* Portfólio de engenharia */
+      .projeto-tour { display: grid; overflow: hidden; border: 1px solid var(--km-borda2); border-radius: 18px; background: var(--km-superficie); box-shadow: var(--km-sombra); }
+      .projeto-tour-imagem { display: flex; align-items: center; background: var(--navy2); }
+      .projeto-tour-imagem img { display: block; width: 100%; height: auto; }
+      .projeto-tour-texto { min-width: 0; padding: clamp(24px, 3vw, 40px); align-self: center; }
+      .projeto-tour-texto h3 { font-size: clamp(25px, 3vw, 34px); line-height: 1.12; color: var(--km-titulo); }
+      .projeto-tour-texto p { margin-top: 16px; color: var(--km-texto2); line-height: 1.65; }
+      .projeto-tour-texto .btn { margin-top: 24px; max-width: 100%; white-space: normal; text-align: center; }
+      .projeto-tour-texto small { display: block; margin-top: 16px; color: var(--km-texto2); font-size: 12px; }
+      @media (min-width: 960px) { .projeto-tour { grid-template-columns: 1.35fr 1fr; } }
       /* Quem faz */
       .quem { display: grid; gap: 24px; align-items: center; }
       @media (min-width: 720px) { .quem { grid-template-columns: 200px 1fr; gap: 40px; } }
@@ -519,6 +530,7 @@
       </div>
     </header>
     <nav class="painel-menu" id="menu-movel" aria-label="Menu do site">
+      <a href="#projetos">Projetos · visita 3D</a>
       <a href="#como-funciona">Como funciona</a>
       <a href="#o-que-faz">O que faz</a>
       <a href="#perguntas">Perguntas</a>
@@ -539,7 +551,7 @@
               <!-- Demonstração pública sem login: empresa fictícia "Construtora Exemplo", nada vai para a nuvem -->
               <a class="btn btn-contorno" href="/app/?demo=1">Ver demonstração</a>
             </div>
-            <a class="link-txt" href="#como-funciona">Ver como funciona</a>
+            <div class="hero-links"><a class="link-txt" href="#como-funciona">Ver como funciona</a><a class="link-txt" href="#projetos">Explorar um projeto em 3D</a></div>
             <ul class="selos">
               <li><svg class="ico"><use href="#i-check"/></svg>Sem instalar nada</li>
               <li><svg class="ico"><use href="#i-check"/></svg>Funciona sem sinal</li>
@@ -784,6 +796,27 @@
         </div>
       </section>
 
+      <section class="secao" id="projetos" aria-labelledby="projetos-titulo">
+        <div class="wrap">
+          <div class="cab rev">
+            <span class="rotulo">Portfólio · Engenharia e arquitetura</span>
+            <h2 id="projetos-titulo">Um projeto para explorar.</h2>
+          </div>
+          <article class="projeto-tour rev">
+            <a class="projeto-tour-imagem" href="/projetos/rodoviaria-sooretama/" aria-label="Explorar a rodoviária de Sooretama em 3D">
+              <img src="/projetos/rodoviaria-sooretama/assets/render-01.jpg" width="1672" height="941" loading="lazy" decoding="async" alt="Vista aérea ilustrativa do estudo preliminar da rodoviária de Sooretama, com terminal, praça e pátio de ônibus.">
+            </a>
+            <div class="projeto-tour-texto">
+              <span class="rotulo">Um lugar, seu olhar</span>
+              <h3>Terminal Rodoviário de Sooretama</h3>
+              <p>Conheça o estudo preliminar R00 em uma visita 3D. Escolha o ponto de vista, percorra o terminal e experimente a luz do dia e da noite.</p>
+              <a class="btn btn-ouro" href="/projetos/rodoviaria-sooretama/">Explorar a rodoviária em 3D <span aria-hidden="true">↗</span></a>
+              <small>Imagens ilustrativas · terreno indicativo</small>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section class="secao" id="dados">
         <div class="wrap">
           <div class="cab rev">
@@ -895,6 +928,7 @@
             <a class="lockup" href="#inicio" aria-label="KMZERO Obras, voltar ao início"><b>KM<span>ZERO</span></b><small>Gestão de obras</small></a>
             <p class="tag">A obra inteira no seu celular. O escritório vê tudo na hora.</p>
             <p style="margin-top:8px">Feito em Alegre/ES</p>
+            <p style="margin-top:12px"><a href="/projetos/rodoviaria-sooretama/">Projetos · Explorar a rodoviária em 3D</a></p>
           </div>
           <div>
             <h4>Contato</h4>
