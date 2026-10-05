@@ -92,6 +92,10 @@
   ],
   "rewrites": [
     {
+      "source": "/atualizar-kmzero",
+      "destination": "/app/index.html"
+    },
+    {
       "source": "/projetos/rodoviaria-sooretama",
       "destination": "/projetos/rodoviaria-sooretama/index.html"
     },
