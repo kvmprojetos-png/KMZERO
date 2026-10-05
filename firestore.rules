@@ -49,9 +49,9 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/empresas/$(empresaId))
         && get(/databases/$(database)/documents/empresas/$(empresaId)).data.gestorUid == uid;
     }
-    // A empresa já existe e foi criada por quem está logado (usado no cadastro do gestor)
+    // Empresa existente ou criada no mesmo batch, pelo mesmo login (cadastro atômico).
     function empresaCriadaPorMim(empresaId) {
-      return ehDono(empresaId, request.auth.uid);
+      return getAfter(/databases/$(database)/documents/empresas/$(empresaId)).data.gestorUid == request.auth.uid;
     }
     // E-mail da conta Google de quem está logado, em minúsculas (é a chave do convite)
     function meuEmail() {
@@ -226,14 +226,67 @@ service cloud.firestore {
       // Só quem administra (acesso total ou área Sistema) edita o cadastro da empresa (e não troca o dono)
       allow update: if logado() && possoAdministrar() && minhaEmpresa() == empresaId
         && request.resource.data.gestorUid == resource.data.gestorUid;
-      // Quem criou a empresa pode apagá-la (inclusive para desfazer um cadastro que parou no meio)
-      allow delete: if logado() && resource.data.gestorUid == request.auth.uid;
+      // Apagar apenas o pai deixa subcoleções órfãs e permite a outro login reivindicar o ID.
+      // Exclusão definitiva exige rotina administrativa com limpeza completa e ID reservado.
+      allow delete: if false;
 
-      // Todos os dados da empresa: qualquer usuário ativo DA empresa. As áreas do escritório
+      // Registros de aparelhos são privados e não podem assumir a identidade de outra pessoa.
+      match /pushTokens/{tokenId} {
+        function tokenValido() {
+          return request.resource.data.keys().hasOnly(['uid', 'nome', 'token', 'aparelho', 'atualizadoEm'])
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.token is string
+            && request.resource.data.token.size() > 0
+            && request.resource.data.token.size() <= 4096
+            && request.resource.data.atualizadoEm is number;
+        }
+        allow get: if souDaEmpresa(empresaId) && resource.data.uid == request.auth.uid;
+        allow list: if false;
+        allow create: if souDaEmpresa(empresaId) && tokenValido();
+        allow update: if souDaEmpresa(empresaId) && resource.data.uid == request.auth.uid && tokenValido();
+        allow delete: if souDaEmpresa(empresaId) && resource.data.uid == request.auth.uid;
+      }
+
+      // O app publica uma vez; somente o servidor confirma/atualiza o disparo.
+      match /avisos/{avisoId} {
+        allow read: if souDaEmpresa(empresaId);
+        allow create: if souDaEmpresa(empresaId)
+          && request.resource.data.keys().hasOnly(['id', 'criadoEm', 'de', 'deNome', 'tipo', 'titulo', 'texto', 'para', 'navegarPara'])
+          && request.resource.data.id == avisoId
+          && request.resource.data.de == request.auth.uid
+          && request.resource.data.criadoEm is number
+          && request.resource.data.titulo is string
+          && request.resource.data.titulo.size() > 0
+          && request.resource.data.titulo.size() <= 500
+          && request.resource.data.texto is string
+          && request.resource.data.texto.size() <= 10000
+          && request.resource.data.para is map
+          && request.resource.data.para.tipo in ['todos', 'gestores', 'encarregados', 'obra', 'pessoa']
+          && (souGestor() || request.resource.data.para.tipo in ['gestores', 'pessoa']);
+        allow update, delete: if false;
+      }
+
+      match /avisosLeitura/{uid} {
+        allow get: if souDaEmpresa(empresaId) && uid == request.auth.uid;
+        allow list: if false;
+        allow create, update: if souDaEmpresa(empresaId) && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'ultimaLeitura'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.ultimaLeitura is number;
+        allow delete: if souDaEmpresa(empresaId) && uid == request.auth.uid;
+      }
+
+      // Controle de idempotência do cron: somente Firebase Admin (servidor).
+      match /avisosEnviados/{id} {
+        allow read, write: if false;
+      }
+
+      // Demais dados da empresa: qualquer usuário ativo DA empresa. As áreas do escritório
       // (acessos) NÃO valem aqui: um gestor "Financeiro" ainda lê e grava obras, folha,
       // pedidos... por fora do app. Separar por área é outro projeto.
       match /{colecao}/{docId} {
-        allow read, write: if logado() && souDaEmpresa(empresaId);
+        allow read, write: if !(colecao in ['pushTokens', 'avisos', 'avisosLeitura', 'avisosEnviados'])
+          && logado() && souDaEmpresa(empresaId);
       }
     }
   }

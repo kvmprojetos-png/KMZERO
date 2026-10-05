@@ -24,10 +24,20 @@ const diaUtil = iso => {
 const reais = v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ erro: "Use GET." });
+  }
   const segredo = process.env.CRON_SECRET;
   if (!segredo || req.headers.authorization !== `Bearer ${segredo}`) return res.status(401).json({ erro: "Não autorizado." });
   const etapa = req.query?.etapa === "tarde" ? "tarde" : "noite";
-  const { db, mensageiro } = firebaseAdmin();
+  let admin;
+  try { admin = firebaseAdmin(); }
+  catch (err) {
+    console.error("cron: configuração indisponível", err.code || "falha-interna");
+    return res.status(503).json({ erro: "Notificações indisponíveis no servidor." });
+  }
+  const { db, mensageiro } = admin;
   const hoje = isoNoFuso(new Date());
   const empresas = await db.collection("empresas").listDocuments();
   const resumo = [];

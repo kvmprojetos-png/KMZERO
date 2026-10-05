@@ -12,7 +12,7 @@ const TOKEN_MORTO = new Set([
 export async function destinatarios(db, empresaId, aviso, { excetoUid } = {}) {
   const snap = await db.collection("usuarios").where("empresaId", "==", empresaId).get();
   return snap.docs
-    .map(d => ({ firebaseUid: d.id, ...d.data() }))
+    .map(d => ({ ...d.data(), firebaseUid: d.id }))
     .filter(u => u.ativo !== false && u.firebaseUid !== excetoUid && avisoEhPara(aviso, u))
     .map(u => u.firebaseUid);
 }

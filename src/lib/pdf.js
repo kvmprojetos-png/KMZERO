@@ -1,3 +1,5 @@
+import { sanitizarHTMLDocumento } from "./documentoSeguro.js";
+
 /* ═══════════════════════════════════════════════════════════════════════════
    KMZERO — camada comum dos documentos de saída (PDF / impressão)
 
@@ -20,9 +22,13 @@ export const carregarScript = (src) => new Promise((resolve, reject) => {
 });
 
 export const carregarPDFLibs = async () => {
-  if (window.jspdf && window.html2canvas) return;
-  await carregarScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
-  await carregarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  // O Vite gera arquivos locais separados: só são carregados quando a pessoa
+  // pede o PDF. As versões vêm do lockfile, sem executar scripts de um CDN.
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import("html2canvas"),
+    import("jspdf"),
+  ]);
+  return { html2canvas, jsPDF };
 };
 
 /* ── Paleta FIXA dos documentos (papel branco). Nunca var(--km-*) nem constantes de tema. ── */
@@ -1163,7 +1169,7 @@ export async function abrirOuBaixarHTML(html, filename = "documento", opcoes = {
 
     /* ── Fonte do documento e metadados ── */
     const fonte = document.createElement("div");
-    fonte.innerHTML = corpoHTML;
+    fonte.innerHTML = sanitizarHTMLDocumento(corpoHTML);
     const meta = extrairMeta(fonte, opcoes);
     prepararCabecalhoMinimo(fonte, meta);
 
@@ -1265,9 +1271,7 @@ export async function abrirOuBaixarHTML(html, filename = "documento", opcoes = {
         await Promise.all(svgsTrocados.map(({ img }) => img.complete ? null : new Promise(r => { img.onload = img.onerror = r; })));
       } catch (e) { console.warn("[KMZERO documentos] não foi possível normalizar SVG para o PDF:", e); }
       try {
-        await carregarPDFLibs();
-        const html2canvas = window.html2canvas;
-        const { jsPDF } = window.jspdf;
+        const { html2canvas, jsPDF } = await carregarPDFLibs();
         const pdf = new jsPDF(papel.jspdf[0], "mm", papel.jspdf[1]);
         const lista = [...paginasEl.querySelectorAll(".km-pagina")];
         for (let i = 0; i < lista.length; i++) {

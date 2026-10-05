@@ -5,23 +5,57 @@
 import { firebaseAdmin } from "./_lib/firebaseAdmin.js";
 import { enviarPush } from "./_lib/enviarAviso.js";
 
+const ERROS_LOGIN = new Set([
+  "auth/argument-error", "auth/invalid-id-token", "auth/id-token-expired",
+  "auth/id-token-revoked", "auth/user-disabled", "auth/user-not-found",
+]);
+const idDocumentoValido = valor => typeof valor === "string" && valor.length > 0
+  && Buffer.byteLength(valor, "utf8") <= 1500
+  && !/[\/\u0000-\u001f\u007f]/.test(valor)
+  && valor !== "." && valor !== ".." && !/^__.*__$/.test(valor);
+
+function validarPedido(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    res.status(405).json({ erro: "Use POST." });
+    return null;
+  }
+  const authorization = req.headers?.authorization;
+  const bearer = typeof authorization === "string" && authorization.length <= 16384
+    ? /^Bearer\s+([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/i.exec(authorization) : null;
+  if (!bearer) {
+    res.status(401).json({ erro: "Sem login." });
+    return null;
+  }
+  const body = req.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || !idDocumentoValido(body.empresaId) || !idDocumentoValido(body.avisoId)) {
+    res.status(400).json({ erro: "empresaId e avisoId devem ser identificadores válidos." });
+    return null;
+  }
+  return { idToken: bearer[1], empresaId: body.empresaId, avisoId: body.avisoId };
+}
+
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ erro: "Use POST." });
+  // Rejeita entradas inválidas antes de inicializar credenciais e serviços.
+  if (!validarPedido(req, res)) return;
   let admin;
   try { admin = firebaseAdmin(); }
-  catch (e) { return res.status(503).json({ erro: "Notificações ainda não configuradas no servidor.", detalhe: e.message }); }
+  catch (e) {
+    console.error("notificar: configuração indisponível", e.code || "falha-interna");
+    return res.status(503).json({ erro: "Notificações indisponíveis no servidor." });
+  }
   return tratarNotificar(admin, req, res);
 }
 
 // Separado do handler para poder ser testado com um Firestore de mentira
 export async function tratarNotificar({ db, auth, mensageiro }, req, res) {
+  const pedido = validarPedido(req, res);
+  if (!pedido) return;
   try {
-    const idToken = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-    if (!idToken) return res.status(401).json({ erro: "Sem login." });
-    const eu = await auth.verifyIdToken(idToken);
-
-    const { empresaId, avisoId } = req.body || {};
-    if (!empresaId || !avisoId) return res.status(400).json({ erro: "Faltam empresaId/avisoId." });
+    const { idToken, empresaId, avisoId } = pedido;
+    // Também recusa sessões revogadas e contas desativadas no Firebase Auth.
+    const eu = await auth.verifyIdToken(idToken, true);
 
     const perfil = (await db.collection("usuarios").doc(eu.uid).get()).data();
     if (!perfil || perfil.ativo === false || perfil.empresaId !== empresaId) return res.status(403).json({ erro: "Sem acesso a esta empresa." });
@@ -46,8 +80,8 @@ export async function tratarNotificar({ db, auth, mensageiro }, req, res) {
     await ref.update({ "push.pessoas": r.pessoas, "push.aparelhos": r.aparelhos });
     return res.status(200).json({ ok: true, ...r });
   } catch (e) {
-    console.error("notificar:", e);
-    const semLogin = /id token|auth\//i.test(String(e.message || e.code || ""));
-    return res.status(semLogin ? 401 : 500).json({ erro: semLogin ? "Login expirado. Entre de novo." : "Falha ao enviar.", detalhe: String(e.message || e) });
+    const semLogin = ERROS_LOGIN.has(e.code);
+    if (!semLogin) console.error("notificar:", e.code || "falha-interna");
+    return res.status(semLogin ? 401 : 500).json({ erro: semLogin ? "Login expirado. Entre de novo." : "Falha ao enviar." });
   }
 }

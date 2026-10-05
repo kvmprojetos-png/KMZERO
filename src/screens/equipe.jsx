@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { fotoRasterDataURL } from "../lib/documentoSeguro.js";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, precoAlim } from "../utils.js";
@@ -596,8 +597,8 @@ export function gerarFichaCadastralPDF(t, obra, empresa = {}) {
   })();
 
   // Foto 3x4: a cadastrada (data URL) ou o espaço para colar
-  const fotoSrc = typeof t.foto === "string" && /^data:image\//.test(t.foto) ? t.foto : "";
-  const fotoHTML = (cls) => fotoSrc ? `<div class="${cls}"><img src="${fotoSrc}" alt="Foto 3x4"></div>` : `<div class="${cls} vazia"><span>FOTO</span>3x4</div>`;
+  const fotoSrc = fotoRasterDataURL(t.foto);
+  const fotoHTML = (cls) => fotoSrc ? `<div class="${cls}"><img src="${esc(fotoSrc)}" alt="Foto 3x4"></div>` : `<div class="${cls} vazia"><span>FOTO</span>3x4</div>`;
 
   // Dados da empresa cliente no crachá (nunca da KM)
   const nomeEmpresaCracha = vz(empresa.nomeFantasia) || vz(empresa.razaoSocial) || "";
@@ -617,7 +618,7 @@ export function gerarFichaCadastralPDF(t, obra, empresa = {}) {
             <div class="cracha-cargo">${esc(vz(t.cargo).toUpperCase()) || "&nbsp;"}</div>
             <div class="cracha-detalhe">
               <b>CPF</b> ${fmtCPF(t.cpf)}<br>
-              <b>Matrícula</b> #${idTrab}<br>
+              <b>Matrícula</b> #${esc(idTrab)}<br>
               <b>Admissão</b> ${fmtData(t.admissao || t.inicio)}<br>
               <b>Tipo sanguíneo</b> ${v(t.tipoSanguineo)}<br>
               <b>Emergência</b> ${fmtTel(t.emergenciaTel)}

@@ -1,5 +1,5 @@
 import { getApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where, getCountFromServer } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query, where, getCountFromServer, writeBatch } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "firebase/storage";
 import { usuarioAtual } from "../firebase.js";
 import { normId, normalizarColecao } from "./ids.js";
@@ -221,27 +221,25 @@ export async function registrarEmpresa(dadosEmpresa, firebaseUid, nomeGestor, em
   try {
     const empresaRef = doc(collection(fb.db, "empresas"));
     const empresaId = empresaRef.id;
-    await setDoc(empresaRef, {
+    // Empresa e perfil nascem juntos. Se o perfil for recusado, nada é gravado;
+    // não há exclusão de empresa que deixe subcoleções com um ID reutilizável.
+    const lote = writeBatch(fb.db);
+    lote.set(empresaRef, {
       ...semUndefined(dadosEmpresa),
       criadoEm: Date.now(),
       gestorUid: firebaseUid,
     });
-    try {
-      await setDoc(doc(fb.db, "usuarios", firebaseUid), {
-        empresaId,
-        nome: nomeGestor,
-        email: String(emailGestor || "").trim().toLowerCase(),
-        foto: fotoGestor || "",
-        perfil: "gestor",
-        acessos: null, // dono da empresa: acesso total
-        ativo: true,
-        criadoEm: Date.now(),
-      });
-    } catch (e) {
-      // Não deixa empresa órfã se o perfil não pôde ser gravado
-      try { await deleteDoc(empresaRef); } catch {}
-      throw e;
-    }
+    lote.set(doc(fb.db, "usuarios", firebaseUid), {
+      empresaId,
+      nome: nomeGestor,
+      email: String(emailGestor || "").trim().toLowerCase(),
+      foto: fotoGestor || "",
+      perfil: "gestor",
+      acessos: null, // dono da empresa: acesso total
+      ativo: true,
+      criadoEm: Date.now(),
+    });
+    await lote.commit();
     return empresaId;
   } catch (e) {
     console.error("registrarEmpresa:", e);

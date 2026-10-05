@@ -4,6 +4,7 @@ import { NAVY, GOLD, GREEN, RED, BLUE, LIGHT, labelS, inputS, selS, T, ESCURO, D
 import { criarConvite, removerConvite, atualizarPerfilNuvem, definirAcessoAtivo, resumoEmpresaParaTroca } from "../lib/store.js";
 import { Btn, KMHeader, KMFooter, Modal, LogoKM, AvatarUsuario } from "../components/ui.jsx";
 import { Icone } from "../components/Icones.jsx";
+import { OrbeEntrada } from "../components/OrbeEntrada.jsx";
 import { normId } from "../lib/ids.js";
 import { useTema, OPCOES_TEMA } from "../lib/useTema.js";
 import { useModoEscritorio } from "../lib/useLargura.js";
@@ -13,8 +14,7 @@ import { GRUPOS_MENU, AREAS_ACESSO, AREA_FIXA, PRESETS_ACESSOS, normalizarAcesso
 const VERSAO_APP = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "";
 
 /* ════════════════════════════════════════════════════════════════════════
-   ENTRADA — "engenharia à noite": paleta ESCURO fixa nos dois temas, malha de
-   planta e brilho teal (os mesmos da vitrine), LogoKM, ouro só na ação.
+   ENTRADA — paleta escura fixa nos dois temas, orbe azul e dourado e LogoKM.
    A moldura (MolduraEntrada) é a mesma para Entrar, Primeiro acesso e Registro:
    no PC (>= 1024 px) painel dividido 58/42, no celular uma coluna.
 ════════════════════════════════════════════════════════════════════════ */
@@ -31,14 +31,14 @@ const ARGUMENTOS = [
 /* CSS da entrada numa constante de módulo, injetada UMA vez no <head> (como o menu).
    Cores fixas de propósito: a entrada é sempre escura, não segue o tema. */
 const CSS_ENTRADA = `
-.km-entrada-tela { position: relative; flex: 1; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; overflow: hidden; color: ${ESCURO.texto}; background: linear-gradient(160deg, #081a21 0%, #052f3d 55%, #0b7285 140%); }
-.km-entrada-tela::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 32px); }
-.km-entrada-tela::after { content: ""; position: absolute; top: -220px; right: -180px; width: 720px; height: 620px; pointer-events: none; background: radial-gradient(closest-side, rgba(11,114,133,0.38), rgba(11,114,133,0)); }
+.km-entrada-tela { position: relative; flex: 1; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; overflow: hidden; color: ${ESCURO.texto}; background: radial-gradient(ellipse at 18% 35%, #102843 0%, #080f1d 48%, #060b14 100%); }
+.km-entrada-tela::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, transparent 55%, #bfa16a07); }
+.km-entrada-tela::after { content: ""; position: absolute; bottom: -200px; right: -180px; width: 620px; height: 520px; pointer-events: none; background: radial-gradient(closest-side, #7b66371c, transparent); }
 .km-entrada-miolo { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; }
 .km-entrada-coluna { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 28px 16px 12px; }
 .km-entrada-painel { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; box-sizing: border-box; padding: 48px 40px 32px; display: grid; grid-template-columns: 58fr 42fr; gap: 56px; align-items: center; }
 .km-entrada-painel > * { min-width: 0; }
-.km-entrada-cartao { width: 100%; max-width: 420px; box-sizing: border-box; background: ${ESCURO.cartao}; border: 1px solid ${ESCURO.borda}; border-radius: 20px; padding: 24px 20px; box-shadow: var(--km-sombra2, 0 20px 60px rgba(0,0,0,0.5)); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+.km-entrada-cartao { width: 100%; max-width: 420px; box-sizing: border-box; background: linear-gradient(145deg, #162538eb, #0c1523f5); border: 1px solid #adc5e329; border-radius: 20px; padding: 24px 20px; box-shadow: 0 24px 80px #0005; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .km-entrada-painel .km-entrada-cartao { padding: 28px; }
 .km-entrada-titulo { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: ${ESCURO.texto}; }
 .km-entrada-sub { margin: 6px 0 18px; font-size: 13px; line-height: 1.55; color: ${ESCURO.texto2}; }
@@ -149,7 +149,8 @@ export function MolduraEntrada({ children }) {
         {pc ? (
           <div className="km-entrada-painel">
             <div>
-              <LogoKM tamanho={64} />
+              <LogoKM tamanho={48} />
+              <OrbeEntrada />
               <div className="km-entrada-headline">A obra no celular.<br />O escritório na hora.</div>
               <ul className="km-entrada-args">
                 {ARGUMENTOS.map(a => (
@@ -167,7 +168,8 @@ export function MolduraEntrada({ children }) {
           </div>
         ) : (
           <div className="km-entrada-coluna">
-            <LogoKM tamanho={44} style={{ alignItems: "center", marginBottom: 18 }} />
+            <LogoKM tamanho={40} style={{ alignItems: "center", marginBottom: 12 }} />
+            <OrbeEntrada />
             <div className="km-entrada-cartao">{children}</div>
             <ul className="km-entrada-selos" aria-label="O que o KMZERO faz">
               {ARGUMENTOS.map(a => (
