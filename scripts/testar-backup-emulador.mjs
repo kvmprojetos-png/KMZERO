@@ -32,6 +32,14 @@ try {
   const persistido = (await db.doc(`empresas/${empresaId}/obras/obra-demo`).get()).data();
   await db.doc(`empresas/${empresaId}/obras/obra-demo/etapas/etapa-demo`).set({ status: "planejada" });
   await db.doc(`empresas/${empresaId}/pais/sem-documento/filhos/neto-demo`).set({ preservado: true });
+  const presencasEsperadas = Array.from({ length: 200 }, (_, i) => ({
+    path: `empresas/${empresaId}/presencas/presenca-${String(i).padStart(4, "0")}`,
+    data: { dia: "2026-10-05", trabalhadorId: `ficticio-${i}`, valor: i % 3, marca: "APENAS EMULADOR" },
+  }));
+  const sementes = db.batch();
+  for (const p of presencasEsperadas) sementes.set(db.doc(p.path), p.data);
+  await sementes.commit();
+  await db.doc(`empresas/${empresaId}/pais/outro-ausente/filhos/ausente/niveis/neto-profundo-demo`).set({ preservado: "profundo" });
   const foto = bucket.file(`empresas/${empresaId}/fotosObras/foto-demo.jpg`);
   await foto.save(Buffer.from([255, 216, 255, 217]), { resumable: false, metadata: { contentType: "image/jpeg", metadata: { firebaseStorageDownloadTokens: "token-ficticio-apenas-emulador" } } });
   const manifesto = await criarBackupEmpresa(opts);
@@ -44,6 +52,16 @@ try {
     assert.equal(verificado.snapshot, undefined);
   });
   const { snapshot } = await carregarBackupEmpresa({ ...opts, backupId: manifesto.id });
+  await check("cópia ampla preserva todas as presenças e árvores de pais ausentes", async () => {
+    const lidos = new Map(snapshot.documentos.map(d => [d.path, d]));
+    assert.equal(lidos.size, snapshot.documentos.length);
+    for (const p of presencasEsperadas) {
+      assert.ok(lidos.has(p.path), `Registro ausente: ${p.path}`);
+    }
+    assert.ok(lidos.has(`empresas/${empresaId}/pais/outro-ausente/filhos/ausente/niveis/neto-profundo-demo`));
+    assert.ok(!lidos.has(`empresas/${empresaId}/pais/outro-ausente`));
+    assert.ok(!lidos.has(`empresas/${empresaId}/pais/outro-ausente/filhos/ausente`));
+  });
   await check("coleções aninhadas e descendente de pai ausente preservados", async () => {
     assert.ok(snapshot.documentos.some(d => d.path === `empresas/${empresaId}/obras/obra-demo/etapas/etapa-demo`));
     assert.ok(snapshot.documentos.some(d => d.path === `empresas/${empresaId}/pais/sem-documento/filhos/neto-demo`));

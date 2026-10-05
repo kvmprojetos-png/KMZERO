@@ -75,39 +75,40 @@ export async function capturarSnapshotEmpresa({ db, bucket, empresaId, uid }) {
   const vistos = new Set();
   const inicio = new Date().toISOString();
   let tamanho = 0;
-  async function percorrer(snap) {
-    if (!snap.exists || vistos.has(snap.ref.path)) return;
-    if (documentos.length >= MAX_DOCUMENTOS) throw new Error("Empresa excede o limite deste backup. Use uma exportação administrada antes de continuar.");
-    vistos.add(snap.ref.path);
-    const registro = { path: snap.ref.path, data: codificarValorFirestore(snap.data()), updateTime: snap.updateTime ? codificarValorFirestore(snap.updateTime) : null };
-    tamanho += Buffer.byteLength(JSON.stringify(registro));
-    if (tamanho > MAX_BYTES) throw new Error("Empresa excede o tamanho seguro deste backup. Nenhuma migração foi iniciada.");
-    documentos.push(registro);
-    const colecoes = await snap.ref.listCollections();
-    for (const colecao of colecoes.sort((a, b) => a.id.localeCompare(b.id))) {
-      if (snap.ref.path === `empresas/${empresaId}` && colecao.id === "_backups") continue;
-      // listDocuments inclui pais apagados com subcoleções; eles também precisam
-      // ser percorridos para não perder descendentes órfãos no snapshot.
-      const refs = await colecao.listDocuments();
-      for (const ref of refs) {
-        const filho = await ref.get();
-        if (filho.exists) await percorrer(filho);
-        else await percorrerOrfao(ref);
+  async function percorrer(iniciais) {
+    let fila = iniciais.map(snap => ({ ref: snap.ref, snap }));
+    while (fila.length) {
+      const proxima = [];
+      // Oito leituras independentes por vez, com teto global mesmo em árvores
+      // aninhadas. Não serializar duas viagens de rede para cada presença.
+      for (let i = 0; i < fila.length; i += 8) {
+        await Promise.all(fila.slice(i, i + 8).map(async ({ ref, snap: pronto }) => {
+          if (vistos.has(ref.path)) return;
+          vistos.add(ref.path);
+          const snap = pronto || await ref.get();
+          if (snap.exists) {
+            if (documentos.length >= MAX_DOCUMENTOS) throw new Error("Empresa excede o limite deste backup. Use uma exportação administrada antes de continuar.");
+            const registro = { path: ref.path, data: codificarValorFirestore(snap.data()), updateTime: snap.updateTime ? codificarValorFirestore(snap.updateTime) : null };
+            tamanho += Buffer.byteLength(JSON.stringify(registro));
+            if (tamanho > MAX_BYTES) throw new Error("Empresa excede o tamanho seguro deste backup. Nenhuma migração foi iniciada.");
+            documentos.push(registro);
+          }
+          // Referências de pais ausentes também podem ter descendentes. Nunca
+          // encerrar a busca apenas porque o documento do pai foi apagado.
+          const colecoes = await ref.listCollections();
+          for (const colecao of colecoes.sort((a, b) => a.id.localeCompare(b.id))) {
+            if (ref.path === `empresas/${empresaId}` && colecao.id === "_backups") continue;
+            for (const filho of await colecao.listDocuments()) proxima.push({ ref: filho });
+          }
+        }));
       }
+      fila = proxima;
     }
   }
-  async function percorrerOrfao(ref) {
-    for (const colecao of await ref.listCollections()) {
-      for (const filho of await colecao.listDocuments()) {
-        const snap = await filho.get();
-        if (snap.exists) await percorrer(snap); else await percorrerOrfao(filho);
-      }
-    }
-  }
-  await percorrer(empresa);
+  await percorrer([empresa]);
   for (const nome of ["usuarios", "convites"]) {
     const encontrados = await db.collection(nome).where("empresaId", "==", empresaId).get();
-    for (const snap of encontrados.docs) await percorrer(snap);
+    await percorrer(encontrados.docs);
   }
   const fotos = [];
   let pageToken;
@@ -126,7 +127,7 @@ export async function capturarSnapshotEmpresa({ db, bucket, empresaId, uid }) {
   documentos.sort((a, b) => a.path.localeCompare(b.path));
   fotos.sort((a, b) => a.path.localeCompare(b.path));
   return { versao: VERSAO, empresaId, ownerUid: uid, iniciadoEm: inicio, concluidoEm: new Date().toISOString(), documentos, fotos,
-    escopo: "Firestore e metadados das fotos; leitura sequencial, bytes das fotos não duplicados" };
+    escopo: "Firestore e metadados das fotos; leitura paralela limitada e não transacional, bytes das fotos não duplicados" };
 }
 
 function resumoManifesto(m) {
