@@ -110,6 +110,10 @@
   ],
   "crons": [
     {
+      "path": "/api/cron-avisos?etapa=fechamento",
+      "schedule": "0 20 * * 1-5"
+    },
+    {
       "path": "/api/cron-avisos?etapa=tarde",
       "schedule": "0 19 * * 1-5"
     },
@@ -119,6 +123,12 @@
     }
   ],
   "functions": {
+    "api/cron-avisos.js": {
+      "maxDuration": 60
+    },
+    "api/assistente.js": {
+      "maxDuration": 60
+    },
     "api/seguranca.js": {
       "maxDuration": 300
     },

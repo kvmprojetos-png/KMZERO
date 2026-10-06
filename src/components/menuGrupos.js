@@ -36,6 +36,7 @@ export const GRUPOS_MENU = [
     { nav: "alertas",   label: "Alertas",     icone: "alert-triangle",   badge: { chave: "alertas", tipo: "alerta" }, busca: "problemas vencimentos atrasos" },
     { nav: "dashboard", label: "Indicadores", icone: "bar-chart-3",      busca: "dashboard gráficos números" },
     { nav: "mensagens", label: "Mensagens",   icone: "message-square",   badge: { chave: "mensagens", tipo: "info" }, busca: "chat conversa" },
+    { nav: 'assistente', label: 'Assistente de obras', icone: 'message-square', busca: 'ia inteligência artificial resumo prioridades relatório' },
   ] },
   { id: "obras", titulo: "Obras", itens: [
     { nav: "obras",          label: "Obras",          icone: "hard-hat",    busca: "cadastro de obra canteiro" },

@@ -15,6 +15,7 @@ export const TIPOS_AVISO = {
   manual: { icone: "📢", nome: "Aviso" },
   pedido: { icone: "📦", nome: "Pedido de material" },
   ponto:  { icone: "⏰", nome: "Ponto" },
+  fechamento: {icone:'📋',nome:'Fechamento do dia'},
   folha:  { icone: "💰", nome: "Pagamento" },
   prazo:  { icone: "⚠️", nome: "Prazos e alertas" },
   teste:  { icone: "🔔", nome: "Teste" },

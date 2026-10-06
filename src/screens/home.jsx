@@ -12,6 +12,7 @@ import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirma
 import { useEscritorio } from "../components/ui.jsx";
 import { useTema } from "../lib/useTema.js";
 import { SinoAvisos } from "./avisos.jsx";
+import {situacaoNotificacoes} from '../lib/avisos.js';
 // Nomes das telas iguais aos do menu lateral ("Indicadores", "Alertas", "Avisos"…) e e-mail do desenvolvedor
 import { EMAIL_DEV, labelDaTela, telaPermitida } from "../components/menuGrupos.js";
 import { normId, mesmoId } from "../lib/ids.js";
@@ -76,6 +77,11 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>Obra: {obra?.nome}</div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
+        {usuario?.firebaseUid && situacaoNotificacoes() !== 'ligada' && <section style={{background:T.superficie,border:`1px solid ${T.borda}`,borderRadius:12,padding:14,marginBottom:14}}>
+          <div style={{fontWeight:700,color:T.titulo}}>Receba os lembretes da sua obra</div>
+          <p style={{fontSize:12,color:T.texto2,lineHeight:1.5}}>Ative as notificações neste aparelho e teste o som para acompanhar os avisos mesmo quando estiver fora desta tela.</p>
+          <button type="button" onClick={()=>onNav('avisos')} style={{background:NAVY,color:'#fff',border:0,borderRadius:8,padding:'11px 14px',fontWeight:700,cursor:'pointer'}}>Abrir Avisos e ativar</button>
+        </section>}
         <div style={{ marginBottom: 14 }} className="km-card-anim">
           <div style={{ fontSize: 22, fontWeight: 800, color: T.titulo }}>
             {emojiSaudacao} {saudacao}, {usuario?.nome?.split(" ")[0] || "Marcos"}!
@@ -331,6 +337,7 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
       cor: "#a855f7",
       desc: "Relatórios e mensagens",
       itens: [
+        { icon: '✦', l: L('assistente'), nav: 'assistente', c: '#0b7285' },
         { icon: "📐", l: L("produtividade"), nav: "produtividade", c: "#15803d" },
         { icon: "📈", l: L("consolidado"),   nav: "consolidado",   c: "#a855f7" },
         { icon: "📓", l: "Diário Obra",     nav: "diario",        c: "#2563eb" },

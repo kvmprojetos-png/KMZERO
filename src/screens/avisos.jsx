@@ -55,7 +55,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
   const desligar = async () => { await desligarNotificacoes(); setSituacao(situacaoNotificacoes()); setMsgAparelho("Desligadas neste aparelho."); };
   const testar = async () => {
     setMsgAparelho("Enviando teste…");
-    const r = await onEnviar({ tipo: "teste", titulo: "🔔 Teste do KMZERO", texto: "Se você está vendo isto, as notificações estão funcionando neste aparelho.", para: { tipo: "pessoa", uid: eu } });
+    const r = await onEnviar({ tipo: "teste", titulo: "🔔 Teste do KMZERO", texto: "Aviso de teste para sua conta. Confira se a notificação chegou ao aparelho e use Ativar e testar som para verificar o áudio do app.", para: { tipo: "pessoa", uid: eu } });
     setMsgAparelho(r.ok ? (r.aparelhos ? `Envio aceito para ${r.aparelhos} aparelho(s). Confira a notificação no aparelho; o volume e o modo silencioso são controlados pelo sistema.` : "Teste gravado, mas nenhum aparelho seu está com notificação ligada.") : r.erro);
   };
 

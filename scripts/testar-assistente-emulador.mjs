@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import {initializeApp,deleteApp} from 'firebase-admin/app';
+import {getFirestore} from 'firebase-admin/firestore';
+import {initializeTestEnvironment,assertFails} from '@firebase/rules-unit-testing';
+import {getDoc,doc} from 'firebase/firestore';
+import {readFileSync} from 'node:fs';
+import {reservarAnalise,contextoObraAssistente} from '../api/_lib/assistenteObras.js';
+import {publicarLembreteCampo} from '../api/_lib/lembretesCampo.js';
+
+if (!/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || '')) throw new Error('Teste exclusivo do emulador local.');
+const projeto='demo-kmzero-security';
+const app=initializeApp({projectId:projeto},'teste-assistente');
+const db=getFirestore(app);
+const env=await initializeTestEnvironment({projectId:projeto,firestore:{rules:readFileSync(new URL('../firestore.rules',import.meta.url),'utf8')}});
+const agora=Date.parse('2039-03-07T15:00:00Z'),dia='2039-03-07',eid='empresa-teste-assistente';
+try {
+  const c=db.collection('_iaCotas');
+  await c.doc(`global_${dia}`).set({quantidade:0});
+  await c.doc(`empresa_${eid}_${dia}`).set({quantidade:19});
+  // Dois aparelhos competem pela última análise da empresa: somente um reserva.
+  const resultados=await Promise.allSettled([reservarAnalise(db,eid,`a-${Date.now()}`,agora),reservarAnalise(db,eid,`b-${Date.now()}`,agora)]);
+  assert.equal(resultados.filter(r=>r.status==='fulfilled').length,1);
+  assert.equal(resultados.find(r=>r.status==='rejected').reason.status,429);
+  assert.equal((await c.doc(`empresa_${eid}_${dia}`).get()).data().quantidade,20);
+  assert.equal((await c.doc(`global_${dia}`).get()).data().quantidade,1);
+  await db.collection('usuarios').doc('gestor-teste-ia').set({empresaId:eid,perfil:'gestor',ativo:true});
+  await assertFails(getDoc(doc(env.authenticatedContext('gestor-teste-ia').firestore(),`_iaCotas/global_${dia}`)));
+  const base=db.collection('empresas').doc(eid);
+  await base.collection('obras').doc('42').set({nome:'Obra fictícia',valorContrato:100000,local:'ENDERECO_PRIVADO'});
+  await base.collection('cronogramas').doc('42').set({obraId:42,etapas:[{nome:'Etapa fictícia',fim:'2039-03-01',progresso:0}]});
+  await base.collection('pedidos').doc('numero').set({obraId:42,status:'Aguardando',enc:'PESSOA_PRIVADA'});
+  await base.collection('pedidos').doc('string').set({obraId:'42',status:'Aprovado',valor:9999});
+  await base.collection('pedidos').doc('outra').set({obraId:43,status:'Aguardando'});
+  const contexto=await contextoObraAssistente(db,eid,'42',{perfil:'gestor',ativo:true},agora);
+  assert.equal(contexto.suprimentos.totalNaAmostra,2);
+  assert.equal(contexto.cronograma.atrasadas,1);
+  assert.doesNotMatch(JSON.stringify(contexto),/100000|9999|PRIVADO|PRIVADA/);
+  let disparos=0;
+  const enviar=async()=>{disparos++;return {pessoas:1,aparelhos:1};};
+  const chave=`ponto_${dia}_42_enc`;
+  const aviso={tipo:'ponto',titulo:'Lembrete fictício',texto:'Teste local',para:{tipo:'obra',obraId:42,perfil:'encarregado'},navegarPara:'fluxo'};
+  const lembretes=await Promise.all([publicarLembreteCampo(db,null,eid,chave,aviso,{enviar,agora}),publicarLembreteCampo(db,null,eid,chave,aviso,{enviar,agora})]);
+  assert.equal(lembretes.filter(Boolean).length,1);assert.equal(disparos,1);
+  assert.equal((await base.collection('avisos').get()).size,1);
+  const campo=env.authenticatedContext('campo-lembrete').firestore();
+  await db.collection('usuarios').doc('campo-lembrete').set({empresaId:eid,perfil:'encarregado',obraId:42,ativo:true});
+  const id=(await base.collection('avisos').get()).docs[0].id;
+  assert.equal((await getDoc(doc(campo,`empresas/${eid}/avisos/${id}`))).exists(),true);
+  await db.collection('usuarios').doc('campo-outra-obra').set({empresaId:eid,perfil:'encarregado',obraId:43,ativo:true});
+  await assertFails(getDoc(doc(env.authenticatedContext('campo-outra-obra').firestore(),`empresas/${eid}/avisos/${id}`)));
+  console.log('5 verificações no Firestore real do emulador: cota concorrente, privacidade dos contadores, contexto minimizado com IDs mistos, lembrete concorrente único e destinatário de campo restrito à obra. Nenhuma IA ou conta real chamada.');
+} finally {await env.cleanup();await deleteApp(app);}

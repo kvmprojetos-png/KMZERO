@@ -15,6 +15,7 @@ import { firebaseAdmin } from "./_lib/firebaseAdmin.js";
 import { enviarPush } from "./_lib/enviarAviso.js";
 import { isoNoFuso, somarDias, diasEntre, dataBR, dataBRAno, proximoPagamento, podeEnviarAviso } from "../src/lib/avisosRegras.js";
 import { feriadoEm } from "../src/utils.js";
+import {obrasComPontoPendente,pendenciasFechamento,publicarLembreteCampo} from './_lib/lembretesCampo.js';
 
 const diaUtil = iso => {
   const dow = new Date(iso + "T12:00:00").getDay();
@@ -40,7 +41,8 @@ export default async function handler(req, res) {
   if (!segredo || req.headers.authorization !== `Bearer ${segredo}`) return res.status(401).json({ erro: "Não autorizado." });
   const ids = empresasCronConfiguradas(process.env.CRON_EMPRESA_IDS);
   if (!ids.length) return res.status(503).json({ erro: "Agendamento sem empresas habilitadas." });
-  const etapa = req.query?.etapa === "tarde" ? "tarde" : "noite";
+  const etapa = req.query?.etapa || 'noite';
+  if (!['tarde','fechamento','noite'].includes(etapa)) return res.status(400).json({erro:'Etapa inválida.'});
   let admin;
   try { admin = firebaseAdmin(); }
   catch (err) {
@@ -53,7 +55,7 @@ export default async function handler(req, res) {
   const resumo = [];
   for (const e of empresas) {
     try { resumo.push({ empresa: e.id, ...(await verificarEmpresa(db, mensageiro, e.id, etapa, hoje)) }); }
-    catch (err) { console.error("cron", e.id, err); resumo.push({ empresa: e.id, erro: String(err.message || err) }); }
+    catch (err) { console.error("cron", e.id, err.code || 'falha-interna'); resumo.push({ empresa: e.id, erro: 'Falha ao processar os avisos desta empresa.' }); }
   }
   return res.status(200).json({ etapa, hoje, resumo });
 }
@@ -80,22 +82,40 @@ export async function verificarEmpresa(db, mensageiro, empresaId, etapa, hoje) {
 
   // ── Ponto de hoje ──
   const obrasAtivas = obras.filter(o => o.status === "Ativa" || !o.status);
+  if (etapa === 'fechamento') {
+    if (!diaUtil(hoje)) return {enviados};
+    // Metadados do dia; não baixa fotos nem textos/nomes presentes no RDO.
+    const dataBr=hoje.split('-').reverse().join('/');
+    const lerDia=async nome=>{
+      const partes=await Promise.all([['dataIso',hoje],['data',dataBr],['data',hoje]].map(([campo,dia])=>base.collection(nome).where(campo,'==',dia).select('obraId','data','dataIso').get()));
+      return [...new Map(partes.flatMap(s=>s.docs).map(d=>[d.id,d.data()])).values()];
+    };
+    const [rdos,fotos]=await Promise.all([lerDia('rdos'),lerDia('fotosObras')]);
+    for (const o of pendenciasFechamento(obrasAtivas,rdos,fotos,hoje)) {
+      const chave=`fechamento_${hoje}_${o.id}_enc`;
+      if (jaFoi.has(chave)) continue;
+      const faltando=[o.rdoPendente ? 'RDO do dia' : null,o.fotoPendente ? 'fotos do dia' : null].filter(Boolean).join(' e ');
+      const r=await publicarLembreteCampo(db,mensageiro,empresaId,chave,{tipo:'fechamento',titulo:'📋 Fechamento do dia pendente',
+        texto:`${o.nome}: falta registrar na nuvem ${faltando}. Confira os registros e conclua o dia no KMZERO.`,
+        para:{tipo:'obra',obraId:o.id,perfil:'encarregado'},navegarPara:o.rdoPendente ? 'fluxo':'fotos_solo'});
+      if (r) enviados.push(r);
+    }
+    return {enviados};
+  }
   if (diaUtil(hoje)) {
     const pres = (await base.collection("presencas").where("data", "==", hoje).get()).docs.map(d => d.data());
-    const comPonto = new Set(pres.map(p => String(p.trabId)));
-    const semPonto = obrasAtivas.filter(o => {
-      const equipe = trabalhadores.filter(t => String(t.obraId) === String(o.id) && t.ativo !== false);
-      return equipe.length > 0 && !equipe.some(t => comPonto.has(String(t.id)));
-    });
+    const semPonto = obrasComPontoPendente(obrasAtivas,trabalhadores,pres);
     if (etapa === "tarde") {
       for (const o of semPonto) {
         const chave = `ponto_${hoje}_${o.id}_enc`;
         if (jaFoi.has(chave)) continue;
-        await criar({ tipo: "ponto", titulo: "⏰ Ponto de hoje ainda não lançado", texto: `${o.nome}: lance a presença da equipe antes de encerrar o dia.`, para: { tipo: "obra", obraId: o.id, perfil: "encarregado" }, navegarPara: "fluxo" });
-        await marcar(chave);
+        const r=await publicarLembreteCampo(db,mensageiro,empresaId,chave,{ tipo: 'ponto', titulo: '⏰ Ponto de hoje incompleto',
+          texto: `${o.nome}: falta o registro de ${o.pontoPendente} pessoa(s) na nuvem. Confira a situação da equipe antes de encerrar o dia.`,
+          para: { tipo: 'obra', obraId: o.id, perfil: 'encarregado' }, navegarPara: 'fluxo' });
+        if (r) enviados.push(r);
       }
     } else if (semPonto.length && !jaFoi.has(`ponto_${hoje}_gestores`)) {
-      await criar({ tipo: "ponto", titulo: `📋 Ponto não lançado hoje (${semPonto.length} obra${semPonto.length > 1 ? "s" : ""})`, texto: semPonto.map(o => `• ${o.nome}`).join("\n"), para: { tipo: "area", area: "campo" }, navegarPara: "calendario" });
+      await criar({ tipo: "ponto", titulo: `📋 Ponto incompleto hoje (${semPonto.length} obra${semPonto.length > 1 ? "s" : ""})`, texto: semPonto.map(o => `• ${o.nome}`).join("\n"), para: { tipo: "area", area: "campo" }, navegarPara: "calendario" });
       await marcar(`ponto_${hoje}_gestores`);
     }
   }

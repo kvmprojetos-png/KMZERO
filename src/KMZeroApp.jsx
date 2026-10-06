@@ -39,6 +39,7 @@ import { TelaRDO, gerarPDFRDORabnt, TelaCronograma, TelaCronogramaPro, CurvaSCha
 import { TelaFotos, TelaGaleria, TelaAnexosObra, TelaMensagens, TelaLinks } from "./screens/midia.jsx";
 import { TelaAvisos } from "./screens/avisos.jsx";
 import { TelaSeguranca } from './screens/seguranca.jsx';
+import { TelaAssistente } from './screens/assistente.jsx';
 import { prepararSomAvisos, tocarSomAviso, novoAvisoSonoro } from './lib/somAvisos.js';
 import { observarAvisosNuvem, observarLeituraAvisos, marcarAvisosLidos, publicarAviso, renovarNotificacoes, desligarNotificacoes } from "./lib/avisos.js";
 import { avisoEhPara, uidDe } from "./lib/avisosRegras.js";
@@ -1251,7 +1252,7 @@ export default function App() {
   // abertas a partir dele + alias antigo "folha" + Minha conta. Antes a lista tinha 13 nomes
   // que não existiam no switch e por isso não bloqueava nada.
   const TELAS_GESTOR = new Set([
-    ...TODAS_TELAS_MENU,
+    ...[...TODAS_TELAS_MENU].filter(t => t !== 'avisos'), // Avisos e ativação do aparelho também pertencem à equipe de campo.
     "folha", "trab_detalhe", "pedido_detalhe", "mov_pess_detalhe", "mov_equip_detalhe", "anexos_obra", "minha_conta",
   ]);
 
@@ -1283,6 +1284,7 @@ export default function App() {
   const render = () => {
     if (tela === 'seguranca') return <TelaSeguranca empresaId={empresaIdState} dono={ehAdministrador} demo={modoDemo} onBack={voltar}/>;
     if (telaBloqueada) return null; // a guarda das áreas já está trocando de tela (sem piscar a proibida)
+    if (tela === 'assistente') return <TelaAssistente empresaId={empresaIdState} demo={modoDemo} onBack={voltar}/>;
     if (usuario && !usuarioEhGestor && !obraAtual && TELAS_COM_OBRA.has(tela)) {
       return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
