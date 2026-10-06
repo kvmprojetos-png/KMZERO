@@ -1,5 +1,5 @@
 import { carimbarFoto } from "./suprimentos.jsx";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
@@ -10,6 +10,7 @@ import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosM
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Tabela, useEscritorio } from "../components/ui.jsx";
 import { normId, mesmoId } from "../lib/ids.js";
 import { proximoNumeroRDO, rdosDoDiaObra } from "./rdo.jsx";
+import { DiarioAssistido } from "../components/DiarioAssistido.jsx";
 
 export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos, pedidos, diario, usuario, empresa, historico, rdosEmitidos, fotosObras = [], onBack, onSavePresencas, onAutoEmitirRDO, onSalvarFotoObra }) {
   const [etapa, setEtapa] = useState(0);
@@ -742,17 +743,24 @@ export function TelaFolha({ obras, trabalhadores, historico, onBack }) {
    DIÁRIO DE OBRA — anotações livres
 ════════════════════════════════════ */
 
-export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onAdd, onRemove, onSalvarFotoObra }) {
+export function TelaDiario({ obra, usuario, diario, empresaId, demo = false, fotosObras = [], onBack, onAdd, onRemove, onSalvarFotoObra }) {
   const [texto, setTexto] = useState("");
   const [foto, setFoto] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [gravando, setGravando] = useState(false);
-  const [recognition, setRecognition] = useState(null);
+  const recognition = useRef(null);
+  const [ocupadoIA, setOcupadoIA] = useState(false);
+  const [textoAplicadoIA, setTextoAplicadoIA] = useState(false);
   const [erroVoz, setErroVoz] = useState("");
   const [fotoVer, setFotoVer] = useState(null); // visualização fullscreen
   const minhasObras = diario.filter(d => mesmoId(d.obraId, obra.id)).sort((a, b) => b.ts - a.ts);
+  useEffect(() => () => {
+    const rec = recognition.current;
+    if (rec) {rec.onresult = null;rec.onend = null;rec.onerror = null;rec.abort();recognition.current = null;}
+  }, []);
 
   const adicionar = async () => {
+    if (gravando || ocupadoIA || salvando) return;
     if (!texto.trim() && !foto) return;
     setSalvando(true);
 
@@ -797,6 +805,7 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
 
     onAdd({ id: Date.now(), obraId: normId(obra.id), autor: usuario?.nome || "—", texto: texto.trim(), foto: fotoFinal, ts: Date.now() });
     setTexto("");
+    setTextoAplicadoIA(false);
     setFoto(null);
     setSalvando(false);
   };
@@ -810,18 +819,21 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
   };
 
   const iniciarVoz = () => {
+    if (gravando || ocupadoIA || salvando) return;
     setErroVoz("");
+    setTextoAplicadoIA(false);
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRec) {
-      setErroVoz("Seu navegador não suporta reconhecimento de voz. Use Chrome ou Edge no celular.");
+      setErroVoz("Ditado indisponível neste navegador. Use o microfone do teclado do celular ou escreva o relato e depois organize com IA.");
       return;
     }
     const rec = new SpeechRec();
     rec.lang = "pt-BR";
     rec.continuous = true;
     rec.interimResults = true;
-    let textoFinal = texto;
+    let textoFinal = texto.trim() ? texto.trim() + " " : "";
     rec.onresult = (event) => {
+      if (recognition.current !== rec) return;
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
@@ -830,16 +842,18 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
       }
       setTexto(textoFinal + interim);
     };
-    rec.onerror = (e) => { setErroVoz("Erro: " + e.error); setGravando(false); };
-    rec.onend = () => setGravando(false);
-    rec.start();
-    setRecognition(rec);
-    setGravando(true);
+    rec.onerror = (e) => {
+      if (recognition.current !== rec) return;
+      rec.onresult = null;rec.onend = null;recognition.current = null;rec.abort();
+      setErroVoz(e.error === "not-allowed" ? "Permita o microfone neste navegador para ditar. Seu texto foi preservado." : "O ditado foi interrompido: " + e.error);setGravando(false);
+    };
+    rec.onend = () => {if (recognition.current === rec) {recognition.current = null;setGravando(false);}};
+    try {rec.start();recognition.current = rec;setGravando(true);}
+    catch {setErroVoz("Não foi possível iniciar o microfone. Você pode escrever o relato e organizar com IA.");}
   };
 
   const pararVoz = () => {
-    if (recognition) recognition.stop();
-    setGravando(false);
+    if (recognition.current) recognition.current.stop();
   };
 
   return (
@@ -847,10 +861,12 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
       <KMHeader title="Diário de Obra" sub={obra.nome} onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ background: T.superficie, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.sombra }}>
-          <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={4} placeholder="Anote aqui ou use o botão de voz: incidentes, observações, mudanças, problemas..." style={{ ...inputS, resize: "none", fontFamily: "inherit", marginBottom: 8 }} />
+          <label style={{display:"block",fontWeight:700,fontSize:13,color:T.titulo,marginBottom:6}}>Seu relato da obra</label>
+          <textarea aria-label="Seu relato da obra" value={texto} disabled={gravando || ocupadoIA || salvando} maxLength={5000} onChange={e => {setTexto(e.target.value);setTextoAplicadoIA(false);}} rows={5} placeholder="Relate os serviços executados, materiais, equipamentos, ocorrências e o que ficou pendente. Informe quantidades apenas quando tiver certeza." style={{ ...inputS, resize: "vertical", fontFamily: "inherit", marginBottom: 8 }} />
+          <p style={{fontSize:11,color:T.texto2,margin:"0 0 8px"}}>Pare o ditado e confira o texto antes de usar a IA. O reconhecimento de voz depende do navegador e da permissão do microfone.</p>
 
           {!gravando ? (
-            <button onClick={iniciarVoz} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: RED, color: "#fff", fontWeight: 800, cursor: "pointer", marginBottom: 8, boxShadow: "0 3px 10px #dc262644", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <button onClick={iniciarVoz} disabled={ocupadoIA || salvando} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: RED, color: "#fff", fontWeight: 800, cursor: "pointer", marginBottom: 8, boxShadow: "0 3px 10px #dc262644", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               🎤 Ditar por Voz
             </button>
           ) : (
@@ -861,6 +877,8 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
           )}
 
           {erroVoz && <div style={{ background: T.erroFundo, color: RED, padding: "6px 10px", borderRadius: 6, fontSize: 11, marginBottom: 8 }}>⚠️ {erroVoz}</div>}
+          <DiarioAssistido empresaId={empresaId} obraId={obra.id} texto={texto} demo={demo} disabled={gravando || salvando} onOcupado={setOcupadoIA} onAplicar={t => {setTexto(t);setTextoAplicadoIA(true);}} />
+          {textoAplicadoIA && <p role="status" style={{fontSize:12,color:T.infoTexto}}>Texto revisado aplicado. Confira a anotação e toque em Adicionar anotação para salvar.</p>}
 
           {/* Anexar foto na ocorrência */}
           {foto ? (
@@ -880,7 +898,7 @@ export function TelaDiario({ obra, usuario, diario, fotosObras = [], onBack, onA
               💡 Foto será <b>carimbada</b> e enviada pra galeria
             </div>
           )}
-          <Btn label={salvando ? "⏳ Carimbando foto..." : "📝 Adicionar Anotação"} color={salvando ? "#ccc" : NAVY} disabled={salvando} onClick={adicionar} />
+          <Btn label={salvando ? "⏳ Carimbando foto..." : "📝 Adicionar Anotação"} color={salvando ? "#ccc" : NAVY} disabled={salvando || gravando || ocupadoIA} onClick={adicionar} />
         </div>
 
         <style>{`@keyframes blink { 50% { opacity: 0.3; } } @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.02); } }`}</style>

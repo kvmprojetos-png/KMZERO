@@ -129,6 +129,9 @@
     "api/assistente.js": {
       "maxDuration": 60
     },
+    "api/diario-ia.js": {
+      "maxDuration": 60
+    },
     "api/seguranca.js": {
       "maxDuration": 300
     },

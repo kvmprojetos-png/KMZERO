@@ -13,6 +13,14 @@ O servidor seleciona nome/situação/tipo da obra, etapas e avanço do cronogram
 
 Modelo fixo: `openai/gpt-oss-120b`. Sem troca automática de provedor ou modelo. Limites internos: 20 solicitações por empresa/dia, 40 no aplicativo/dia e intervalo de 10 segundos por usuário. Reserva atômica no Firestore, inclusive em caso de falha do provedor. Esses limites controlam o uso do aplicativo; a disponibilidade e as cotas do plano gratuito permanecem sob controle da Groq. Sem chave, a tela mostra os dados reais e informa que a IA aguarda ativação.
 
+## Diário falado com IA
+
+No Diário de obra, o encarregado/apontador dita ou escreve o relato, encerra o ditado e confere o texto. O reconhecimento de voz usa o recurso do navegador (`SpeechRecognition`/`webkitSpeechRecognition`), quando disponível e autorizado; não há envio de arquivo de áudio à Groq. Sem esse recurso, é possível usar o ditado do teclado do aparelho ou escrever o texto.
+
+Após autorização específica na tela, **Organizar com IA** envia somente o texto revisado (10–5.000 caracteres), o nome da obra lido pelo servidor e a data de referência. `/api/diario-ia` verifica sessão revogada, empresa e acesso de campo. Encarregados/apontadores só podem solicitar rascunhos da obra vinculada ao perfil. Gestores precisam da área campo. Não consulta outros diários, fotos, folha, contatos, contratos ou cronogramas. Compartilha as cotas do assistente acima e mantém a chave exclusivamente no servidor.
+
+A IA retorna um rascunho e pontos a conferir, preservando quantidades, incertezas e a distinção entre serviços executados e planos. A resposta é validada; resultados truncados ou inválidos são recusados. O autor pode editar o rascunho, marca que o revisou e usa **Usar texto revisado no diário**. Isso apenas preenche a anotação: **Adicionar anotação** continua sendo necessário para salvar. A geração não grava diário nem RDO. As anotações salvas já são usadas nas ocorrências do RDO do mesmo dia pelo fluxo existente. Ao trocar de obra, empresa ou usuário, o rascunho e o microfone são encerrados para evitar associação incorreta. Falhas da IA preservam o relato original.
+
 ## Notificações e som
 
 `VITE_FCM_VAPID_KEY` contém apenas a chave pública Web Push. A ativação é individual: Avisos → Ativar notificações → permitir no navegador. Avisos → Ativar e testar som libera Web Audio após uma interação. O usuário pode silenciar o som local. Com o app fechado, o toque depende do sistema operacional, volume e modo silencioso. Não há promessa de áudio personalizado em segundo plano.
