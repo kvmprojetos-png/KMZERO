@@ -11,8 +11,8 @@ import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosM
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade } from "../components/ui.jsx";
 import { normId, mesmoId } from "../lib/ids.js";
 
-export function TelaCronograma({ obras, cronogramas, onBack, onSalvar, empresa: empresaProp }) {
-  const [obraId, setObraId] = useState(obras[0]?.id || 1);
+export function TelaCronograma({ obras, cronogramas, obraInicialId, onBack, onSalvar, empresa: empresaProp }) {
+  const [obraId, setObraId] = useState(() => obras.find(o => mesmoId(o.id,obraInicialId))?.id ?? obras[0]?.id ?? 1);
   // Empresa cliente para o documento: vem por prop; sem prop, lê a mesma chave que o app grava (Sistema → Empresa)
   const [empresaStore, setEmpresaStore] = useState(null);
   useEffect(() => {
@@ -399,8 +399,8 @@ export function CurvaSChart({ pontos }) {
 }
 
 
-export function TelaCronogramaPro({ obras, cronogramas, onBack, onSalvar }) {
-  const [obraId, setObraId] = useState(obras[0]?.id || 1);
+export function TelaCronogramaPro({ obras, cronogramas, obraInicialId, onBack, onSalvar }) {
+  const [obraId, setObraId] = useState(() => obras.find(o => mesmoId(o.id,obraInicialId))?.id ?? obras[0]?.id ?? 1);
   const [aba, setAba] = useState("gantt");
   const [etapaSel, setEtapaSel] = useState(null);
   const [custoInput, setCustoInput] = useState("");

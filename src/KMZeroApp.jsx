@@ -23,6 +23,7 @@ import { politicaColecao, filtrarCachePermitido, administraPessoas, perfilCampo 
 import { registrarAbaProtegida, prepararSaida, baixarBackupSaida, executarSaida, donoCacheLocal, marcarDonoCacheLocal, lerLimpezaPendente, concluirLimpezaPendente, higienizarCachePermissoes, prepararRecuperacaoDono, concluirRecuperacaoDono } from './lib/saidaSegura.js';
 import { normId, mesmoId, normalizarColecao } from "./lib/ids.js";
 import { normalizarFotoLocalPrivada } from './lib/fotoCaminho.js';
+import { useNavegacao } from './lib/navegacao.js';
 
 /* ── Telas separadas por domínio ── */
 import { TelaEntrar, TelaPrimeiroAcesso, TelaMinhaConta, TelaAcessosApp, TelaConviteOutraEmpresa } from "./screens/auth.jsx";
@@ -163,11 +164,12 @@ const upsertRdo = (lista, r) => {
 };
 
 export default function App() {
-  const [tela, setTelaRaw]        = useState("login");
+  const navegacao = useNavegacao();
+  const {tela,contexto:contextoTela,setTela,setTelaRaw,voltar,limparHistorico} = navegacao;
   // Demonstração pública (/app/?demo=1): decidido uma vez, na abertura
   const [modoDemo] = useState(detectarDemo);
-  const [historicoTelas, setHistoricoTelas] = useState([]); // pilha de navegação
   const [usuario, setUsuario]     = useState(null);
+  navegacao.setRaiz(() => telaInicialPermitida(usuario));
   const [saidaSegura, setSaidaSegura] = useState(null);
   const [cacheBloqueado, setCacheBloqueado] = useState(null);
   const [backupSaidaConfirmado, setBackupSaidaConfirmado] = useState(false);
@@ -176,37 +178,9 @@ export default function App() {
   // Largura da tela: >= 1024 px vira "modo escritório" (só para gestor, ver `escritorio` abaixo)
   const modoEscritorio = useModoEscritorio();
 
-  // Wrapper inteligente: quando muda de tela, guarda a anterior no histórico
-  const setTela = (novaTela) => {
-    setTelaRaw(prev => {
-      // Não guarda no histórico se: é login, é a mesma tela, ou é "home/gestor" (telas raiz)
-      const ehTelaRaiz = ["login", "home", "gestor"].includes(prev);
-      if (prev !== novaTela && !ehTelaRaiz) {
-        setHistoricoTelas(h => [...h, prev]);
-      } else if (ehTelaRaiz && prev !== novaTela) {
-        // Quando sai de uma tela raiz, limpa histórico
-        setHistoricoTelas([]);
-      }
-      return novaTela;
-    });
-  };
-
-  // Voltar: vai pra última tela do histórico, ou pra raiz se vazio
-  const voltar = () => {
-    setHistoricoTelas(h => {
-      if (h.length > 0) {
-        const novaPilha = [...h];
-        const anterior = novaPilha.pop();
-        setTelaRaw(anterior);
-        return novaPilha;
-      }
-      // Sem histórico: vai pra tela raiz da pessoa (Painel, a primeira área liberada, home ou login)
-      setTelaRaw(telaInicialPermitida(usuario));
-      return [];
-    });
-  };
-
   const [empresaIdState, setEmpresaIdState] = useState(null);
+  // Conta, empresa e permissões não compartilham o histórico de navegação.
+  useEffect(() => {limparHistorico();}, [empresaIdState,assinaturaPermissoes,limparHistorico]);
   const [usuarios, setUsuarios]   = useState([]);
   const [usuarioGoogle, setUsuarioGoogle] = useState(null); // conta Google sem empresa (primeiro acesso)
   const [erroEntrada, setErroEntrada] = useState("");        // aviso para a tela de entrada: { codigo, mensagem, email } (redirect, acesso desativado)
@@ -994,7 +968,6 @@ export default function App() {
   // Convite de outra empresa para quem já tem a própria (login e sessão aberta neste aparelho)
   const abrirEscolhaConvite = (escolha) => {
     setEscolhaConvite(escolha);
-    setHistoricoTelas([]);
     setTelaRaw("convite_empresa");
   };
   // Sessão já aberta (não passa por resolverEntradaGoogle): faz a mesma pergunta, em segundo plano
@@ -1209,7 +1182,7 @@ export default function App() {
     const qs = new URLSearchParams(window.location.search);
     if (!qs.has("aviso")) return;
     qs.delete("aviso");
-    window.history.replaceState(null, "", window.location.pathname + (qs.toString() ? `?${qs}` : ""));
+    window.history.replaceState(window.history.state, "", window.location.pathname + (qs.toString() ? `?${qs}` : ""));
     setTela("avisos");
   }, [carregando, usuario?.firebaseUid]);
 
@@ -1235,7 +1208,6 @@ export default function App() {
   const telaBloqueada = !carregando && usuario?.perfil === "gestor" && !telaPermitida(usuario, tela);
   useEffect(() => {
     if (!telaBloqueada) return;
-    setHistoricoTelas([]);
     setTelaRaw(telaInicialPermitida(usuario));
     setAvisoAcesso(Date.now());
   }, [telaBloqueada, usuario, tela]);
@@ -1260,7 +1232,7 @@ export default function App() {
   if (usuario && usuario.perfil === "encarregado" && TELAS_GESTOR.has(tela)) {
     return (
       <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-        <KMHeader title="Acesso restrito" sub="Apenas gestores" onBack={() => setTela("home")} />
+        <KMHeader title="Acesso restrito" sub="Apenas gestores" onBack={voltar} />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
           <div>
             <div style={{ fontSize: 64, marginBottom: 16 }}>🔒</div>
@@ -1288,7 +1260,7 @@ export default function App() {
     if (usuario && !usuarioEhGestor && !obraAtual && TELAS_COM_OBRA.has(tela)) {
       return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-          <KMHeader title="Sem obra vinculada" sub="Fale com o gestor" onBack={() => setTela("home")} />
+          <KMHeader title="Sem obra vinculada" sub="Fale com o gestor" onBack={voltar} />
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 30, textAlign: "center" }}>
             <div>
               <div style={{ fontSize: 64, marginBottom: 16 }}>🏗️</div>
@@ -1297,7 +1269,7 @@ export default function App() {
                 Peça ao gestor para vincular você a uma obra em Sistema → Usuários e acessos.
               </div>
               <button onClick={() => window.location.reload()} style={{ background: NAVY, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13, marginRight: 8 }}>🔄 Atualizar</button>
-              <button onClick={() => setTela("home")} style={{ background: T.superficie2, color: T.titulo, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
+              <button onClick={voltar} style={{ background: T.superficie2, color: T.titulo, border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Voltar</button>
             </div>
           </div>
           <KMFooter />
@@ -1312,17 +1284,17 @@ export default function App() {
         ? <TelaConviteOutraEmpresa usuario={escolhaConvite.usuario} convite={escolhaConvite.convite} onEntrar={entrarNoConvite} onContinuar={continuarNaMinhaEmpresa} />
         : <TelaEntrar onGoogle={concluirLoginGoogle} erroInicial={erroEntrada} />;
       case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} />;
-      case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={() => setTela("home")} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
-      case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={() => setTela("home")} onAddPedido={criarPedidoSync} />;
-      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => mesmoId(f.obraId, obraAtual?.id)).length} onBack={() => setTela("home")} onSalvar={salvarFotoObraSync} />;
+      case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={voltar} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
+      case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={voltar} onAddPedido={criarPedidoSync} />;
+      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => mesmoId(f.obraId, obraAtual?.id)).length} onBack={voltar} onSalvar={salvarFotoObraSync} />;
       case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} usuario={usuario} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => !mesmoId(f.id, id)))} />;
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => mesmoId(x.id, f.id) ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => !mesmoId(x.id, id)))} />;
-      case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={() => setTela("home")} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => mesmoId(u.id, e.id)); return u || e; }))} />;
+      case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={voltar} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => mesmoId(u.id, e.id)); return u || e; }))} />;
       case "diario":     return <TelaDiario key={`${empresaIdState}:${obraAtual?.id}:${usuario?.firebaseUid}`} obra={obraAtual} usuario={usuario} diario={diario} empresaId={empresaIdState} demo={modoDemo} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => !mesmoId(d.id, id)))} onSalvarFotoObra={salvarFotoObraSync} />;
       case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
-      case "obras":      return <TelaObras usuario={usuario} usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={setTela} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra"); }} />;
-      case "cronograma": return <TelaCronograma obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
-      case "cronograma_pro": return <TelaCronogramaPro obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
+      case "obras":      return <TelaObras usuario={usuario} usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} obraSelecionadaId={contextoTela.obraId} onSelecionarObra={id => navegacao.setContexto(id == null ? {} : {obraId:id})} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={destino => setTela(destino,contextoTela.obraId == null ? {} : {obraId:contextoTela.obraId})} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra",{obraId:obra.id}); }} />;
+      case "cronograma": return <TelaCronograma obraInicialId={contextoTela.obraId} obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
+      case "cronograma_pro": return <TelaCronogramaPro obraInicialId={contextoTela.obraId} obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "mov_equip":  return <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} onVerDetalhe={m => { setMovEquipSel(m); setTela("mov_equip_detalhe"); }} />;
       case "mov_equip_detalhe": return movEquipSel ? <TelaMovEquipDetalhe mov={movEquip.find(x => mesmoId(x.id, movEquipSel.id)) || movEquipSel} obras={obras} equips={equips} ferramentas={ferramentas} usuario={usuario} onBack={voltar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} /> : <TelaMovEquip obras={obras} equips={equips} ferramentas={ferramentas} movEquip={movEquip} usuario={usuario} onBack={voltar} onSolicitar={movEquipSolicitar} onAprovar={movEquipAprovar} onNegar={movEquipNegar} onDevolver={movEquipDevolver} />;
       case "equipe":     return <TelaEquipe obras={obras} trabalhadores={trabalhadores} usuarios={usuarios} onBack={voltar} onAdd={(t) => {
@@ -1376,7 +1348,7 @@ export default function App() {
       case "folha_quinzenal": return <TelaFolhaQuinzenal obras={obras} trabalhadores={trabalhadores} historico={historico} adiantamentos={adiantamentos} abastecimentos={abastecimentos} ativos={ativos} empresa={empresa} onBack={voltar} onSalvarFolha={f => setFolhasSalvas(fs => [f, ...fs])} onMarcarPago={(t, novaData) => editarTrabalhador({ ...t, ultimoPagamento: novaData })} onMarcarValesDescontados={marcarValesDescontados} />;
       case "hist_folha":      return <TelaHistFolha obras={obras} trabalhadores={trabalhadores} folhasSalvas={folhasSalvas} onBack={voltar} onRemover={id => { setFolhasSalvas(fs => fs.filter(f => !mesmoId(f.id, id))); setAdiant(ads => ads.map(a => mesmoId(a.folhaId, id) ? { ...a, descontadoEm: null, folhaId: null, folhaPeriodo: null, descontado: false } : a)); }} />;
       case "manutencao":      return <TelaManutencao obras={obras} ativos={ativos} ferramentas={ferramentas} equips={equips} manutencoes={manutencoes} onBack={voltar} onAdd={salvarManutencao} onRemover={id => setManut(ms => ms.filter(m => !mesmoId(m.id, id)))} />;
-      case "solicitar_mov": return <TelaSolicitarMov obras={obras} trabalhadores={trabalhadores} usuario={usuario} onBack={() => setTela("home")} onSolicitar={m => setMov(ms => [m, ...ms])} />;
+      case "solicitar_mov": return <TelaSolicitarMov obras={obras} trabalhadores={trabalhadores} usuario={usuario} onBack={voltar} onSolicitar={m => setMov(ms => [m, ...ms])} />;
       case "aprovar_mov":   return <TelaAprovarMov obras={obras} trabalhadores={trabalhadores} movimentacoes={movimentacoes} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => mesmoId(m.id, id) ? { ...m, status: "Negado" } : m))} onVerDetalhe={m => { setMovPessSel(m); setTela("mov_pess_detalhe"); }} />;
       case "mov_pess_detalhe": return movPessSel ? <TelaMovPessoalDetalhe mov={movimentacoes.find(x => mesmoId(x.id, movPessSel.id)) || movPessSel} obras={obras} trabalhadores={trabalhadores} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => mesmoId(m.id, id) ? { ...m, status: "Negado" } : m))} /> : <TelaAprovarMov obras={obras} trabalhadores={trabalhadores} movimentacoes={movimentacoes} onBack={voltar} onAprovar={aprovarMov} onNegar={id => setMov(ms => ms.map(m => mesmoId(m.id, id) ? { ...m, status: "Negado" } : m))} />;
       case "ferramentas":   return <TelaFerramentas obras={obras} ferramentas={ferramentas} onBack={voltar} onAdd={f => setFerr(fs => [...fs, f])} onEditar={f => setFerr(fs => fs.map(x => mesmoId(x.id, f.id) ? f : x))} onRemover={id => setFerr(fs => fs.filter(f => !mesmoId(f.id, id)))} />;

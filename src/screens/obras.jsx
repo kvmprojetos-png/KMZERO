@@ -18,10 +18,12 @@ const dataBR = (iso) => {
   return isNaN(d) ? "—" : d.toLocaleDateString("pt-BR");
 };
 
-export function TelaObras({ usuario, obras, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
+export function TelaObras({ usuario, obras, usuarios = [], clientes = [], trabalhadores, ativos, equips, ferramentas, pedidos, abastecimentos, manutencoes, cronogramas, historico, recebimentos, rdosEmitidos, obraSelecionadaId, onSelecionarObra, onBack, onAdd, onEditar, onRemover, onNav, onNavAnexos }) {
   const [modal, setModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
-  const [obraSelecionada, setObraSelecionada] = useState(null);
+  const [obraLocal, setObraLocal] = useState(null);
+  const obraSelecionada = onSelecionarObra ? obras.find(o => mesmoId(o.id, obraSelecionadaId)) : obraLocal;
+  const setObraSelecionada = o => onSelecionarObra ? onSelecionarObra(o?.id ?? null) : setObraLocal(o);
   const [form, setForm] = useState({ nome: "", local: "", status: "Ativa", tipo: "Edificação", apontadorId: "", clienteId: "", cliente: "", clienteDoc: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const escritorio = !!useEscritorio(); // modo escritório (gestor em tela larga): mostra a tabela-resumo acima dos cartões
@@ -55,7 +57,7 @@ export function TelaObras({ usuario, obras, usuarios = [], clientes = [], trabal
       historico={historico}
       recebimentos={recebimentos}
       rdosEmitidos={rdosEmitidos}
-      onBack={() => setObraSelecionada(null)}
+      onBack={onSelecionarObra ? onBack : () => setObraSelecionada(null)}
       onEditar={() => {
         // FIX: fechar tela de detalhe ANTES de abrir o modal
         // Antes: o modal abria mas ficava escondido atrás do detalhe

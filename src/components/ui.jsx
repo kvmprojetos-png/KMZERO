@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { useModoEscritorio } from "../lib/useLargura.js";
-import { TELAS_MENU } from "../lib/layoutEscritorio.js";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 
 /* ── Modo escritório ──
@@ -176,14 +175,13 @@ export function LogoKM({ tamanho = 24, tagline = true, cor = "#fff", style: sx }
 /* Cabeçalho de tela. No celular: logo + voltar + pessoa logada + título (como sempre).
    No escritório vira BARRA DE PÁGINA: 56 px, navy plano nos dois temas (os slots `right`
    das telas usam fundo rgba branca e precisam de fundo escuro), sem logo e sem pessoa
-   logada (o menu lateral já tem os dois). "‹ Voltar" só quando há onBack E a tela não
-   está no menu (telas de detalhe) — ou quando a tela passa `voltar` (subtelas internas,
-   como o detalhe da obra dentro de "obras"). Sem título e sem sub não renderiza nada. */
+   logada (o menu lateral já tem os dois). "‹ Voltar" aparece sempre que a tela oferece
+   onBack, incluindo as seções do menu. Sem título e sem sub não renderiza nada. */
 export function KMHeader({ title, sub, onBack, right, voltar }) {
   const escritorio = useEscritorio();
   if (escritorio) {
     if (!title && !sub) return null;
-    const mostrarVoltar = !!onBack && (voltar || !TELAS_MENU.has(escritorio.tela));
+    const mostrarVoltar = !!onBack;
     return (
       <div className="km-barra-pagina" style={{ background: T.barra, minHeight: 56, padding: "0 24px", display: "flex", alignItems: "center", gap: 16, position: "sticky", top: 0, zIndex: 20, borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, boxSizing: "border-box" }}>
         {mostrarVoltar && (
