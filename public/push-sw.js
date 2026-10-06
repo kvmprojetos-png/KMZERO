@@ -16,6 +16,7 @@ self.addEventListener("push", (event) => {
     tag: d.tag || undefined,
     renotify: !!d.tag,
     lang: "pt-BR",
+    silent: false,
     vibrate: [200, 100, 200],
     data: { url: d.url || "/app/" },
   }));

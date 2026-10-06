@@ -4,6 +4,7 @@ import { KMHeader, KMFooter, EmptyState } from "../components/ui.jsx";
 import { TIPOS_AVISO, descreverPara, uidDe } from "../lib/avisosRegras.js";
 import { situacaoNotificacoes, ativarNotificacoes, desligarNotificacoes } from "../lib/avisos.js";
 import { normId } from "../lib/ids.js";
+import { observarSomAvisos, definirSomAvisos, tocarSomAviso } from '../lib/somAvisos.js';
 
 /* Avisos: lista do que chegou para a pessoa + (gestor) escrever aviso para todos,
    gestores/diretores, encarregados, uma obra ou uma pessoa. O encarregado só
@@ -38,6 +39,13 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
   const [situacao, setSituacao] = useState(situacaoNotificacoes());
   const [ligando, setLigando] = useState(false);
   const [msgAparelho, setMsgAparelho] = useState("");
+  const [som, setSom] = useState('aguarda_toque'), [msgSom, setMsgSom] = useState('');
+  useEffect(() => observarSomAvisos(setSom), []);
+  const testarSom = async () => {
+    await definirSomAvisos(true);
+    const tocou = tocarSomAviso({ teste: true });
+    setMsgSom(tocou ? 'Teste de áudio iniciado. Se não ouviu, confira o volume e se esta aba está silenciada.' : 'O navegador não liberou o áudio. Toque novamente ou confira as permissões de som do site.');
+  };
   const ligar = async () => {
     setLigando(true); setMsgAparelho("");
     const r = await ativarNotificacoes(usuario);
@@ -48,7 +56,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
   const testar = async () => {
     setMsgAparelho("Enviando teste…");
     const r = await onEnviar({ tipo: "teste", titulo: "🔔 Teste do KMZERO", texto: "Se você está vendo isto, as notificações estão funcionando neste aparelho.", para: { tipo: "pessoa", uid: eu } });
-    setMsgAparelho(r.ok ? (r.aparelhos ? `Teste enviado para ${r.aparelhos} aparelho(s).` : "Teste gravado, mas nenhum aparelho seu está com notificação ligada.") : r.erro);
+    setMsgAparelho(r.ok ? (r.aparelhos ? `Envio aceito para ${r.aparelhos} aparelho(s). Confira a notificação no aparelho; o volume e o modo silencioso são controlados pelo sistema.` : "Teste gravado, mas nenhum aparelho seu está com notificação ligada.") : r.erro);
   };
 
   const [escrevendo, setEscrevendo] = useState(false);
@@ -72,7 +80,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
     const r = await onEnviar({ tipo: "manual", titulo: titulo.trim(), texto: texto.trim(), para });
     setEnviando(false);
     if (r.ok) {
-      setResultado(r.aparelhos !== undefined ? `✅ Enviado: ${r.pessoas || 0} pessoa(s), tocou em ${r.aparelhos} aparelho(s).` : "✅ Aviso publicado.");
+      setResultado(r.aparelhos !== undefined ? `✅ Aviso publicado. Envio aceito para ${r.aparelhos} aparelho(s).` : "✅ Aviso publicado.");
       setTitulo(""); setTexto(""); setEscrevendo(false);
     } else setResultado("⚠️ Aviso publicado no app. " + r.erro);
   };
@@ -86,12 +94,22 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
       <KMHeader title="Avisos" sub="Notificações da equipe" onBack={onBack} />
       <div style={{ flex: 1, overflowY: "auto", background: T.fundo, padding: 14 }}>
         <div style={{ maxWidth: 720 }}>
+          <section aria-label="Som com o app aberto" style={card}>
+            <h2 style={{fontSize:15,color:T.titulo,margin:'0 0 8px'}}>Som com o app aberto</h2>
+            <p role="status" style={{fontSize:13,color:T.texto,margin:'0 0 10px'}}>{som === 'pronto' ? 'Som habilitado nesta sessão.' : som === 'desligado' ? 'Som desligado neste aparelho.' : som === 'sem_suporte' ? 'Este navegador não oferece áudio compatível.' : 'Toque em testar para liberar o som neste navegador.'}</p>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <button type="button" onClick={testarSom} disabled={som === 'sem_suporte'} style={btn(NAVY)}>Ativar e testar som</button>
+              <button type="button" onClick={() => { void definirSomAvisos(false); setMsgSom(''); }} style={btn(T.superficie2,T.titulo)}>Silenciar som do app</button>
+            </div>
+            {msgSom && <p role="status" style={{fontSize:12,color:T.texto2}}>{msgSom}</p>}
+            <p style={{fontSize:12,color:T.texto2,marginBottom:0}}>Com o app fechado, permita notificações neste aparelho. O toque depende do volume, do modo silencioso e das configurações do sistema.</p>
+          </section>
           {/* Este aparelho */}
           <div style={{ ...card, borderLeft: `4px solid ${sit.cor}` }}>
             <div style={{ fontSize: 13, color: T.titulo, lineHeight: 1.45 }}>{sit.txt}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
               {situacao === "desligada" && <button onClick={ligar} disabled={ligando} style={btn(NAVY)}>{ligando ? "Ligando…" : "🔔 Ativar notificações"}</button>}
-              {situacao === "ligada" && <button onClick={testar} style={btn(NAVY)}>Testar</button>}
+              {situacao === "ligada" && <button onClick={testar} style={btn(NAVY)}>Testar notificação</button>}
               {situacao === "ligada" && <button onClick={desligar} style={btn(T.superficie2, T.titulo)}>Desligar neste aparelho</button>}
             </div>
             {msgAparelho && <div style={{ fontSize: 12, color: T.texto2, marginTop: 8 }}>{msgAparelho}</div>}
@@ -153,7 +171,7 @@ export function TelaAvisos({ usuario, usuarios = [], obras = [], avisos = [], ul
                     {a.texto && <div style={{ fontSize: 13, color: T.texto, whiteSpace: "pre-wrap", marginTop: 4, lineHeight: 1.45 }}>{a.texto}</div>}
                     <div style={{ fontSize: 11, color: T.texto2, marginTop: 6 }}>
                       {a.de === eu ? "Você" : a.deNome || "KMZERO"} → {descreverPara(a.para, { obras, usuarios })} · {quandoFoi(a.criadoEm)}
-                      {a.de === eu && a.push?.aparelhos !== undefined && ` · tocou em ${a.push.aparelhos} aparelho(s)`}
+                      {a.de === eu && a.push?.aparelhos !== undefined && ` · envio aceito para ${a.push.aparelhos} aparelho(s)`}
                     </div>
                     {/* Botão "fantasma" sobre o cartão: superfície2 no lugar do LIGHT fixo (ficaria branco no escuro) */}
                     {a.navegarPara && onNav && <button onClick={() => onNav(a.navegarPara)} style={{ ...btn(T.superficie2, T.titulo), marginTop: 8, padding: "6px 10px", fontSize: 12 }}>Abrir →</button>}

@@ -23,6 +23,14 @@ const diaUtil = iso => {
 };
 const reais = v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+// O agendamento só processa empresas expressamente habilitadas no servidor.
+// Nunca enumera empresas de outras contas ao ativar os alertas de uma empresa.
+export function empresasCronConfiguradas(valor) {
+  if (typeof valor !== 'string' || valor.length > 4096) return [];
+  const ids = [...new Set(valor.split(',').map(id => id.trim()).filter(Boolean))];
+  return ids.length && ids.length <= 20 && ids.every(id => /^[A-Za-z0-9_-]{1,128}$/.test(id)) ? ids : [];
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -30,6 +38,8 @@ export default async function handler(req, res) {
   }
   const segredo = process.env.CRON_SECRET;
   if (!segredo || req.headers.authorization !== `Bearer ${segredo}`) return res.status(401).json({ erro: "Não autorizado." });
+  const ids = empresasCronConfiguradas(process.env.CRON_EMPRESA_IDS);
+  if (!ids.length) return res.status(503).json({ erro: "Agendamento sem empresas habilitadas." });
   const etapa = req.query?.etapa === "tarde" ? "tarde" : "noite";
   let admin;
   try { admin = firebaseAdmin(); }
@@ -39,7 +49,7 @@ export default async function handler(req, res) {
   }
   const { db, mensageiro } = admin;
   const hoje = isoNoFuso(new Date());
-  const empresas = await db.collection("empresas").listDocuments();
+  const empresas = ids.map(id => db.collection("empresas").doc(id));
   const resumo = [];
   for (const e of empresas) {
     try { resumo.push({ empresa: e.id, ...(await verificarEmpresa(db, mensageiro, e.id, etapa, hoje)) }); }

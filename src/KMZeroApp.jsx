@@ -39,7 +39,8 @@ import { TelaRDO, gerarPDFRDORabnt, TelaCronograma, TelaCronogramaPro, CurvaSCha
 import { TelaFotos, TelaGaleria, TelaAnexosObra, TelaMensagens, TelaLinks } from "./screens/midia.jsx";
 import { TelaAvisos } from "./screens/avisos.jsx";
 import { TelaSeguranca } from './screens/seguranca.jsx';
-import { observarAvisosNuvem, observarLeituraAvisos, marcarAvisosLidos, publicarAviso, renovarNotificacoes, desligarNotificacoes, situacaoNotificacoes } from "./lib/avisos.js";
+import { prepararSomAvisos, tocarSomAviso, novoAvisoSonoro } from './lib/somAvisos.js';
+import { observarAvisosNuvem, observarLeituraAvisos, marcarAvisosLidos, publicarAviso, renovarNotificacoes, desligarNotificacoes } from "./lib/avisos.js";
 import { avisoEhPara, uidDe } from "./lib/avisosRegras.js";
 import { TelaConfigEmpresa, TelaEscritorio, TelaAjuda, TelaBackup, TelaGerarSimulacao, TelaDiagnostico, TelaZerarTudo } from "./screens/sistema.jsx";
 
@@ -334,14 +335,19 @@ export default function App() {
     setUltimaLeituraAvisos(agora);
     marcarAvisosLidos(usuarioRef.current?.firebaseUid, agora);
   }, []);
-  // Aviso novo com o app aberto e sem push ligado: mostra uma faixa no topo por alguns segundos
+  useEffect(() => usuario ? prepararSomAvisos() : undefined, [usuario?.firebaseUid, usuario?.id]);
+  // Aviso novo: o som local também funciona quando o push está ligado.
   const inicioSessaoRef = useRef(Date.now());
   const avisosJaMostradosRef = useRef(new Set());
   useEffect(() => {
+    inicioSessaoRef.current = Date.now();
+    avisosJaMostradosRef.current.clear();
+  }, [usuario?.firebaseUid, usuario?.id, empresaIdState]);
+  useEffect(() => {
     const eu = uidDe(usuario);
-    const novo = avisosVisiveis.find(a => a.de !== eu && (a.criadoEm || 0) > inicioSessaoRef.current && !avisosJaMostradosRef.current.has(a.id));
-    avisosVisiveis.forEach(a => avisosJaMostradosRef.current.add(a.id));
-    if (!novo || situacaoNotificacoes() === "ligada") return;
+    const novo = novoAvisoSonoro(avisosVisiveis, { uid: eu, inicio: inicioSessaoRef.current, conhecidos: avisosJaMostradosRef.current });
+    if (!novo) return;
+    tocarSomAviso();
     setAvisoNaTela(novo);
     const t = setTimeout(() => setAvisoNaTela(x => (x === novo ? null : x)), 8000);
     return () => clearTimeout(t);

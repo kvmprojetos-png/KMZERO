@@ -134,9 +134,9 @@ export async function ativarNotificacoes(usuario) {
   if (s === "sem_config") return { ok: false, erro: "Notificações ainda não configuradas (falta a chave do Firebase no Vercel)." };
   if (s === "instalar_ios") return { ok: false, erro: "No iPhone: toque em Compartilhar → \"Adicionar à Tela de Início\" e abra o KMZERO por lá." };
   if (s === "sem_suporte") return { ok: false, erro: "Este navegador não recebe notificações. Use o Chrome." };
-  const perm = await Notification.requestPermission();
-  if (perm !== "granted") return { ok: false, erro: "Permissão negada. Libere as notificações do site nas configurações do navegador." };
   try {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return { ok: false, erro: "Permissão negada. Libere as notificações do site nas configurações do navegador." };
     const token = await obterToken();
     if (!token) return { ok: false, erro: "Não foi possível registrar este aparelho." };
     await salvarToken(usuario, token);
