@@ -267,7 +267,9 @@ export function observarColecaoNuvem(colecao, callback, onErro) {
   if (!fb || !_empresaId) return () => {};
   try {
     const consulta = consultaPermitida(fb, colecao);
-    if (!consulta) { callback([], { fromCache:false, hasPendingWrites:false }); return () => {}; }
+    // Sem consulta possível (ex.: encarregado ainda sem obra) não é resposta do servidor:
+    // fromCache:true para nenhum consumidor tratar a lista vazia como remoção.
+    if (!consulta) { callback([], { fromCache:true, hasPendingWrites:false }); return () => {}; }
     return onSnapshot(
       consulta,
       { includeMetadataChanges: false },
@@ -487,10 +489,20 @@ export async function aceitarConvite(userGoogle, convite) {
     criadoEm: Date.now(),
   });
   try {
-    const lote = writeBatch(fb.db);
-    lote.set(doc(fb.db,'usuarios',userGoogle.uid),perfil);
-    lote.set(doc(fb.db,'empresas',perfil.empresaId,'perfisCampo',userGoogle.uid),perfilCampo(perfil,userGoogle.uid));
-    await lote.commit();
+    try {
+      const lote = writeBatch(fb.db);
+      lote.set(doc(fb.db,'usuarios',userGoogle.uid),perfil);
+      lote.set(doc(fb.db,'empresas',perfil.empresaId,'perfisCampo',userGoogle.uid),perfilCampo(perfil,userGoogle.uid));
+      await lote.commit();
+    } catch (e) {
+      if (!e || e.code !== "permission-denied") throw e;
+      // Regras anteriores à proteção por função conferem a empresa pelo perfil JÁ gravado
+      // e recusam o lote. Em duas etapas cada gravação passa sozinha: primeiro o perfil
+      // (regra do convite), depois o espelho de campo, que a migração refaz se faltar.
+      await setDoc(doc(fb.db,'usuarios',userGoogle.uid),perfil);
+      try { await setDoc(doc(fb.db,'empresas',perfil.empresaId,'perfisCampo',userGoogle.uid),perfilCampo(perfil,userGoogle.uid)); }
+      catch (e2) { console.warn("aceitarConvite: espelho de campo fica para a migração", e2?.code); }
+    }
     return { ok: true, perfil };
   } catch (e) {
     console.error("aceitarConvite:", e);

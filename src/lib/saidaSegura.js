@@ -38,7 +38,9 @@ async function lerEstado(empresaId, opcoes) {
   const storage = opcoes.storage || storagePadrao();
   const lerAnexos = opcoes.lerAnexos || (async id => (await import("./fileStore.js")).listarAnexosLocais(id));
   const anexos = await lerAnexos(empresaId); // Falha de leitura não significa banco vazio.
-  return { dados: lerChavesEmpresa(empresaId, storage), anexos };
+  // Cópias guardadas na abertura (ajustarCacheComCopia) entram no backup, na assinatura e na limpeza.
+  const copias = await (opcoes.lerCopias || lerCopiasPermissoes)(empresaId);
+  return { dados: lerChavesEmpresa(empresaId, storage), anexos, copias };
 }
 
 export function donoCacheLocal(empresaId, storage = storagePadrao()) {
@@ -72,6 +74,112 @@ export function higienizarCachePermissoes(perfil, { empresaId = perfil?.empresaI
   if (aplicar && chavesRestritas.length && !copiaAnteriorConfirmada) throw new Error("É necessário resguardar os dados anteriores com uma pessoa autorizada antes de remover conteúdo do cache.");
   if (aplicar) for (const nome of chavesRestritas) storage.setItem(prefixo + nome, JSON.stringify(permitidos[nome]));
   return { ok: chavesRestritas.length === 0 || aplicar, chavesRestritas, permitidos, aplicado: aplicar };
+}
+
+/* Abertura sem travar. O cliente anterior (até 05/10/2026) guardava as coleções
+   completas em todo aparelho, então quase todo cache antigo difere do que o perfil
+   vê agora — e o aparelho de quem não é dono ficava parado sem saída. Em vez de
+   parar a abertura: guarda uma cópia integral das chaves afetadas no IndexedDB
+   DESTE aparelho (nada sai dele), confere relendo e só então grava o mesmo filtro
+   que a leitura (store.get) já aplica. Gravações pendentes do Firestore ficam na
+   fila do próprio SDK e não são tocadas. Sem cópia confirmada, nada é alterado. */
+export const COPIAS_PERMISSOES = Object.freeze({ banco: "kmzero-copias-permissoes", loja: "copias", tipo: "kmzero-copia-permissoes-v1" });
+
+function abrirBancoCopias(idb) {
+  return new Promise((resolve, reject) => {
+    if (!idb) { reject(new Error("Este navegador não tem onde guardar a cópia de segurança dos dados do aparelho.")); return; }
+    const req = idb.open(COPIAS_PERMISSOES.banco, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(COPIAS_PERMISSOES.loja)) req.result.createObjectStore(COPIAS_PERMISSOES.loja, { keyPath: "id" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("Não foi possível abrir o armazenamento da cópia de segurança."));
+    req.onblocked = () => reject(new Error("Feche as outras abas do KMZERO e tente novamente."));
+  });
+}
+
+const pedido = req => new Promise((resolve, reject) => {
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error || new Error("Falha no armazenamento da cópia de segurança."));
+});
+const transacao = tx => new Promise((resolve, reject) => {
+  tx.oncomplete = () => resolve();
+  tx.onerror = () => reject(tx.error || new Error("A cópia de segurança não foi gravada."));
+  tx.onabort = () => reject(tx.error || new Error("A cópia de segurança não foi gravada (armazenamento cheio?)."));
+});
+const MAX_COPIAS_POR_PESSOA = 10;
+// Lê e apaga na MESMA transação, dentro do retorno da leitura (sem await no meio).
+function apagarOnde(banco, escolher) {
+  const tx = banco.transaction(COPIAS_PERMISSOES.loja, "readwrite");
+  const loja = tx.objectStore(COPIAS_PERMISSOES.loja);
+  const req = loja.getAll();
+  req.onsuccess = () => { for (const c of escolher(req.result || [])) loja.delete(c.id); };
+  return transacao(tx);
+}
+
+export async function gravarCopiaPermissoes(copia, { idb = globalThis.indexedDB } = {}) {
+  const banco = await abrirBancoCopias(idb);
+  try {
+    // Pede ao navegador para não descartar este armazenamento sob pressão de espaço.
+    try { await globalThis.navigator?.storage?.persist?.(); } catch { /* opcional */ }
+    const tx = banco.transaction(COPIAS_PERMISSOES.loja, "readwrite");
+    tx.objectStore(COPIAS_PERMISSOES.loja).put(copia);
+    await transacao(tx);
+    const lida = await pedido(banco.transaction(COPIAS_PERMISSOES.loja, "readonly").objectStore(COPIAS_PERMISSOES.loja).get(copia.id));
+    if (!lida || serializarEstavel(lida.chaves) !== serializarEstavel(copia.chaves)) throw new Error("A cópia de segurança não pôde ser conferida.");
+    // Limite por pessoa: fica a mais antiga (o cache da versão anterior) e as mais recentes.
+    await apagarOnde(banco, todas => {
+      const minhas = todas.filter(c => c.empresaId === copia.empresaId && c.uid === copia.uid)
+        .sort((a, b) => String(a.criadoEm).localeCompare(String(b.criadoEm)));
+      return minhas.length > MAX_COPIAS_POR_PESSOA ? minhas.slice(1, minhas.length - (MAX_COPIAS_POR_PESSOA - 1)).filter(c => c.id !== copia.id) : [];
+    });
+    return true;
+  } finally { try { banco.close(); } catch { /* já fechado */ } }
+}
+
+/* Leitura para backup/assinatura. Sem IndexedDB (testes em Node) não há cópia possível. */
+export async function lerCopiasPermissoes(empresaId, { idb = globalThis.indexedDB } = {}) {
+  if (!idb) return [];
+  const banco = await abrirBancoCopias(idb);
+  try {
+    const todas = await pedido(banco.transaction(COPIAS_PERMISSOES.loja, "readonly").objectStore(COPIAS_PERMISSOES.loja).getAll());
+    return todas.filter(c => c.empresaId === empresaId).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  } finally { try { banco.close(); } catch { /* já fechado */ } }
+}
+
+export async function apagarCopiasPermissoes(empresaId, { idb = globalThis.indexedDB } = {}) {
+  if (!idb) return;
+  const banco = await abrirBancoCopias(idb);
+  try { await apagarOnde(banco, todas => todas.filter(c => c.empresaId === empresaId)); }
+  finally { try { banco.close(); } catch { /* já fechado */ } }
+}
+
+export async function ajustarCacheComCopia(perfil, { empresaId = perfil?.empresaId, storage = storagePadrao(), gravarCopia = gravarCopiaPermissoes, agora = () => Date.now() } = {}) {
+  try {
+    validarEmpresa(empresaId);
+    const higiene = higienizarCachePermissoes(perfil, { empresaId, storage });
+    if (higiene.ok) return { ok: true, chaves: [] };
+    const prefixo = `${empresaId}_`;
+    const chaves = Object.fromEntries(higiene.chavesRestritas.map(nome => [nome, storage.getItem(prefixo + nome)]));
+    const uid = perfil?.firebaseUid || perfil?.id || null;
+    const quando = agora();
+    // Id pelo conteúdo: abrir de novo com o mesmo cache regrava a mesma cópia em vez de acumular.
+    const conteudo = (await assinatura(chaves)).slice(0, 24);
+    await gravarCopia({
+      id: `${empresaId}:${uid}:${conteudo}`, tipo: COPIAS_PERMISSOES.tipo, empresaId, uid,
+      perfil: { perfil: perfil?.perfil ?? null, obraId: perfil?.obraId ?? null, acessos: perfil?.acessos ?? null },
+      criadoEm: new Date(quando).toISOString(), chaves,
+    });
+    // Outra aba mexeu no cache durante a cópia: não grava nada (a próxima abertura copia de novo).
+    for (const [nome, bruto] of Object.entries(chaves)) {
+      if (storage.getItem(prefixo + nome) !== bruto) throw new Error("Os dados do aparelho mudaram durante a cópia. Toque em Conferir novamente.");
+    }
+    // Só as chaves copiadas, com o filtro calculado sobre os mesmos valores copiados.
+    for (const nome of higiene.chavesRestritas) storage.setItem(prefixo + nome, JSON.stringify(higiene.permitidos[nome]));
+    return { ok: true, chaves: higiene.chavesRestritas };
+  } catch (e) {
+    return { ok: false, erro: e?.message || "Não foi possível preservar os dados deste aparelho." };
+  }
 }
 
 /* Chamar no boot de toda aba, antes de liberar edição. Navegadores sem Web
@@ -119,6 +227,9 @@ export async function prepararSaida({ empresaId, uid, perfil, ...opcoes }) {
   if (estado.anexos.length && !(perfil.perfil === "gestor" && perfil.acessos == null)) {
     throw new Error("Há anexos locais cuja permissão individual não pode ser confirmada. O gestor com acesso completo precisa resguardá-los antes da limpeza. Nenhum arquivo foi apagado.");
   }
+  if (estado.copias.length && !(perfil.perfil === "gestor" && perfil.acessos == null)) {
+    throw new Error("Este aparelho guarda uma cópia de segurança de dados de permissões anteriores. O gestor com acesso completo precisa resguardá-la antes da limpeza. Nenhum dado foi apagado.");
+  }
   return montarPlano(empresaId, uid, estado);
 }
 
@@ -134,8 +245,10 @@ async function montarPlano(empresaId, uid, estado) {
   // Mantém compatibilidade com o importador de Backup & Restaurar.
   dados.obras ||= [];
   dados.trabalhadores ||= [];
-  const requerBackup = Object.keys(estado.dados).some(k => !k.slice(prefixo.length).startsWith("_") && !k.endsWith("_usuarioLogado")) || estado.anexos.length > 0;
+  const copias = estado.copias || [];
+  const requerBackup = Object.keys(estado.dados).some(k => !k.slice(prefixo.length).startsWith("_") && !k.endsWith("_usuarioLogado")) || estado.anexos.length > 0 || copias.length > 0;
   const backup = { ...dados, anexosLocais: structuredClone(estado.anexos), _kmzeroBackup: { tipo: META_BACKUP, empresaId, uid, criadoEm: new Date().toISOString() } };
+  if (copias.length) backup.copiasPermissoes = structuredClone(copias);
   return { empresaId, uid, backup, requerBackup, assinatura: await assinatura(estado), totalAnexos: estado.anexos.length };
 }
 
@@ -229,6 +342,7 @@ export async function executarSaida({ plano, backupConfirmado = false, ...opcoes
       saiu = true;
       const apagarAnexos = opcoes.apagarAnexos || (async id => (await import("./fileStore.js")).apagarBancoAnexos(id));
       await apagarAnexos(plano.empresaId);
+      await (opcoes.apagarCopias || apagarCopiasPermissoes)(plano.empresaId);
       limparLocal(plano.empresaId, storage);
       return { ok: true };
     });
@@ -251,6 +365,7 @@ export async function concluirLimpezaPendente(opcoes = {}) {
   await (opcoes.comTrava || comTravaExclusiva)(async () => {
     await fb.limparCacheFirestoreParaSaida();
     await apagarAnexos(pendente.empresaId);
+    await (opcoes.apagarCopias || apagarCopiasPermissoes)(pendente.empresaId);
     limparLocal(pendente.empresaId, storage);
     return { ok: true };
   });
