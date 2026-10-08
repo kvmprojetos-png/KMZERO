@@ -23,6 +23,7 @@ import { politicaColecao, filtrarCachePermitido, administraPessoas, perfilCampo 
 import { registrarAbaProtegida, prepararSaida, baixarBackupSaida, executarSaida, donoCacheLocal, marcarDonoCacheLocal, lerLimpezaPendente, concluirLimpezaPendente, higienizarCachePermissoes, prepararRecuperacaoDono, concluirRecuperacaoDono } from './lib/saidaSegura.js';
 import { normId, mesmoId, normalizarColecao } from "./lib/ids.js";
 import { normalizarFotoLocalPrivada } from './lib/fotoCaminho.js';
+import { fotosDoAparelho, registrarNumerosFotos, juntarMarcasNumeroFoto, marcasNumeroFoto, ultimoNumeroFotoObra, registrarFotosNaNuvem, limparFotosAntigasDosRdos, limparFotosAntigasDoDiario } from './lib/fotosNuvemLeitura.js';
 import { useNavegacao } from './lib/navegacao.js';
 
 /* ── Telas separadas por domínio ── */
@@ -400,15 +401,17 @@ export default function App() {
         normalizarColecao('fotosObras',nuvem).forEach(x => {
           const anterior = anteriores.get(String(x.id));
           const imagemLocal = mesmoId(anterior?.obraId,x.obraId) && typeof anterior?.foto === 'string' && anterior.foto.startsWith('data:image/');
-          if (x.fotoIndisponivel && imagemLocal && !anterior.fotoPath && !anterior.fotoUrl) {
+          const semBytesNuvem = x.fotoIndisponivel || x.fotoCarregando; // ainda baixando conta como sem bytes
+          if (semBytesNuvem && imagemLocal && !anterior.fotoPath && !anterior.fotoUrl) {
             porId.set(String(x.id),anterior); // Mantém o envio ainda não confirmado sem adotar um caminho remoto.
             return;
           }
-          const bytesConhecidos = x.fotoIndisponivel && !!x.fotoPath && anterior?.fotoPath === x.fotoPath
+          const bytesConhecidos = semBytesNuvem && !!x.fotoPath && anterior?.fotoPath === x.fotoPath
             && imagemLocal;
           porId.set(String(x.id),bytesConhecidos ? {...x,foto:anterior.foto} : x);
         });
-        return [...porId.values()].sort((a,b) => Number(b.id)-Number(a.id));
+        // Encarregado: fotos de meses anteriores saem do celular (pendentes de envio ficam).
+        return fotosDoAparelho([...porId.values()], usuario?.perfil).sort((a,b) => Number(b.id)-Number(a.id));
       });
     });
     return parar;
@@ -610,6 +613,8 @@ export default function App() {
       const movE_    = await store.get("movEquip");
       const despAv_  = await store.get("despesasAvulsas");
       const fotos_   = await store.get("fotosObras");
+      // Numeração das fotos por obra: marcas guardadas + fotos antigas ANTES da limpeza do mês (não recomeça no #001)
+      juntarMarcasNumeroFoto(await store.get("_numeroFotoObra")); registrarNumerosFotos(fotos_); registrarFotosNaNuvem(fotos_);
       const forn_    = await store.get("fornecedores");
       const clientes_ = await store.get("clientes");
       const userLogado = perfilBoot;
@@ -641,7 +646,7 @@ export default function App() {
       if (cron_)    setCronog(cron_);
       if (movE_)    setMovEquip(n("movEquip", movE_));
       if (despAv_)  setDespesasAvulsas(n("despesasAvulsas", despAv_));
-      if (fotos_)   setFotosObras(n("fotosObras", fotos_));
+      if (fotos_)   setFotosObras(fotosDoAparelho(n("fotosObras", fotos_), userLogado?.perfil)); // encarregado: só o mês atual + pendentes
       if (forn_)    setFornecedores(n("fornecedores", forn_));
       if (clientes_) setClientes(n("clientes", clientes_));
       if (modoDemo) {
@@ -716,6 +721,16 @@ export default function App() {
   useEffect(() => { if (!carregando) store.set("movEquip", movEquip); }, [movEquip, carregando]);
   useEffect(() => { if (!carregando) store.set("despesasAvulsas", despesasAvulsas); }, [despesasAvulsas, carregando]);
   useEffect(() => { if (!carregando) store.set("fotosObras", fotosObras); }, [fotosObras, carregando]);
+  // Guarda o maior nº de foto de cada obra (a limpeza mensal do celular não apaga): vem da lista e da nuvem
+  useEffect(() => { if (!carregando) { registrarNumerosFotos(fotosObras); store.set("_numeroFotoObra", marcasNumeroFoto()); } }, [fotosObras, carregando]);
+  // Encarregado ("só limpar o celular"): RDOs e anotações do diário de meses anteriores largam a cópia base64
+  // das fotos que JÁ estão na galeria da nuvem (libera o localStorage). A nuvem e o escritório não mudam.
+  useEffect(() => {
+    if (carregando || usuario?.perfil !== "encarregado") return;
+    registrarFotosNaNuvem(fotosObras);
+    setRdos(rs => limparFotosAntigasDosRdos(rs, "encarregado"));
+    setDiario(ds => limparFotosAntigasDoDiario(ds, "encarregado"));
+  }, [fotosObras, carregando, usuario?.perfil]);
   useEffect(() => { if (!carregando) store.set("fornecedores", fornecedores); }, [fornecedores, carregando]);
   useEffect(() => { if (!carregando) store.set("clientes", clientes); }, [clientes, carregando]);
 
@@ -1286,12 +1301,12 @@ export default function App() {
       case "home":       return <TelaHome obra={obraAtual} usuario={usuario} mensagens={mensagens} trabalhadores={trabObra} presencasHoje={presencasHoje} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} />;
       case "fluxo":      return <FluxoEncarregado obra={obraAtual} trabalhadores={trabObra} equips={equips} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} diario={diario} usuario={usuario} empresa={empresa} historico={historico} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} onBack={voltar} onSavePresencas={salvarPresencas} onAutoEmitirRDO={emitirRDOSync} onSalvarFotoObra={salvarFotoObraSync} />;
       case "material":   return <TelaMaterial obra={obraAtual} usuario={usuario} onBack={voltar} onAddPedido={criarPedidoSync} />;
-      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={fotosObras.filter(f => mesmoId(f.obraId, obraAtual?.id)).length} onBack={voltar} onSalvar={salvarFotoObraSync} />;
+      case "fotos_solo": return <TelaFotos obra={obraAtual} usuario={usuario} totalFotosObra={ultimoNumeroFotoObra(fotosObras, obraAtual?.id)} onBack={voltar} onSalvar={salvarFotoObraSync} />;
       case "galeria":    return <TelaGaleria obras={obras} fotos={fotosObras} usuario={usuario} onBack={voltar} onRemover={id => setFotosObras(fs => fs.filter(f => !mesmoId(f.id, id)))} />;
       case "fornecedores": return <TelaFornecedores fornecedores={fornecedores} onBack={voltar} onAdd={f => setFornecedores(fs => [...fs, f])} onEditar={f => setFornecedores(fs => fs.map(x => mesmoId(x.id, f.id) ? f : x))} onRemover={id => setFornecedores(fs => fs.filter(x => !mesmoId(x.id, id)))} />;
       case "equip_solo": return <TelaEquip obra={obraAtual} equips={equips} onBack={voltar} onSaveEquips={updated => setEquips(es => es.map(e => { const u = updated.find(u => mesmoId(u.id, e.id)); return u || e; }))} />;
       case "diario":     return <TelaDiario key={`${empresaIdState}:${obraAtual?.id}:${usuario?.firebaseUid}`} obra={obraAtual} usuario={usuario} diario={diario} empresaId={empresaIdState} demo={modoDemo} fotosObras={fotosObras} onBack={voltar} onAdd={d => setDiario(ds => [d, ...ds])} onRemove={id => setDiario(ds => ds.filter(d => !mesmoId(d.id, id)))} onSalvarFotoObra={salvarFotoObraSync} />;
-      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
+      case "gestor":     return <TelaPainelGestor obras={obras} trabalhadores={trabalhadores} pedidos={pedidos} equips={equips} historico={historico} mensagens={mensagens} movimentacoes={movimentacoes} manutencoes={manutencoes} cronogramas={cronogramas} movEquip={movEquip} ativos={ativos} abastecimentos={abastecimentos} empresa={empresa} usuario={usuario} rdosEmitidos={rdosEmitidos} fotosObras={fotosObras} diario={diario} avisosNaoLidos={avisosNaoLidos} onNav={setTela} onLogout={logout} onAprovar={(id, extras = {}) => mudarStatusPedidoSync(id, "Aprovado", extras)} onNegar={id => mudarStatusPedidoSync(id, "Negado")} />;
       case "obras":      return <TelaObras usuario={usuario} usuarios={usuarios} obras={obras} clientes={clientes} trabalhadores={trabalhadores} ativos={ativos} equips={equips} ferramentas={ferramentas} pedidos={pedidos} abastecimentos={abastecimentos} manutencoes={manutencoes} cronogramas={cronogramas} historico={historico} recebimentos={recebimentos} rdosEmitidos={rdosEmitidos} obraSelecionadaId={contextoTela.obraId} onSelecionarObra={id => navegacao.setContexto(id == null ? {} : {obraId:id})} onBack={voltar} onAdd={o => setObras(os => [...os, o])} onEditar={o => setObras(os => os.map(x => mesmoId(x.id, o.id) ? o : x))} onRemover={id => setObras(os => os.filter(o => !mesmoId(o.id, id)))} onNav={destino => setTela(destino,contextoTela.obraId == null ? {} : {obraId:contextoTela.obraId})} onNavAnexos={(obra) => { setObraAnexos(obra); setTela("anexos_obra",{obraId:obra.id}); }} />;
       case "cronograma": return <TelaCronograma obraInicialId={contextoTela.obraId} obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
       case "cronograma_pro": return <TelaCronogramaPro obraInicialId={contextoTela.obraId} obras={obras} cronogramas={cronogramas} onBack={voltar} onSalvar={(obraId, etapas) => setCronog(c => ({ ...c, [obraId]: etapas }))} />;
@@ -1337,7 +1352,7 @@ export default function App() {
       case "custos":     return <TelaCustos obras={obras} trabalhadores={trabalhadores} historico={historico} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} despesasAvulsas={despesasAvulsas} onBack={voltar} />;
       case "despesas":   return <TelaDespesasAvulsas obras={obras} despesas={despesasAvulsas} onBack={voltar} onAdd={d => setDespesasAvulsas(arr => [d, ...arr])} onEditar={d => setDespesasAvulsas(arr => arr.map(x => mesmoId(x.id, d.id) ? d : x))} onRemover={id => setDespesasAvulsas(arr => arr.filter(x => !mesmoId(x.id, id)))} />;
       case "ferias":     return <TelaFerias obras={obras} trabalhadores={trabalhadores} ferias={ferias} onBack={voltar} onAdd={f => setFerias(fs => [...fs, f])} onRemove={id => setFerias(fs => fs.filter(f => !mesmoId(f.id, id)))} />;
-      case "rdo":        return <TelaRDO obras={obras} trabalhadores={trabalhadores} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} historico={historico} diario={diario} usuario={usuario} empresa={empresa} rdosEmitidos={rdosEmitidos} recebimentos={recebimentos} fotosObras={fotosObras} despesasAvulsas={despesasAvulsas} movimentacoes={movimentacoes} movEquip={movEquip} produtividade={produtividade} cronogramas={cronogramas} onBack={voltar} onEmitirRDO={emitirRDOSync} onUpdateRDO={updateRDOSync} onRemoveRDO={removeRDOSync} podeCriarRdoDia={ehAdministrador} />;
+      case "rdo":        return <TelaRDO obras={obras} trabalhadores={trabalhadores} ativos={ativos} abastecimentos={abastecimentos} pedidos={pedidos} historico={historico} diario={diario} usuario={usuario} empresa={empresa} rdosEmitidos={rdosEmitidos} recebimentos={recebimentos} fotosObras={fotosObras} despesasAvulsas={despesasAvulsas} movimentacoes={movimentacoes} movEquip={movEquip} produtividade={produtividade} cronogramas={cronogramas} onBack={voltar} onEmitirRDO={emitirRDOSync} onUpdateRDO={updateRDOSync} onRemoveRDO={removeRDOSync} podeCriarRdoDia={ehAdministrador} obraInicialId={contextoTela.obraId} diaInicial={contextoTela.dia} />;
       case "empresa":    return <TelaConfigEmpresa empresa={empresa} onSave={setEmpresa} onBack={voltar} />;
       case "minha_conta": return <TelaMinhaConta usuario={usuario} empresa={empresa} demo={modoDemo} onBack={voltar} onLogout={logout} />;
       case "ajuda":      return <TelaAjuda empresa={empresa} onBack={voltar} />;
