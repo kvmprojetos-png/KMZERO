@@ -195,7 +195,8 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
             ))}
           </div>
         </div>
-        <div onClick={() => onNav("equipe")} style={{ background: T.superficie, borderRadius: 14, padding: "12px 14px", boxShadow: T.sombra, cursor: "pointer" }}>
+        {/* A tela Equipe (cadastro, salários) é do escritório; no campo a equipe da obra se vê na Presença */}
+        <div onClick={() => onNav("fluxo")} style={{ background: T.superficie, borderRadius: 14, padding: "12px 14px", boxShadow: T.sombra, cursor: "pointer" }}>
           <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 10, fontSize: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Equipe da Obra ({trabalhadores.length})</span>
             <span style={{ color: T.desabilitado, fontSize: 16 }}>›</span>

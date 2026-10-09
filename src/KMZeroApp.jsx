@@ -1238,8 +1238,13 @@ export default function App() {
   // Derivado do menu (menuGrupos.js, inclui as telas do desenvolvedor) + telas de detalhe
   // abertas a partir dele + alias antigo "folha" + Minha conta. Antes a lista tinha 13 nomes
   // que não existiam no switch e por isso não bloqueava nada.
+  // Telas de campo que a tela inicial do encarregado abre (TelaHome) e que o perfil dele pode usar
+  // (permissoesDados: diário, produtividade, recebimento e transferência de equipamento da própria obra;
+  // mensagens próprias). Estão no menu do escritório, mas não são só do gestor: sem esta lista o
+  // encarregado caía em "Acesso restrito" ao tocar em Diário de Obra para ditar o relato.
+  const TELAS_CAMPO_ENCARREGADO = new Set(["avisos", "diario", "produtividade", "recebimento", "mov_equip", "mensagens"]);
   const TELAS_GESTOR = new Set([
-    ...[...TODAS_TELAS_MENU].filter(t => t !== 'avisos'), // Avisos e ativação do aparelho também pertencem à equipe de campo.
+    ...[...TODAS_TELAS_MENU].filter(t => !TELAS_CAMPO_ENCARREGADO.has(t)),
     "folha", "trab_detalhe", "pedido_detalhe", "mov_pess_detalhe", "mov_equip_detalhe", "anexos_obra", "minha_conta",
   ]);
 
