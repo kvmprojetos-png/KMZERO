@@ -20,7 +20,7 @@ import { LARGURA_POR_TELA, tipoDaTela } from "./lib/layoutEscritorio.js";
 import { useSyncColecao, porIdAsc, porIdDesc } from "./lib/cloudSync.js";
 import { setPerfilDados, observarMeuPerfil, suspenderPersistencia } from './lib/store.js';
 import { politicaColecao, filtrarCachePermitido, administraPessoas, perfilCampo } from './lib/permissoesDados.js';
-import { registrarAbaProtegida, prepararSaida, baixarBackupSaida, executarSaida, donoCacheLocal, marcarDonoCacheLocal, lerLimpezaPendente, concluirLimpezaPendente, higienizarCachePermissoes, prepararRecuperacaoDono, concluirRecuperacaoDono } from './lib/saidaSegura.js';
+import { registrarAbaProtegida, prepararSaida, baixarBackupSaida, executarSaida, donoCacheLocal, marcarDonoCacheLocal, lerLimpezaPendente, concluirLimpezaPendente, ajustarCacheComCopia, prepararRecuperacaoDono, concluirRecuperacaoDono } from './lib/saidaSegura.js';
 import { normId, mesmoId, normalizarColecao } from "./lib/ids.js";
 import { normalizarFotoLocalPrivada } from './lib/fotoCaminho.js';
 import { fotosDoAparelho, registrarNumerosFotos, juntarMarcasNumeroFoto, marcasNumeroFoto, ultimoNumeroFotoObra, registrarFotosNaNuvem, limparFotosAntigasDosRdos, limparFotosAntigasDoDiario } from './lib/fotosNuvemLeitura.js';
@@ -447,6 +447,7 @@ export default function App() {
   const [clientes, setClientes] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const empresaCarregadaRef = useRef(null); // empresa cujos dados estão em memória (prefixo do localStorage)
+  const hidratadoRef = useRef(false); // o boot leu o localStorage COM o perfil (sem perfil, a memória fica vazia)
 
   // Gestor: sem obra fixa cai na primeira obra. Equipe: só a obra vinculada (sem obra → aviso, nunca a obra de outro)
   const usuarioEhGestor = usuario?.perfil === "gestor";
@@ -483,13 +484,15 @@ export default function App() {
     }
   };
   const conferirCacheAntesDeAbrir = async u => {
-    const higiene = higienizarCachePermissoes(u);
-    if (higiene.ok) return true;
+    // Cache da versão anterior (coleções completas): guarda cópia integral no próprio
+    // aparelho e ajusta ao perfil. Só para a abertura se a cópia não puder ser confirmada.
+    const ajuste = await ajustarCacheComCopia(u);
+    if (ajuste.ok) return true;
     suspenderPersistencia(true);
     setPerfilDados(null);
     setUsuario(null);
     const dono = await carregarDonoEmpresa();
-    setCacheBloqueado({empresaId:u.empresaId,perfil:u,dono:dono === u.firebaseUid,seguranca:false});
+    setCacheBloqueado({empresaId:u.empresaId,perfil:u,dono:dono === u.firebaseUid,seguranca:false,erro:ajuste.erro});
     setCarregando(false);
     return false;
   };
@@ -584,6 +587,7 @@ export default function App() {
               setPerfilDados(perfilBoot);
               if (!(await conferirCacheAntesDeAbrir(perfilBoot))) return;
               marcarDonoCacheLocal(cachedEmpresaId,sessao.uid);
+              hidratadoRef.current = true;
             }
           }
         }
@@ -1015,7 +1019,10 @@ export default function App() {
     limparRestosDemo(); // login real: apaga demo_* e demo_files deixados pela demonstração
     const eidNovo = u.empresaId || null;
     if (eidNovo) {
-      const anterior = donoCacheLocal(eidNovo);
+      // Mesma reserva do boot: aparelho que nunca abriu nesta versão ainda não tem dono marcado.
+      let logadoAntes = null;
+      try { logadoAntes = JSON.parse(localStorage.getItem(`${eidNovo}_usuarioLogado`) || "null")?.firebaseUid || null; } catch { /* cache ilegível */ }
+      const anterior = donoCacheLocal(eidNovo) || logadoAntes;
       if (anterior && anterior !== u.firebaseUid) {
         setErroEntrada({mensagem:'Os dados deste aparelho pertencem a outra conta. Saia pela conta anterior e conclua a limpeza antes de trocar.'});
         setTelaRaw('login'); return;
@@ -1028,9 +1035,11 @@ export default function App() {
     suspenderPersistencia(false);
     setCacheBloqueado(null);
     setPerfilDados(u);
-    if (eidNovo !== (empresaCarregadaRef.current || null)) {
-      // Os dados em memória são de outra empresa (ou de antes de existir empresa).
-      // Grava o login no prefixo certo e recarrega, para nunca misturar dados entre empresas.
+    if (eidNovo !== (empresaCarregadaRef.current || null) || (eidNovo && !hidratadoRef.current)) {
+      // Os dados em memória são de outra empresa (ou de antes de existir empresa), ou o
+      // boot abriu sem sessão e a memória está vazia: gravar agora regravaria o aparelho
+      // vazio por cima do que só existe nele. Grava o login no prefixo certo e recarrega;
+      // o boot seguinte lê o localStorage já com o perfil.
       if (eidNovo) localStorage.setItem("_kmzero_empresaId", eidNovo);
       else localStorage.removeItem("_kmzero_empresaId");
       setEmpresaId(eidNovo);
@@ -1473,17 +1482,19 @@ export default function App() {
         <p>Há registros de permissões anteriores. Eles foram preservados e o aplicativo interrompeu a abertura para evitar perder alterações ou mostrar dados fora do seu acesso.</p>
         {cacheBloqueado.dono ? <>
           <p>Como proprietário, você pode guardar uma cópia integral antes de ajustar o que este aparelho mostra. A cópia inclui dados empresariais: guarde-a em um local privado.</p>
-          <button disabled={cacheBloqueado.ocupado} style={bigBtn} onClick={prepararRecuperacao}>Preparar cópia de recuperação</button>
+          <button disabled={cacheBloqueado.ocupado} style={bigBtn(GREEN)} onClick={prepararRecuperacao}>Preparar cópia de recuperação</button>
           {cacheBloqueado.plano && <>
-            <button disabled={cacheBloqueado.ocupado} style={{...bigBtn,marginTop:12}} onClick={baixarRecuperacao}>Baixar cópia integral</button>
+            <button disabled={cacheBloqueado.ocupado} style={{...bigBtn(GREEN),marginTop:12}} onClick={baixarRecuperacao}>Baixar cópia integral</button>
             <label style={{display:'block',margin:'20px 0'}}><input type="checkbox" disabled={!cacheBloqueado.baixado || cacheBloqueado.ocupado} checked={!!cacheBloqueado.confirmado} onChange={e => setCacheBloqueado(s => ({...s,confirmado:e.target.checked}))}/> Confirmei que o arquivo foi salvo em um local seguro.</label>
-            <button disabled={!cacheBloqueado.confirmado || cacheBloqueado.ocupado} style={bigBtn} onClick={recuperar}>Ajustar acesso e abrir o aplicativo</button>
+            <button disabled={!cacheBloqueado.confirmado || cacheBloqueado.ocupado} style={bigBtn(GREEN)} onClick={recuperar}>Ajustar acesso e abrir o aplicativo</button>
           </>}
-          <button disabled={cacheBloqueado.ocupado} style={{...bigBtn,marginTop:16}} onClick={() => setCacheBloqueado(s => ({...s,seguranca:true}))}>Abrir segurança da empresa</button>
+          <button disabled={cacheBloqueado.ocupado} style={{...bigBtn(GREEN),marginTop:16}} onClick={() => setCacheBloqueado(s => ({...s,seguranca:true}))}>Abrir segurança da empresa</button>
         </> : <p>Peça ao proprietário que revise a recuperação dos registros. Este perfil não pode exportar os dados que deixaram de estar autorizados.</p>}
         {cacheBloqueado.ocupado && <p role="status">Conferindo e preservando os dados…</p>}
         {cacheBloqueado.erro && <p role="alert">{cacheBloqueado.erro}</p>}
-        <button disabled={cacheBloqueado.ocupado} style={{...bigBtn,marginTop:16}} onClick={() => window.location.reload()}>Conferir novamente</button>
+        <button disabled={cacheBloqueado.ocupado} style={{...bigBtn(GREEN),marginTop:16}} onClick={() => window.location.reload()}>Conferir novamente</button>
+        {/* Saída sem apagar nada: os dados continuam no aparelho, presos a esta conta */}
+        <button disabled={cacheBloqueado.ocupado} style={{...bigBtn(GREEN),marginTop:12,background:'transparent',border:'1px solid #fff',boxShadow:'none'}} onClick={async () => { try { marcarDonoCacheLocal(cacheBloqueado.empresaId,cacheBloqueado.perfil?.firebaseUid); } catch { /* sem uid: nada a marcar */ } try { await logoutFirebase(); } catch { /* recarrega mesmo assim */ } window.location.reload(); }}>Sair desta conta</button>
       </section>
     </main>;
   }
@@ -1494,13 +1505,13 @@ export default function App() {
       <p>Guarde uma cópia antes de limpar. Ela inclui arquivos que podem existir somente neste aparelho.</p>
       {saidaSegura.plano && <>
         <p>{saidaSegura.plano.totalAnexos} anexo(s) local(is) incluído(s).</p>
-        <button disabled={saidaSegura.ocupado} onClick={() => {baixarBackupSaida(saidaSegura.plano);setSaidaSegura(s => ({...s,baixado:true}));}} style={bigBtn}>Baixar cópia dos dados deste aparelho</button>
+        <button disabled={saidaSegura.ocupado} onClick={() => {baixarBackupSaida(saidaSegura.plano);setSaidaSegura(s => ({...s,baixado:true}));}} style={bigBtn(GREEN)}>Baixar cópia dos dados deste aparelho</button>
         <label style={{display:'block',margin:'20px 0'}}><input type="checkbox" disabled={!saidaSegura.baixado || saidaSegura.ocupado} checked={backupSaidaConfirmado} onChange={e => setBackupSaidaConfirmado(e.target.checked)}/> Confirmei que o arquivo foi salvo em um local seguro.</label>
-        <button disabled={saidaSegura.ocupado || (saidaSegura.plano.requerBackup && !backupSaidaConfirmado)} onClick={concluirSaidaSegura} style={bigBtn}>Sair e limpar dados locais</button>
+        <button disabled={saidaSegura.ocupado || (saidaSegura.plano.requerBackup && !backupSaidaConfirmado)} onClick={concluirSaidaSegura} style={bigBtn(GREEN)}>Sair e limpar dados locais</button>
       </>}
       {saidaSegura.ocupado && <p role="status">Preparando saída segura…</p>}
       {saidaSegura.erro && <p role="alert">{saidaSegura.erro}</p>}
-      <button disabled={saidaSegura.ocupado} style={{...bigBtn,marginTop:16}} onClick={() => { if(saidaSegura.recarregar)window.location.reload();else{suspenderPersistencia(false);setSaidaSegura(null);} }}>{saidaSegura.recarregar ? 'Recarregar para tentar novamente':'Voltar ao aplicativo'}</button>
+      <button disabled={saidaSegura.ocupado} style={{...bigBtn(GREEN),marginTop:16}} onClick={() => { if(saidaSegura.recarregar)window.location.reload();else{suspenderPersistencia(false);setSaidaSegura(null);} }}>{saidaSegura.recarregar ? 'Recarregar para tentar novamente':'Voltar ao aplicativo'}</button>
     </section>
   </main>;
   return (

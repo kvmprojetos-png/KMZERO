@@ -50,7 +50,9 @@ export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
       idsAnterioresRef.current = null;
       return;
     }
-    conhecidosRef.current = new Set(lerIdsSync(colecao).map(String)); // Set compara com tipo: ids sempre como texto
+    // Ids vistos guardados pela coleção LIDA (obras x obrasCampo): quando o perfil passa a
+    // ler a projeção, os ids da original não podem contar como "sumiram" e esvaziar o aparelho.
+    conhecidosRef.current = new Set(lerIdsSync(acesso.colecao).map(String)); // Set compara com tipo: ids sempre como texto
 
     const parar = observarColecaoNuvem(colecao, (docs, meta) => {
       const doServidor = !(meta && meta.fromCache);
@@ -71,7 +73,7 @@ export function useSyncColecao(colecao, itens, setItens, ativo, opcoes = {}) {
         nuvemRef.current.set(id, j);
         if (doServidor) conhecidosRef.current.add(id);
       });
-      if (doServidor) salvarIdsSync(colecao, [...conhecidosRef.current]);
+      if (doServidor) salvarIdsSync(acesso.colecao, [...conhecidosRef.current]);
 
       // Updater puro: só transforma o array
       setItens(loc => {
