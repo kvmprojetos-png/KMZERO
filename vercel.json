@@ -38,6 +38,15 @@
       ]
     },
     {
+      "source": "/projetos/casa-ana-paula(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
       "source": "/api/(.*)",
       "headers": [
         {
@@ -98,6 +107,10 @@
     {
       "source": "/projetos/rodoviaria-sooretama",
       "destination": "/projetos/rodoviaria-sooretama/index.html"
+    },
+    {
+      "source": "/projetos/casa-ana-paula",
+      "destination": "/projetos/casa-ana-paula/index.html"
     },
     {
       "source": "/__/auth/(.*)",
