@@ -42,7 +42,7 @@ export function referenciaFoto(registro, empresaId) {
 // voltam para IMG/PDF. Só preservar raster/base64 ainda sem envio confirmado.
 export function normalizarFotoLocalPrivada(registro, empresaId) {
   if (!registro || typeof registro !== "object" || Array.isArray(registro)) return null;
-  const { fotoUrl: _url, foto: original, ...meta } = registro;
+  const { fotoUrl: _url, foto: original, fotoCarregando: _transitorio, ...meta } = registro; // marcador da sessão nunca vai ao cache
   const path = referenciaFoto(registro, empresaId);
   if (path) return { ...meta, fotoPath: path, acessoFoto: "autenticado" };
   const pendente = !registro.fotoPath && typeof original === "string"

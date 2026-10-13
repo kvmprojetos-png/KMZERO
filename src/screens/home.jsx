@@ -10,6 +10,7 @@ import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHead
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Grade, UsuarioLogado } from "../components/ui.jsx";
 import { useEscritorio } from "../components/ui.jsx";
+import { PreviaRDO, buscarRDOsDoDia, dataBRDeIso, isoDoRDO } from "../components/PreviaRDO.jsx";
 import { useTema } from "../lib/useTema.js";
 import { SinoAvisos } from "./avisos.jsx";
 import {situacaoNotificacoes} from '../lib/avisos.js';
@@ -194,7 +195,8 @@ export function TelaHome({ obra, usuario, mensagens, trabalhadores, presencasHoj
             ))}
           </div>
         </div>
-        <div onClick={() => onNav("equipe")} style={{ background: T.superficie, borderRadius: 14, padding: "12px 14px", boxShadow: T.sombra, cursor: "pointer" }}>
+        {/* A tela Equipe (cadastro, salários) é do escritório; no campo a equipe da obra se vê na Presença */}
+        <div onClick={() => onNav("fluxo")} style={{ background: T.superficie, borderRadius: 14, padding: "12px 14px", boxShadow: T.sombra, cursor: "pointer" }}>
           <div style={{ fontWeight: 700, color: T.titulo, marginBottom: 10, fontSize: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Equipe da Obra ({trabalhadores.length})</span>
             <span style={{ color: T.desabilitado, fontSize: 16 }}>›</span>
@@ -230,7 +232,7 @@ function tsLancamento(r) {
 }
 const maisRecentes = (lista, n) => [...(lista || [])].sort((a, b) => tsLancamento(b) - tsLancamento(a)).slice(0, n);
 
-export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, rdosEmitidos = [], fotosObras = [], avisosNaoLidos = 0, onNav, onLogout, onAprovar, onNegar }) {
+export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, historico, mensagens, movimentacoes, manutencoes, cronogramas, movEquip, ativos, abastecimentos, empresa, usuario, rdosEmitidos = [], fotosObras = [], diario, avisosNaoLidos = 0, onNav, onLogout, onAprovar, onNegar }) {
   const escritorio = !!useEscritorio(); // modo escritório (gestor em tela larga): versão de escritório; no app de campo continua igual
   const pendentes = pedidos.filter(p => p.status === "Aguardando").length;
   const movPendentes = (movimentacoes || []).filter(m => m.status === "Aguardando").length;
@@ -247,6 +249,11 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
   const [pedidoAprovando, setPedidoAprovando] = useState(null);
   const [formaPag, setFormaPag] = useState("");
   const [prazo, setPrazo] = useState("");
+
+  // Busca de RDO por dia (Painel do escritório): dia "AAAA-MM-DD", obra ("" = todas) e o RDO aberto na prévia
+  const [buscaDiaRdo, setBuscaDiaRdo] = useState("");
+  const [buscaObraRdo, setBuscaObraRdo] = useState("");
+  const [rdoPrevia, setRdoPrevia] = useState(null);
 
   const abrirAprovacao = (p) => {
     setPedidoAprovando(p);
@@ -432,7 +439,23 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
     const presentesHoje = Object.values(presHoje).filter(v => v === "Presente").length;
     const obrasAtivas = obras.filter(o => o.status === "Ativa");
     const pedidosAguardando = pedidos.filter(p => p.status === "Aguardando");
-    const rdosRecentes = maisRecentes(rdosEmitidos, 8);
+    // RDOs separados por obra (a numeração é de cada obra): obra com o RDO mais recente primeiro,
+    // até 6 obras e os 3 últimos RDOs de cada uma, do número maior para o menor
+    const rdosPorObra = (() => {
+      const grupos = new Map();
+      // obra escolhida na busca: só os RDOs dela (antes de cortar em 6 obras)
+      maisRecentes(buscaObraRdo ? (rdosEmitidos || []).filter(r => mesmoId(r.obraId, buscaObraRdo)) : rdosEmitidos, Infinity).forEach(r => {
+        const k = String(r.obraId ?? "");
+        if (!grupos.has(k)) grupos.set(k, []);
+        grupos.get(k).push(r);
+      });
+      return [...grupos.entries()].slice(0, 6).map(([obraId, lista]) => ({
+        obraId,
+        lista: [...lista].sort((a, b) => (Number(b.numero) || 0) - (Number(a.numero) || 0) || tsLancamento(b) - tsLancamento(a)).slice(0, 3),
+      }));
+    })();
+    // Busca por dia: RDOs daquele dia (todas as obras ou a escolhida)
+    const rdosBuscados = buscarRDOsDoDia(rdosEmitidos, buscaDiaRdo, buscaObraRdo);
     const fotosRecentes = maisRecentes(fotosObras, 8);
     const limite7d = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const nomeObra = (obraId, alternativa) => obras.find(o => mesmoId(o.id, obraId))?.nome || alternativa || "Obra";
@@ -576,15 +599,53 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={cartaoS}>
                 <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13, marginBottom: 8 }}>📄 Últimos RDOs</div>
-                {rdosRecentes.length === 0
-                  ? <div style={{ fontSize: 12, color: T.texto3 }}>{textoVazio}</div>
-                  : rdosRecentes.map(r => (
-                    <div key={r.id} onClick={clique("rdo").onClick} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${T.borda}`, cursor: clique("rdo").cursor }}>
-                      <span style={{ background: GOLD, color: NAVY, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>nº {r.numero ?? "—"}</span>
-                      <span style={{ flex: 1, fontSize: 12, color: T.titulo, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nomeObra(r.obraId, r.obra)}</span>
-                      <span style={{ fontSize: 11, color: T.texto2, whiteSpace: "nowrap" }}>{r.data || "—"}</span>
+                {/* Busca do RDO de um dia (todas as obras ou uma): tocar no RDO abre a prévia, sem sair do Painel */}
+                <div data-busca-rdo="1" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end", marginBottom: 8 }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: T.texto2, fontWeight: 700, flex: "1 1 150px", minWidth: 0 }}>
+                    Buscar RDO do dia
+                    <input type="date" value={buscaDiaRdo} max={hoje} onChange={e => setBuscaDiaRdo(e.target.value)} style={{ ...dateS, marginBottom: 0, minHeight: 38, padding: "8px 10px", fontSize: 13 }} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: T.texto2, fontWeight: 700, flex: "1 1 150px", minWidth: 0 }}>
+                    Obra
+                    <select value={buscaObraRdo} onChange={e => setBuscaObraRdo(e.target.value)} style={{ ...selS, marginBottom: 0, minHeight: 38, padding: "8px 34px 8px 10px", fontSize: 13 }}>
+                      <option value="">Todas as obras</option>
+                      {obras.map(o => <option key={o.id} value={String(o.id)}>{o.nome}</option>)}
+                    </select>
+                  </label>
+                  {(buscaDiaRdo || buscaObraRdo) && (
+                    <button type="button" onClick={() => { setBuscaDiaRdo(""); setBuscaObraRdo(""); }} style={{ background: T.superficie2, color: T.titulo, border: `1px solid ${T.borda}`, borderRadius: 8, padding: "0 12px", minHeight: 38, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Limpar</button>
+                  )}
+                </div>
+                {buscaDiaRdo ? (
+                  <div data-resultado-busca-rdo="1">
+                    <div style={{ fontSize: 11, color: T.texto2, fontWeight: 700, margin: "4px 0 6px" }}>
+                      {rdosBuscados.length === 0
+                        ? `Nenhum RDO em ${dataBRDeIso(buscaDiaRdo)}${buscaObraRdo ? " nesta obra" : ""}.`
+                        : `${rdosBuscados.length} RDO${rdosBuscados.length > 1 ? "s" : ""} em ${dataBRDeIso(buscaDiaRdo)} · toque para ver a prévia`}
                     </div>
-                  ))}
+                    {rdosBuscados.map(r => (
+                      <button key={r.id} type="button" onClick={() => setRdoPrevia(r)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", background: T.superficie2, border: "none", borderRadius: 8, padding: "8px 10px", marginBottom: 6, cursor: "pointer" }}>
+                        <span style={{ background: GOLD, color: NAVY, borderRadius: 6, padding: "1px 7px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>nº {r.numero ?? "—"}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: T.titulo, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nomeObra(r.obraId, r.obra)}</span>
+                        <span style={{ fontSize: 11, color: T.texto2, whiteSpace: "nowrap" }}>{r.encarregado || ""}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (rdosPorObra.length === 0
+                  ? <div style={{ fontSize: 12, color: T.texto3 }}>{buscaObraRdo ? "Nenhum RDO desta obra ainda." : textoVazio}</div>
+                  : rdosPorObra.map(g => (
+                    <div key={g.obraId} style={{ padding: "8px 0 10px", borderBottom: `1px solid ${T.borda}` }}>
+                      <div style={{ fontSize: 12, color: T.titulo, fontWeight: 800, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nomeObra(g.obraId, g.lista[0]?.obra)}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {g.lista.map(r => (
+                          <button key={r.id} type="button" title="Ver a prévia deste RDO" onClick={() => setRdoPrevia(r)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.superficie2, border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer" }}>
+                            <span style={{ background: GOLD, color: NAVY, borderRadius: 6, padding: "1px 7px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>nº {r.numero ?? "—"}</span>
+                            <span style={{ fontSize: 11, color: T.texto2, whiteSpace: "nowrap" }}>{r.data || "—"}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )))}
               </div>
               <div style={cartaoS}>
                 <div style={{ fontWeight: 800, color: T.titulo, fontSize: 13, marginBottom: 8 }}>📷 Últimas fotos</div>
@@ -613,6 +674,17 @@ export function TelaPainelGestor({ obras, trabalhadores, pedidos, equips, histor
         </div>
         <KMFooter />
         {modalAprovacao}
+        {rdoPrevia && (
+          <PreviaRDO
+            rdo={rdoPrevia}
+            obras={obras}
+            trabalhadores={trabalhadores}
+            diario={diario}
+            fotosObras={fotosObras}
+            onClose={() => setRdoPrevia(null)}
+            onAbrirCompleto={pode("rdo") ? r => { setRdoPrevia(null); onNav("rdo", { obraId: r.obraId, dia: isoDoRDO(r) }); } : undefined}
+          />
+        )}
       </div>
     );
   }

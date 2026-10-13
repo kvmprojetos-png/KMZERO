@@ -4,7 +4,8 @@ import { getStorage } from "firebase/storage";
 import { usuarioAtual } from "../firebase.js";
 import { normId, normalizarColecao } from "./ids.js";
 import { enviarFotoPrivada, carregarFotoPrivada } from "./fotosSeguras.js";
-import { normalizarFotoLocalPrivada, referenciaFoto } from "./fotoCaminho.js";
+import { normalizarFotoLocalPrivada } from "./fotoCaminho.js";
+import { criarLeituraFotos, manterFotoNoAparelho } from "./fotosNuvemLeitura.js";
 import { politicaColecao, temAreaDados, administraPessoas, variantesId, trabalhadorCampo, obraCampo, perfilCampo, filtrarCachePermitido } from "./permissoesDados.js";
 
 let _empresaId = null;
@@ -73,54 +74,22 @@ export function observarFotosNuvem(callback) {
   if (!fb || !empresaId || !pessoa) return () => {};
   const consulta = consultaPermitida(fb, "fotosObras");
   if (!consulta) return () => {};
-  let parar = () => {}, versao = 0, encerrado = false, ultimoSnapshot = null, leituraAtual = null;
+  let parar = () => {};
   // Metadados ainda são ao vivo; os bytes sempre passam pela API autenticada.
-  // O cache abaixo pertence a este listener e é descartado ao sair/trocar conta.
-  const cache = new Map();
-  const carregar = async snap => {
-      if (encerrado) return;
-      ultimoSnapshot = snap;
-      leituraAtual?.abort();
-      const leitura = new AbortController();
-      leituraAtual = leitura;
-      const minhaVersao = ++versao;
-      const saida = new Array(snap.docs.length);
-      let indice = 0;
-      const ler = async () => {
-        while (indice < snap.docs.length && !leitura.signal.aborted) {
-          const posicao = indice++, d = snap.docs[posicao];
-          const registro = { ...d.data(), id: d.id };
-          const chave = JSON.stringify(registro);
-          if (cache.get(d.id)?.chave === chave) { saida[posicao] = cache.get(d.id).foto; continue; }
-          try {
-            const foto = await carregarFotoPrivada(pessoa, empresaId, registro, { signal: leitura.signal });
-            if (encerrado || leitura.signal.aborted) return;
-            cache.set(d.id, { chave, foto }); saida[posicao] = foto;
-          } catch (e) {
-            const { fotoUrl: _urlAntiga, foto: _fotoAntiga, ...meta } = registro;
-            const path = referenciaFoto(registro, empresaId);
-            const anterior = cache.get(d.id)?.foto;
-            const preservada = anterior?.fotoPath === path && String(anterior?.obraId) === String(registro.obraId)
-              && anterior?.foto?.startsWith("data:image/") ? anterior.foto : "";
-            saida[posicao] = { ...meta, ...(path ? { fotoPath: path } : {}), foto: preservada, fotoIndisponivel: true };
-            if (!leitura.signal.aborted) console.warn("Foto indisponível:", e.status || "falha-leitura");
-          }
-        }
-      };
-      await Promise.all([ler(), ler(), ler()]);
-      if (!encerrado && !leitura.signal.aborted && minhaVersao === versao) {
-        const ids = new Set(snap.docs.map(d => d.id));
-        for (const id of cache.keys()) if (!ids.has(id)) cache.delete(id);
-        callback(saida.filter(Boolean));
-      }
-  };
-  const aoReconectar = () => { if (ultimoSnapshot && !encerrado) carregar(ultimoSnapshot); };
+  // O cache do leitor pertence a este listener e é descartado ao sair/trocar conta.
+  // Regras de ordem, paralelismo e emissão progressiva: fotosNuvemLeitura.js.
+  // Encarregado: fotos de meses anteriores não descem para o celular (a nuvem não muda).
+  const perfil = _perfilDados?.perfil;
+  const leitor = criarLeituraFotos({ empresaId, callback,
+    manterFoto: registro => manterFotoNoAparelho(registro, perfil),
+    carregarFoto: (registro, opcoes) => carregarFotoPrivada(pessoa, empresaId, registro, opcoes) });
+  const aoReconectar = () => { leitor.aoReconectar(); };
   try {
-    parar = onSnapshot(consulta, { includeMetadataChanges: true }, carregar,
+    parar = onSnapshot(consulta, { includeMetadataChanges: true }, snap => { leitor.aoSnapshot(snap); },
       e => console.error("observarFotosNuvem:", e.code || "falha-listener"));
     if (typeof window !== "undefined") window.addEventListener("online", aoReconectar);
   } catch (e) { console.error("observarFotosNuvem:", e.code || "falha-listener"); }
-  return () => { encerrado = true; leituraAtual?.abort(); parar(); cache.clear(); ultimoSnapshot = null;
+  return () => { leitor.encerrar(); parar();
     if (typeof window !== "undefined") window.removeEventListener("online", aoReconectar); };
 }
 

@@ -67,13 +67,54 @@ test("cache antigo de encarregado: guarda cópia integral e abre com os dados do
   assert.equal(higienizarCachePermissoes(perfil, { storage }).ok, true); // a próxima abertura não copia de novo
 });
 
-test("sem cópia confirmada nada muda no aparelho e a abertura para com o motivo", async () => {
-  const { storage, perfil } = celularAntigo();
-  const antes = tudo(storage);
+// localStorage que recusa a reserva da cópia (aparelho sem espaço nem IndexedDB)
+function semReserva(storage) {
+  return {
+    get length() { return storage.length; }, key: i => storage.key(i), getItem: k => storage.getItem(k),
+    removeItem: k => storage.removeItem(k),
+    setItem: (k, v) => { if (k.endsWith("__copiaPermissoes")) throw new Error("QuotaExceededError"); storage.setItem(k, v); },
+  };
+}
+
+test("sem cópia confirmada (IndexedDB e reserva falham) nada muda no aparelho e a abertura para com o motivo", async () => {
+  const { storage: base, perfil } = celularAntigo();
+  const storage = semReserva(base);
+  const antes = tudo(base);
   const r = await ajustarCacheComCopia(perfil, { storage, gravarCopia: async () => { throw new Error("armazenamento cheio"); } });
   assert.equal(r.ok, false);
   assert.match(r.erro, /armazenamento cheio/);
-  assert.equal(tudo(storage), antes);
+  assert.equal(tudo(base), antes);
+});
+
+test("IndexedDB falhou (iPhone): a cópia vai para a reserva no aparelho e o celular abre", async () => {
+  const { storage, perfil } = celularAntigo();
+  const original = storage.getItem("empA_obras");
+  const r = await ajustarCacheComCopia(perfil, { storage, gravarCopia: async () => { throw new Error("idb indisponível"); } });
+  assert.equal(r.ok, true, r.erro);
+  const reserva = JSON.parse(storage.getItem("empA__copiaPermissoes"));
+  assert.equal(reserva.length, 1);
+  assert.equal(reserva[0].chaves.obras, original); // texto original guardado
+  assert.equal(ler(storage, "obras")[0].valorContrato, undefined); // e o aparelho abre filtrado
+  // a reserva entra no backup do gestor completo e some no "Sair e limpar"
+  const dono = { firebaseUid: "uidDono", empresaId: "empA", ativo: true, perfil: "gestor", acessos: null };
+  const c = saidaComCopia(dono);
+  c.storage.setItem("empA__copiaPermissoes", storage.getItem("empA__copiaPermissoes"));
+  await ajustarCacheComCopia(dono, { storage: c.storage, gravarCopia: async () => {} });
+  const plano = await prepararSaida({ empresaId: "empA", uid: "uidDono", perfil: dono, ...c.opcoes, lerCopias: async () => [] });
+  assert.ok(plano.backup.copiasPermissoes.some(x => x.chaves?.obras === original));
+  // encarregado com reserva guardada não exporta nem limpa
+  const c2 = saidaComCopia(perfil);
+  c2.storage.setItem("empA__copiaPermissoes", storage.getItem("empA__copiaPermissoes"));
+  await ajustarCacheComCopia(perfil, { storage: c2.storage, gravarCopia: async () => {} });
+  await assert.rejects(prepararSaida({ empresaId: "empA", uid: "uidEnc", perfil, ...c2.opcoes, lerCopias: async () => [] }), /cópia de segurança/);
+});
+
+test("valor antigo fora do formato não trava a abertura e fica intacto", async () => {
+  const { storage, perfil } = celularAntigo();
+  storage.setItem("empA_ultimoBackup", "2026-09-30T10:00");
+  const r = await ajustarCacheComCopia(perfil, { storage, gravarCopia: async () => {} });
+  assert.equal(r.ok, true, r.erro);
+  assert.equal(storage.getItem("empA_ultimoBackup"), "2026-09-30T10:00");
 });
 
 test("cache alterado durante a cópia (outra aba) não é sobrescrito", async () => {

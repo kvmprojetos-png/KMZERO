@@ -149,7 +149,9 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
   const isGestor = usuario && usuario.perfil === "gestor";
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroData, setFiltroData] = useState("");
-  const [fotoExpandida, setFotoExpandida] = useState(null);
+  const [fotoExpandidaSel, setFotoExpandida] = useState(null);
+  // Versão atual da foto aberta: se ainda estava carregando, os bytes aparecem quando chegarem.
+  const fotoExpandida = fotoExpandidaSel && (fotos.find(f => mesmoId(f.id, fotoExpandidaSel.id)) || fotoExpandidaSel);
   const fotoExpandidaNaNuvem = !!(fotoExpandida?.fotoPath || fotoExpandida?.fotoUrl || /^https?:/i.test(fotoExpandida?.foto || ""));
   const escritorio = !!useEscritorio(); // celular: 3 miniaturas por linha (como sempre); escritório: quantas couberem de 160 px
 
@@ -220,7 +222,9 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
               <Grade min={160} gap={6} style={escritorio ? undefined : { gridTemplateColumns: "repeat(3, 1fr)" }}>
                 {porData[data].map(f => (
                   <div key={f.id} onClick={() => setFotoExpandida(f)} style={{ position: "relative", aspectRatio: "1", background: T.superficie2, borderRadius: 8, overflow: "hidden", cursor: "pointer", boxShadow: T.sombra }}>
-                    <img src={f.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    {f.foto
+                      ? <img src={f.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: T.superficie2, color: T.texto3, fontSize: 10 }}>{f.fotoCarregando ? "carregando…" : "indisponível"}</div>}
                     {f.numero && (
                       <div style={{ position: "absolute", top: 4, left: 4, background: "rgba(15,33,81,0.9)", color: GOLD, padding: "2px 6px", borderRadius: 4, fontSize: 9, fontWeight: 800 }}>#{String(f.numero).padStart(3, "0")}</div>
                     )}
@@ -254,7 +258,9 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
               <button onClick={() => setFotoExpandida(null)} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 18, width: 36, height: 36, fontSize: 18, cursor: "pointer" }}>✕</button>
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <img src={fotoExpandida.foto} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8 }} />
+              {fotoExpandida.foto
+                ? <img src={fotoExpandida.foto} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8 }} />
+                : <div style={{ color: "#ddd", fontSize: 13 }}>{fotoExpandida.fotoCarregando ? "carregando…" : "indisponível"}</div>}
             </div>
             {fotoExpandida.legenda && (
               <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 8, padding: 10, marginTop: 10, color: "#fff", fontSize: 12, textAlign: "center" }}>
@@ -262,7 +268,7 @@ export function TelaGaleria({ obras, fotos = [], usuario, onBack, onRemover }) {
               </div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button onClick={() => baixarFoto(fotoExpandida)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 10, padding: 12, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>📥 Baixar</button>
+              <button disabled={!fotoExpandida.foto} onClick={() => fotoExpandida.foto && baixarFoto(fotoExpandida)} style={{ flex: 1, background: BLUE, color: "#fff", border: "none", borderRadius: 10, padding: 12, fontWeight: 700, cursor: fotoExpandida.foto ? "pointer" : "not-allowed", opacity: fotoExpandida.foto ? 1 : 0.5, fontSize: 13 }}>📥 Baixar</button>
               {isGestor && <button disabled={fotoExpandidaNaNuvem} title={fotoExpandidaNaNuvem ? "A exclusão de fotos já enviadas ainda não está disponível." : "Excluir foto local"} onClick={() => { confirmar("Excluir esta foto local da galeria?", () => { onRemover(fotoExpandida.id); setFotoExpandida(null); }) }} style={{ background: RED, color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px", fontWeight: 700, cursor: fotoExpandidaNaNuvem ? "not-allowed" : "pointer", opacity: fotoExpandidaNaNuvem ? 0.5 : 1, fontSize: 13 }}>🗑️</button>}
             </div>
             {isGestor && fotoExpandidaNaNuvem && <div style={{ color: "#ddd", fontSize: 12, marginTop: 8 }}>A exclusão de fotos já enviadas ainda não está disponível. A imagem permanece guardada na empresa.</div>}

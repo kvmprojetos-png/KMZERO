@@ -39,8 +39,31 @@ async function lerEstado(empresaId, opcoes) {
   const lerAnexos = opcoes.lerAnexos || (async id => (await import("./fileStore.js")).listarAnexosLocais(id));
   const anexos = await lerAnexos(empresaId); // Falha de leitura não significa banco vazio.
   // Cópias guardadas na abertura (ajustarCacheComCopia) entram no backup, na assinatura e na limpeza.
-  const copias = await (opcoes.lerCopias || lerCopiasPermissoes)(empresaId);
+  const copias = [...await (opcoes.lerCopias || lerCopiasPermissoes)(empresaId), ...lerCopiasReserva(storage, empresaId)];
   return { dados: lerChavesEmpresa(empresaId, storage), anexos, copias };
+}
+
+/* Reserva da cópia de abertura no localStorage, quando o IndexedDB falha: guarda a primeira
+   (o cache da versão anterior) e a mais recente. Confere relendo. */
+const CHAVE_COPIA_RESERVA = "__copiaPermissoes";
+function lerCopiasReserva(storage, empresaId) {
+  try {
+    const v = JSON.parse(storage.getItem(`${empresaId}${CHAVE_COPIA_RESERVA}`) || "[]");
+    return Array.isArray(v) ? v : [v];
+  } catch { return [{ id: `${empresaId}:reserva-ilegivel`, bruto: storage.getItem(`${empresaId}${CHAVE_COPIA_RESERVA}`) }]; }
+}
+function guardarCopiaReserva(storage, empresaId, copia) {
+  try {
+    const atuais = lerCopiasReserva(storage, empresaId).filter(c => c?.id !== copia.id);
+    const texto = JSON.stringify(atuais.length ? [atuais[0], copia] : [copia]);
+    storage.setItem(`${empresaId}${CHAVE_COPIA_RESERVA}`, texto);
+    return storage.getItem(`${empresaId}${CHAVE_COPIA_RESERVA}`) === texto;
+  } catch { return false; }
+}
+function resumoSimples(texto) { // FNV-1a 32 bits, só para o id da cópia
+  let h = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i++) { h ^= texto.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return `fnv${h.toString(16).padStart(8, "0")}`;
 }
 
 export function donoCacheLocal(empresaId, storage = storagePadrao()) {
@@ -54,7 +77,7 @@ export function marcarDonoCacheLocal(empresaId, uid, storage = storagePadrao()) 
 /* Não apaga automaticamente valores removidos pelas novas permissões: eles
    podem conter edições offline ainda únicas. O coordenador só aplica depois
    de resguardar a cópia anterior por um fluxo autorizado de recuperação. */
-export function higienizarCachePermissoes(perfil, { empresaId = perfil?.empresaId, storage = storagePadrao(), aplicar = false, copiaAnteriorConfirmada = false } = {}) {
+export function higienizarCachePermissoes(perfil, { empresaId = perfil?.empresaId, storage = storagePadrao(), aplicar = false, copiaAnteriorConfirmada = false, tolerarInvalidos = false } = {}) {
   const estado = lerChavesEmpresa(empresaId, storage);
   const prefixo = `${empresaId}_`;
   const valores = {};
@@ -62,7 +85,12 @@ export function higienizarCachePermissoes(perfil, { empresaId = perfil?.empresaI
     const nome = chave.slice(prefixo.length);
     if (nome.startsWith("_") || nome === "usuarioLogado") continue;
     try { valores[nome] = JSON.parse(bruto); }
-    catch { throw new Error("Cache local inválido. Preserve os dados antes de alterar suas permissões."); }
+    catch {
+      // Na abertura, um valor antigo fora do formato não pode travar o aparelho: fica intacto
+      // (store.get já o ignora). A saída segura continua exigindo tudo legível.
+      if (tolerarInvalidos) continue;
+      throw new Error("Cache local inválido. Preserve os dados antes de alterar suas permissões.");
+    }
   }
   const trabalhadores = filtrarCachePermitido(perfil, "trabalhadores", valores.trabalhadores || []) || [];
   const permitidos = {};
@@ -157,19 +185,27 @@ export async function apagarCopiasPermissoes(empresaId, { idb = globalThis.index
 export async function ajustarCacheComCopia(perfil, { empresaId = perfil?.empresaId, storage = storagePadrao(), gravarCopia = gravarCopiaPermissoes, agora = () => Date.now() } = {}) {
   try {
     validarEmpresa(empresaId);
-    const higiene = higienizarCachePermissoes(perfil, { empresaId, storage });
+    const higiene = higienizarCachePermissoes(perfil, { empresaId, storage, tolerarInvalidos: true });
     if (higiene.ok) return { ok: true, chaves: [] };
     const prefixo = `${empresaId}_`;
     const chaves = Object.fromEntries(higiene.chavesRestritas.map(nome => [nome, storage.getItem(prefixo + nome)]));
     const uid = perfil?.firebaseUid || perfil?.id || null;
     const quando = agora();
     // Id pelo conteúdo: abrir de novo com o mesmo cache regrava a mesma cópia em vez de acumular.
-    const conteudo = (await assinatura(chaves)).slice(0, 24);
-    await gravarCopia({
+    let conteudo;
+    try { conteudo = (await assinatura(chaves)).slice(0, 24); }
+    catch { conteudo = resumoSimples(serializarEstavel(chaves)); } // aparelho sem crypto.subtle
+    const copia = {
       id: `${empresaId}:${uid}:${conteudo}`, tipo: COPIAS_PERMISSOES.tipo, empresaId, uid,
       perfil: { perfil: perfil?.perfil ?? null, obraId: perfil?.obraId ?? null, acessos: perfil?.acessos ?? null },
       criadoEm: new Date(quando).toISOString(), chaves,
-    });
+    };
+    try { await gravarCopia(copia); }
+    catch (erroIdb) {
+      // IndexedDB indisponível ou cheio (visto em iPhones): reserva no localStorage da empresa,
+      // sob "_" (fora do filtro), que entra no backup e some no "Sair e limpar" como as outras.
+      if (!guardarCopiaReserva(storage, empresaId, copia)) throw erroIdb;
+    }
     // Outra aba mexeu no cache durante a cópia: não grava nada (a próxima abertura copia de novo).
     for (const [nome, bruto] of Object.entries(chaves)) {
       if (storage.getItem(prefixo + nome) !== bruto) throw new Error("Os dados do aparelho mudaram durante a cópia. Toque em Conferir novamente.");

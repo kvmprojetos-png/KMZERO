@@ -3,14 +3,16 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
 import { NAVY, NAVY2, GOLD, GREEN, RED, ORANGE, BLUE, LIGHT, labelS, inputS, dateS, selS, bigBtn, css, T } from "../theme.js";
 import { hojeStr, fmtData, ultimosDias, dataPascoa, feriadosDoAno, feriadoEm, dataLocalIso, precoAlim, somaAlim, faltaPrecoAlim } from "../utils.js";
-import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store, versaoRdo } from "../lib/store.js";
+import { cloudRefs, enviarFotoNuvem, observarFotosNuvem, semUndefined, enviarDocNuvem, removerDocNuvem, observarColecaoNuvem, store, versaoRdo, getEmpresaId, emModoDemo } from "../lib/store.js";
 import { FILE_DB_VERSION, FILE_STORE_NAME, openFileDB, fileStore, lerArquivoComoBase64, formatarTamanhoBytes, iconePorTipoArquivo } from "../lib/fileStore.js";
 import { carregarScript, carregarPDFLibs, KM_PDF_PAGE_CSS, KM_PDF_CSS, gerarHeaderHTML, gerarFooterHTML, gerarAssinaturasHTML, fmtQtd, abrirOuBaixarHTML } from "../lib/pdf.js";
 import { DEFAULT_FORNECEDORES, DEFAULT_OBRAS, DEFAULT_TRABALHADORES, gerarDadosMes30Dias, DEFAULT_EQUIPS, CARGOS, detectarUnidade, CATALOGO_KM_FULL, CAT_KM_BUSCA, CAT_KM_CATEGORIAS, CAT_KM_SUBCATEGORIAS, MATERIAIS_BANCO_DETALHADO, MATERIAIS_BANCO, MATERIAIS, CATALOGO_FROTA, CATALOGO_FROTA_NOMES, CATALOGO_EQUIPAMENTOS, CATALOGO_EQUIPAMENTOS_NOMES, MATERIAL_INFO, EQUIP_COLOR, STATUS_COLOR, EMPRESA_TEMPLATE, DEFAULT_FUNC_ESCRITORIO, DEFAULT_ATIVOS, VALOR_HORA_CARGO } from "../data/catalogos.js";
 import { Badge, Btn, EmptyState, KMHeader, KMFooter, FotoViewer, Modal, confirmar, Assinatura, Tabela, useEscritorio } from "../components/ui.jsx";
 import { normId, mesmoId } from "../lib/ids.js";
 import { proximoNumeroRDO, rdosDoDiaObra } from "./rdo.jsx";
+import { ultimoNumeroFotoObra } from "../lib/fotosNuvemLeitura.js";
 import { DiarioAssistido } from "../components/DiarioAssistido.jsx";
+import { BotaoDitado, RELATO_MINIMO, relatoObrigatorio, relatoSuficiente, montarObservacoesRelato, mesclarObservacoesRelato } from "../components/BotaoDitado.jsx";
 
 export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abastecimentos, pedidos, diario, usuario, empresa, historico, rdosEmitidos, fotosObras = [], onBack, onSavePresencas, onAutoEmitirRDO, onSalvarFotoObra }) {
   const [etapa, setEtapa] = useState(0);
@@ -45,6 +47,36 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
   const [rdoAtualizado, setRdoAtualizado] = useState(false); // true: a obra já tinha RDO hoje e o fechamento atualizou esse RDO
   const [localizacao, setLocalizacao] = useState(null);
   const [pegandoLoc, setPegandoLoc] = useState(false);
+
+  // 🗣️ RELATO DO DIA (falado ou escrito). Obrigatório em dia com alguém presente.
+  // Rascunho fica no aparelho (chave "_" = fora do filtro de cache; apagada no "Sair e limpar") até finalizar o dia.
+  const [relato, setRelato] = useState("");
+  const [gravandoRelato, setGravandoRelato] = useState(false);
+  const [ocupadoIARelato, setOcupadoIARelato] = useState(false);
+  const [relatoRevisadoIA, setRelatoRevisadoIA] = useState(false);
+  const rascunhoRelatoPronto = useRef(false);
+  const empresaIdRelato = usuario?.empresaId || getEmpresaId();
+  const demoRelato = emModoDemo();
+  useEffect(() => {
+    let vivo = true;
+    rascunhoRelatoPronto.current = false;
+    store.get("_rascunhoRelato").then(r => {
+      if (!vivo) return;
+      if (r && typeof r.texto === "string" && r.texto.trim() && mesmoId(r.obraId, obra.id) && r.dataIso === hojeStr()) {
+        setRelato(atual => atual || r.texto);
+      } else {
+        // Sem rascunho e o dia desta obra já foi fechado: traz o relato salvo no RDO para corrigir/completar
+        const relatoSalvo = String(rdosDoDiaObra(rdosEmitidos, obra.id, hojeStr())[0]?.relatoDia || "");
+        if (relatoSalvo.trim()) setRelato(atual => atual || relatoSalvo);
+      }
+      rascunhoRelatoPronto.current = true;
+    }).catch(() => { if (vivo) rascunhoRelatoPronto.current = true; });
+    return () => { vivo = false; };
+  }, [obra.id]);
+  useEffect(() => {
+    if (!rascunhoRelatoPronto.current) return;
+    store.set("_rascunhoRelato", relato.trim() ? { obraId: normId(obra.id), dataIso: hojeStr(), texto: relato } : null);
+  }, [relato, obra.id]);
 
   // Horímetro das máquinas (início/fim)
   const ativosObra = (ativos || []).filter(a => mesmoId(a.obraId, obra.id));
@@ -161,8 +193,9 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
           />
         )}
 
-        {/* ALIMENTAÇÃO */}
-        {trabalhadores.filter(t => presencas[t.id] === "Presente").length > 0 && (
+        {/* ALIMENTAÇÃO — só o escritório vê e ajusta; no campo vale o padrão (café da manhã e da tarde
+            para cada presente), que segue para o RDO e os custos do mesmo jeito */}
+        {usuario?.perfil === "gestor" && trabalhadores.filter(t => presencas[t.id] === "Presente").length > 0 && (
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: T.titulo, letterSpacing: 0.5, marginBottom: 6 }}>☕ ALIMENTAÇÃO DO DIA</div>
             <div style={{ background: T.avisoFundo, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: T.avisoTexto, marginBottom: 10 }}>
@@ -345,10 +378,27 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
             <div><div style={{ fontWeight: 700, color: T.titulo, fontSize: 14 }}>{item.label}</div><div style={{ fontSize: 11, color: T.texto2, marginTop: 2 }}>{item.detail}</div></div>
           </div>
         ))}
+        <div style={{ background: T.superficie, borderRadius: 12, padding: 12, marginTop: 4, marginBottom: 8, boxShadow: T.sombra, borderLeft: `4px solid ${GOLD}` }}>
+          <label htmlFor="relato-dia" style={{ display: "block", fontWeight: 800, fontSize: 13, color: T.titulo, marginBottom: 4 }}>🗣️ RELATO DO DIA {relatoObrigatorio(presentes) ? <span style={{ color: RED }}>(obrigatório)</span> : <span style={{ color: T.texto2, fontWeight: 600 }}>(opcional)</span>}</label>
+          <p style={{ fontSize: 11, color: T.texto2, margin: "0 0 8px" }}>Fale ou escreva o que foi feito hoje, os materiais usados e as ocorrências. Esse texto vai para o RDO do dia.</p>
+          <textarea id="relato-dia" aria-label="Relato do dia" value={relato} disabled={gravandoRelato || ocupadoIARelato} maxLength={5000} onChange={e => { setRelato(e.target.value); setRelatoRevisadoIA(false); }} rows={5} placeholder="Ex.: Assentamos 40 m² de piso no bloco B. Chegaram 30 sacos de cimento. Chuva parou o serviço das 14h às 15h." style={{ ...inputS, resize: "vertical", fontFamily: "inherit", marginBottom: 8 }} />
+          <BotaoDitado texto={relato} onTexto={setRelato} disabled={ocupadoIARelato} onGravando={setGravandoRelato} onIniciar={() => setRelatoRevisadoIA(false)} />
+          <DiarioAssistido empresaId={empresaIdRelato} obraId={obra.id} texto={relato} demo={demoRelato} disabled={gravandoRelato} onOcupado={setOcupadoIARelato} onAplicar={t => { setRelato(t); setRelatoRevisadoIA(true); }} />
+          {relatoRevisadoIA && <p role="status" style={{ fontSize: 12, color: T.infoTexto, margin: "0 0 4px" }}>Texto revisado aplicado ao relato. Confira antes de finalizar.</p>}
+          {relatoObrigatorio(presentes) && !relatoSuficiente(relato) && (
+            <div role="alert" style={{ background: T.erroFundo, color: RED, padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+              ⚠️ Teve gente trabalhando hoje: conte o que foi feito (pelo menos {RELATO_MINIMO} letras) para liberar o botão FINALIZAR DIA. Faltam {RELATO_MINIMO - relato.trim().length}.
+            </div>
+          )}
+          {gravandoRelato && <div style={{ fontSize: 11, color: T.texto2, marginTop: 6 }}>Toque em Parar antes de finalizar o dia.</div>}
+        </div>
         <div style={{ background: T.avisoFundo, borderRadius: 12, padding: "10px 14px", fontSize: 12, color: T.avisoTexto, marginTop: 4 }}>⚠️ Finalizando o dia você confirma o envio do relatório.</div>
       </div>
       <div style={{ padding: "10px 14px", background: T.superficie, boxShadow: "0 -2px 10px rgba(0,0,0,0.07)" }}>
-        <Btn label="FINALIZAR DIA" color={GREEN} onClick={() => setConfirmando(true)} />
+        {(() => {
+          const bloqueado = gravandoRelato || ocupadoIARelato || (relatoObrigatorio(presentes) && !relatoSuficiente(relato));
+          return <Btn label="FINALIZAR DIA" color={bloqueado ? "#ccc" : GREEN} disabled={bloqueado} onClick={() => { if (!bloqueado) setConfirmando(true); }} />;
+        })()}
       </div>
       <KMFooter />
       {confirmando && (
@@ -360,6 +410,9 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
               <button onClick={() => setConfirmando(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, border: "none", background: T.superficie2, color: T.titulo, fontWeight: 800, cursor: "pointer", fontSize: 14 }}>CANCELAR</button>
               <button onClick={async () => {
                 setConfirmando(false);
+                // Relato obrigatório em dia trabalhado (o botão já fica bloqueado; aqui é a última trava)
+                if (gravandoRelato || ocupadoIARelato || (relatoObrigatorio(presentes) && !relatoSuficiente(relato))) return;
+                const relatoLimpo = relato.trim();
 
                 // ⚡ AUTO-GERAR RDO ao finalizar. Um RDO por obra por dia: se a obra JÁ tem RDO hoje (o administrador criou,
                 // ou o dia já foi fechado), o fechamento atualiza esse RDO (mesmo id e número). Senão, número da obra =
@@ -372,7 +425,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                 const autorNome = usuario?.nome || "Encarregado";
 
                 // 📸 CARIMBA E ENVIA FOTOS PRA GALERIA
-                const totalFotosObra = (fotosObras || []).filter(f => mesmoId(f.obraId, obra.id)).length;
+                const totalFotosObra = ultimoNumeroFotoObra(fotosObras, obra.id); // último nº da obra (não recomeça quando o celular limpa as fotos do mês anterior)
                 const fotosCarimbadas = [];
                 for (let i = 0; i < fotos.length; i++) {
                   const numeroFoto = totalFotosObra + i + 1;
@@ -430,7 +483,9 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                   dataIso: hojeIso,
                   encarregado: autorNome,
                   clima: "Bom",
-                  observacoes: `Relatório gerado automaticamente ao finalizar o dia. ${presentes} presente(s), ${faltas} falta(s). ${fotos.length} foto(s) registrada(s).`,
+                  // Relato do encarregado + resumo automático (o PDF do RDO mostra em "Observações gerais")
+                  observacoes: montarObservacoesRelato(relatoLimpo, `Relatório gerado automaticamente ao finalizar o dia. ${presentes} presente(s), ${faltas} falta(s). ${fotos.length} foto(s) registrada(s).`),
+                  relatoDia: relatoLimpo,
                   ts: Date.now(),
                   autoGerado: true,
                   horasTrabalhadas: { ...horasTrabalhadas },
@@ -444,6 +499,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                     return s + somaAlim(empresa, a);
                   }, 0),
                 };
+                rdoNovo.observacoesGeradas = rdoNovo.observacoes; // marca do texto que o sistema montou (ver mesclarObservacoesRelato)
                 let rdo = rdoNovo;
                 if (rdoExistente) {
                   // Mescla o fechamento no RDO do dia: mantém id, número, data, clima e observações escritas pelo gestor;
@@ -453,7 +509,7 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                   const alimM = { ...(rdoExistente.alimentacao || {}), ...rdoNovo.alimentacao };
                   let heM = 0;
                   Object.entries(presM).forEach(([tid, st]) => { if (st === "Presente") { const h = Number(horasM[tid]) || 9; if (h > 9) heM += h - 9; } });
-                  const obsAuto = !String(rdoExistente.observacoes || "").trim() || /^Relatório gerado automaticamente/.test(rdoExistente.observacoes);
+                  const obsMescladas = mesclarObservacoesRelato(rdoExistente.observacoes, rdoNovo.observacoes, relatoLimpo, rdoExistente.relatoDia, rdoExistente.observacoesGeradas);
                   rdo = {
                     ...rdoExistente,
                     ...rdoNovo,
@@ -466,7 +522,11 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                     // Sempre acima da versão que este aparelho viu (relógio do celular atrasado não esconde o fechamento dos outros aparelhos)
                     atualizadoEm: Math.max(Date.now(), versaoRdo(rdoExistente) + 1),
                     clima: rdoExistente.clima || rdoNovo.clima,
-                    observacoes: obsAuto ? rdoNovo.observacoes : rdoExistente.observacoes,
+                    // Observações vazias ou só o resumo automático: usa as novas; escritas pelo gestor: mantém e acrescenta o relato
+                    observacoes: obsMescladas,
+                    // Só é "texto do sistema" se saiu inteiro deste fechamento; com edição de alguém, nunca é refeito
+                    observacoesGeradas: obsMescladas === rdoNovo.observacoes ? obsMescladas : null,
+                    relatoDia: relatoLimpo || rdoExistente.relatoDia || "",
                     presencas: presM,
                     horasTrabalhadas: horasM,
                     alimentacao: alimM,
@@ -477,6 +537,9 @@ export function FluxoEncarregado({ obra, trabalhadores, equips, ativos, abasteci
                   };
                 }
                 if (onAutoEmitirRDO) onAutoEmitirRDO(rdo);
+                // Dia fechado: apaga o rascunho do relato deste aparelho
+                rascunhoRelatoPronto.current = false;
+                store.set("_rascunhoRelato", null);
 
                 setNumeroRdoGerado(rdo.numero);
                 setRdoAtualizado(!!rdoExistente);
@@ -747,17 +810,11 @@ export function TelaDiario({ obra, usuario, diario, empresaId, demo = false, fot
   const [texto, setTexto] = useState("");
   const [foto, setFoto] = useState(null);
   const [salvando, setSalvando] = useState(false);
-  const [gravando, setGravando] = useState(false);
-  const recognition = useRef(null);
+  const [gravando, setGravando] = useState(false); // ditado em andamento (controlado pelo BotaoDitado)
   const [ocupadoIA, setOcupadoIA] = useState(false);
   const [textoAplicadoIA, setTextoAplicadoIA] = useState(false);
-  const [erroVoz, setErroVoz] = useState("");
   const [fotoVer, setFotoVer] = useState(null); // visualização fullscreen
   const minhasObras = diario.filter(d => mesmoId(d.obraId, obra.id)).sort((a, b) => b.ts - a.ts);
-  useEffect(() => () => {
-    const rec = recognition.current;
-    if (rec) {rec.onresult = null;rec.onend = null;rec.onerror = null;rec.abort();recognition.current = null;}
-  }, []);
 
   const adicionar = async () => {
     if (gravando || ocupadoIA || salvando) return;
@@ -771,7 +828,7 @@ export function TelaDiario({ obra, usuario, diario, empresaId, demo = false, fot
       const dataAtual = new Date().toLocaleDateString("pt-BR");
       const horaAtual = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       const autorNome = usuario?.nome || "—";
-      const totalFotosObra = (fotosObras || []).filter(f => mesmoId(f.obraId, obra.id)).length;
+      const totalFotosObra = ultimoNumeroFotoObra(fotosObras, obra.id); // último nº da obra (não recomeça com a limpeza do mês)
       const numeroFoto = totalFotosObra + 1;
 
       try {
@@ -818,44 +875,6 @@ export function TelaDiario({ obra, usuario, diario, empresaId, demo = false, fot
     r.readAsDataURL(f);
   };
 
-  const iniciarVoz = () => {
-    if (gravando || ocupadoIA || salvando) return;
-    setErroVoz("");
-    setTextoAplicadoIA(false);
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRec) {
-      setErroVoz("Ditado indisponível neste navegador. Use o microfone do teclado do celular ou escreva o relato e depois organize com IA.");
-      return;
-    }
-    const rec = new SpeechRec();
-    rec.lang = "pt-BR";
-    rec.continuous = true;
-    rec.interimResults = true;
-    let textoFinal = texto.trim() ? texto.trim() + " " : "";
-    rec.onresult = (event) => {
-      if (recognition.current !== rec) return;
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) textoFinal += transcript + " ";
-        else interim += transcript;
-      }
-      setTexto(textoFinal + interim);
-    };
-    rec.onerror = (e) => {
-      if (recognition.current !== rec) return;
-      rec.onresult = null;rec.onend = null;recognition.current = null;rec.abort();
-      setErroVoz(e.error === "not-allowed" ? "Permita o microfone neste navegador para ditar. Seu texto foi preservado." : "O ditado foi interrompido: " + e.error);setGravando(false);
-    };
-    rec.onend = () => {if (recognition.current === rec) {recognition.current = null;setGravando(false);}};
-    try {rec.start();recognition.current = rec;setGravando(true);}
-    catch {setErroVoz("Não foi possível iniciar o microfone. Você pode escrever o relato e organizar com IA.");}
-  };
-
-  const pararVoz = () => {
-    if (recognition.current) recognition.current.stop();
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <KMHeader title="Diário de Obra" sub={obra.nome} onBack={onBack} />
@@ -865,18 +884,7 @@ export function TelaDiario({ obra, usuario, diario, empresaId, demo = false, fot
           <textarea aria-label="Seu relato da obra" value={texto} disabled={gravando || ocupadoIA || salvando} maxLength={5000} onChange={e => {setTexto(e.target.value);setTextoAplicadoIA(false);}} rows={5} placeholder="Relate os serviços executados, materiais, equipamentos, ocorrências e o que ficou pendente. Informe quantidades apenas quando tiver certeza." style={{ ...inputS, resize: "vertical", fontFamily: "inherit", marginBottom: 8 }} />
           <p style={{fontSize:11,color:T.texto2,margin:"0 0 8px"}}>Pare o ditado e confira o texto antes de usar a IA. O reconhecimento de voz depende do navegador e da permissão do microfone.</p>
 
-          {!gravando ? (
-            <button onClick={iniciarVoz} disabled={ocupadoIA || salvando} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: RED, color: "#fff", fontWeight: 800, cursor: "pointer", marginBottom: 8, boxShadow: "0 3px 10px #dc262644", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              🎤 Ditar por Voz
-            </button>
-          ) : (
-            <button onClick={pararVoz} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: RED, color: "#fff", fontWeight: 800, cursor: "pointer", marginBottom: 8, animation: "pulse 1.5s infinite", boxShadow: "0 3px 10px #dc262688", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              <span style={{ width: 10, height: 10, /* ponto branco piscando sobre botão vermelho: não segue o tema */ background: "#fff", borderRadius: 5, animation: "blink 0.8s infinite" }}></span>
-              ⏹️ Parar Gravação (gravando...)
-            </button>
-          )}
-
-          {erroVoz && <div style={{ background: T.erroFundo, color: RED, padding: "6px 10px", borderRadius: 6, fontSize: 11, marginBottom: 8 }}>⚠️ {erroVoz}</div>}
+          <BotaoDitado texto={texto} onTexto={setTexto} disabled={ocupadoIA || salvando} onGravando={setGravando} onIniciar={() => setTextoAplicadoIA(false)} rotuloFalar="🎤 Ditar por Voz" rotuloParar="⏹️ Parar Gravação (gravando...)" msgSemSuporte="Ditado indisponível neste navegador. Use o microfone do teclado do celular ou escreva o relato e depois organize com IA." mostrarEstado={false} />
           <DiarioAssistido empresaId={empresaId} obraId={obra.id} texto={texto} demo={demo} disabled={gravando || salvando} onOcupado={setOcupadoIA} onAplicar={t => {setTexto(t);setTextoAplicadoIA(true);}} />
           {textoAplicadoIA && <p role="status" style={{fontSize:12,color:T.infoTexto}}>Texto revisado aplicado. Confira a anotação e toque em Adicionar anotação para salvar.</p>}
 
