@@ -1083,6 +1083,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     const ancora = new Date(t.ultimoPagamento + "T12:00:00");
     let presentes = 0, faltas = 0, atestados = 0, feriados = 0, contados = 0;
     let cursor = new Date(ancora), primeiroDiaUtil = null, ultimoDiaUtil = null, guard = 0;
+    const dias = []; // memória de cálculo: cada dia do ciclo como foi contado (anexo da folha)
     // Mensal: o ciclo vai do dia seguinte ao último pagamento até o próximo "dia X" do mês
     // (ficha: diaPagamentoMes). Semanal/quinzenal: 5 ou 10 dias úteis, como antes.
     let fimMensal = null;
@@ -1095,20 +1096,27 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     while ((fimMensal ? cursor < fimMensal : contados < nUteis) && guard < 400) {
       guard++;
       cursor.setDate(cursor.getDate() + 1);
-      if (cursor.getDay() === 0 || cursor.getDay() === 6) continue;
       const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+      if (cursor.getDay() === 0 || cursor.getDay() === 6) {
+        // fim de semana não entra no ciclo; se houver registro, aparece no anexo como "não computado"
+        if (primeiroDiaUtil) dias.push({ iso, st: (historico[iso] || {})[t.id] || "", fora: true });
+        continue;
+      }
       if (!primeiroDiaUtil) primeiroDiaUtil = iso;
       ultimoDiaUtil = iso;
       contados++;
       const sdia = (historico[iso] || {})[t.id];
       const fer = feriadoEm(iso);
-      if (fer && fer.tipo === "nacional" && (sdia === undefined || sdia === "" || sdia === "Feriado" || sdia === "Falta")) { feriados++; continue; }
+      if (fer && fer.tipo === "nacional" && (sdia === undefined || sdia === "" || sdia === "Feriado" || sdia === "Falta")) { feriados++; dias.push({ iso, st: "Feriado" }); continue; }
+      dias.push({ iso, st: sdia || "" });
       if (sdia === "Presente") presentes++;
       else if (sdia === "Meia") presentes += 0.5; // meia diária vale 0,5 dia
       else if (sdia === "Falta") faltas++;
       else if (sdia === "Atestado") atestados++;
       else if (sdia === "Feriado") feriados++;
     }
+    // fim de semana depois do último dia útil não pertence ao ciclo
+    while (dias.length && dias[dias.length - 1].fora) dias.pop();
     let diasPagos = presentes + (pagaAtestado ? atestados : 0) + (pagaFeriado ? feriados : 0);
     let diasBase = 0, bruto = 0;
     if (ehCLT && salarioFixo > 0) {
@@ -1129,7 +1137,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       adiantIds = vales.map(a => a.id);
     }
     const liquido = Math.max(0, bruto - adiantDesconto);
-    return { ...base, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, diasBase, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: fimMensal ? `${fimMensal.getFullYear()}-${String(fimMensal.getMonth() + 1).padStart(2, "0")}-${String(fimMensal.getDate()).padStart(2, "0")}` : ultimoDiaUtil };
+    return { ...base, dias, presentes, faltas, atestados, feriados, diasPagos, diasTotaisPeriodo: contados, diasBase, bruto, adiantDesconto, adiantIds, liquido, periodoIni: primeiroDiaUtil, periodoFim: ultimoDiaUtil, proxPagamento: fimMensal ? `${fimMensal.getFullYear()}-${String(fimMensal.getMonth() + 1).padStart(2, "0")}-${String(fimMensal.getDate()).padStart(2, "0")}` : ultimoDiaUtil };
   };
 
   const calcular = (t) => {
@@ -1141,6 +1149,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
     // ────── CONTAR PRESENÇAS NO PERÍODO ──────
     let presentes = 0, faltas = 0, atestados = 0, feriados = 0;
     let diasTotaisPeriodo = 0;
+    const dias = []; // memória de cálculo: cada dia do período como foi contado (anexo da folha)
     const contarDia = (d, mAtual, aAtual) => {
       const iso = `${aAtual}-${String(mAtual + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const s = (historico[iso] || {})[t.id];
@@ -1150,8 +1159,10 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       // Só conta como feriado se o registro for vazio OU "Feriado" OU "Falta" (faltas em feriado nacional viram feriado pago)
       if (feriado && feriado.tipo === "nacional" && (s === undefined || s === "" || s === "Feriado" || s === "Falta")) {
         feriados++;
+        dias.push({ iso, st: "Feriado" });
         return;
       }
+      dias.push({ iso, st: s || "" });
       if (s === "Presente") presentes++;
       else if (s === "Meia") presentes += 0.5; // meia diária vale 0,5 dia
       else if (s === "Falta") faltas++;
@@ -1159,12 +1170,16 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       else if (s === "Feriado") feriados++;
     };
 
-    if (periodo.mesInicio === periodo.mesFim && periodo.anoInicio === periodo.anoFim) {
-      for (let d = periodo.diaInicio; d <= periodo.diaFim; d++) contarDia(d, periodo.mesInicio, periodo.anoInicio);
-    } else {
-      const ultDiaPrimeiroMes = new Date(periodo.anoInicio, periodo.mesInicio + 1, 0).getDate();
-      for (let d = periodo.diaInicio; d <= ultDiaPrimeiroMes; d++) contarDia(d, periodo.mesInicio, periodo.anoInicio);
-      for (let d = 1; d <= periodo.diaFim; d++) contarDia(d, periodo.mesFim, periodo.anoFim);
+    // Dia a dia, do início ao fim (inclusive). Antes, período que passava por mais de dois meses (personalizado)
+    // pulava os meses do meio: o anexo do calendário deixaria a diferença à vista.
+    {
+      const cur = new Date(periodo.anoInicio, periodo.mesInicio, periodo.diaInicio, 12);
+      const fimP = new Date(periodo.anoFim, periodo.mesFim, periodo.diaFim, 12);
+      let guarda = 0;
+      while (cur <= fimP && guarda++ < 400) {
+        contarDia(cur.getDate(), cur.getMonth(), cur.getFullYear());
+        cur.setDate(cur.getDate() + 1);
+      }
     }
 
     // ────── CÁLCULO DO VALOR BRUTO ──────
@@ -1201,7 +1216,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
 
     const liquido = Math.max(0, bruto - adiantDesconto); // nunca paga negativo
     return {
-      presentes, faltas, atestados, feriados, diaria, salarioFixo,
+      dias, presentes, faltas, atestados, feriados, diaria, salarioFixo,
       diasPagos, diasTotaisPeriodo, diasBase, bruto, adiantDesconto, adiantIds, liquido,
       periodoIni: periodoIniIso, periodoFim: periodoFimIso,
       tipoFolha: tipoRegime, descricaoPeriodo: periodo.descricao, formaCalculo, pagaFeriado, pagaAtestado,
@@ -1310,6 +1325,80 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       : `${linhas}
         <tr class="total"><td colspan="${ehCiclo ? 6 : 5}">Total da folha · ${itens.length} colaborador${itens.length === 1 ? "" : "es"}</td><td class="num">${fmtDias(tot.presentes)}</td><td class="num">${tot.atestados ? fmtDias(tot.atestados) : "—"}</td><td class="num">${tot.faltas ? fmtDias(tot.faltas) : "—"}</td><td class="num">${fmtDias(tot.diasPagos)}</td><td class="num">${fmt(tot.bruto)}</td><td class="num">${tot.adiant > 0 ? "−" + fmt(tot.adiant) : "—"}</td><td class="num">${fmt(tot.liquido)}</td></tr>`;
 
+    // ════ ANEXO · MEMÓRIA DE CÁLCULO: um mini-calendário por colaborador, 12 por página (4 × 3) ════
+    // Usa os MESMOS dias que o cálculo contou (c.dias, gravado em calcular/calcularCiclo): o calendário nunca
+    // diverge da linha da folha. Cada cartão leva o Nº da linha da tabela e a conta escrita até o líquido.
+    const POR_PAGINA_ANEXO = 12;
+    const isoDe = d => `${d.getFullYear()}-${dd(d.getMonth() + 1)}-${dd(d.getDate())}`;
+    const hojeIso = dataLocalIso();
+    const COD = { Presente: ["P", "p"], Meia: ["½", "m"], Falta: ["F", "f"], Atestado: ["A", "a"], Feriado: ["FE", "fe"] };
+    const cartaoCalendario = ({ t, c }, i) => {
+      const fixo = ehFixo(c);
+      const dias = Array.isArray(c.dias) ? c.dias : [];
+      let grade = "";
+      if (!dias.length) {
+        grade = `<div class="cal-vazio">${c.semAncora ? "Sem último pagamento cadastrado: ciclo não definido." : "Sem dias no período."}</div>`;
+      } else {
+        const mapa = new Map(dias.map(d => [d.iso, d]));
+        const ini = new Date(dias[0].iso + "T12:00:00");
+        const fim = new Date(dias[dias.length - 1].iso + "T12:00:00");
+        const cur = new Date(ini); cur.setDate(cur.getDate() - cur.getDay()); // domingo da 1ª semana
+        const ate = new Date(fim); ate.setDate(ate.getDate() + (6 - ate.getDay())); // sábado da última semana
+        const semanas = [];
+        let semana = [], guarda = 0;
+        while (cur <= ate && guarda++ < 500) {
+          const iso = isoDe(cur);
+          const d = mapa.get(iso);
+          const num = cur.getDate();
+          // mês marcado no 1º dia do período e em todo dia 1 (período que atravessa meses)
+          const mesMarca = d && (iso === dias[0].iso || num === 1) ? `<i>${dd(cur.getMonth() + 1)}</i>` : "";
+          if (!d) semana.push(`<td class="cal-fora"><b>${num}</b><span>&nbsp;</span></td>`);
+          else if (!d.st && iso > hojeIso) semana.push(`<td class="cal-fut"><b>${num}</b>${mesMarca}<span>&nbsp;</span></td>`);
+          else {
+            const [cod, cls] = COD[d.st] || ["", "s"];
+            semana.push(`<td class="cal-${d.fora ? "nc" : cls}"><b>${num}</b>${mesMarca}${cod ? `<span>${cod}</span>` : `<span class="v">&nbsp;</span>`}</td>`);
+          }
+          if (cur.getDay() === 6) { semanas.push(semana.join("")); semana = []; }
+          cur.setDate(cur.getDate() + 1);
+        }
+        // até 3 semanas: linhas de 7 mm; mais que isso (mês, personalizado): as semanas dividem a altura livre do cartão
+        const curto = semanas.length <= 3;
+        semanas.forEach((h, k) => { semanas[k] = curto ? `<tr style="height:7mm">${h}</tr>` : `<tr>${h}</tr>`; });
+        grade = `<table class="cal${curto ? "" : " cheia"}"><thead><tr><th>D</th><th>S</th><th>T</th><th>Q</th><th>Q</th><th>S</th><th>S</th></tr></thead><tbody>${semanas.join("")}</tbody></table>`;
+      }
+      // Conta escrita: a mesma da linha da tabela (diária × dias pagos = bruto; bruto − vales = líquido)
+      const partes = [];
+      if (fixo) partes.push(`${c.diasBase === 30 && c.tipoFolha === "mensal" ? "30 avos" : `${fmtDias(c.diasBase)} dias do período`} − ${fmtDias(c.faltas || 0)} falta${c.faltas === 1 ? "" : "s"}`);
+      else {
+        partes.push(`${fmtDias(c.presentes)} pres.`);
+        if (c.atestados && c.pagaAtestado) partes.push(`${fmtDias(c.atestados)} atest.`);
+        if (c.feriados && c.pagaFeriado) partes.push(`${fmtDias(c.feriados)} fer.`);
+      }
+      const dPagosTxt = `${fixo ? partes[0] : partes.join(" + ")} = <b>${fmtDias(c.diasPagos)} d</b>`;
+      const naoPagos = [];
+      if (!fixo && c.atestados && !c.pagaAtestado) naoPagos.push(`${fmtDias(c.atestados)} atest.`);
+      if (!fixo && c.feriados && !c.pagaFeriado) naoPagos.push(`${fmtDias(c.feriados)} fer.`);
+      const diariaV = fixo ? c.salarioFixo / 30 : c.diaria;
+      const periodoCartao = fPeriodo(c.periodoIni, c.periodoFim);
+      return `<div class="cal-cartao">
+        <div class="cal-topo"><span class="cal-n">Nº ${i + 1}</span><b>${esc(t.nome)}</b></div>
+        <div class="cal-sub">${esc(t.cargo || "—")} · ${esc(periodoCartao)}</div>
+        <div class="cal-grade">${grade}</div>
+        <div class="cal-conta">
+          ${fixo ? `<div class="cal-np" style="color:#5c6b73">Salário fixo: só a falta desconta; dia sem registro é pago.</div>` : ""}
+          <div>Dias pagos: ${dPagosTxt}${naoPagos.length ? ` <span class="cal-np">(não pagos: ${naoPagos.join(", ")}${c.faltas && !fixo ? `, ${fmtDias(c.faltas)} falta${c.faltas > 1 ? "s" : ""}` : ""})</span>` : (c.faltas && !fixo ? ` <span class="cal-np">(${fmtDias(c.faltas)} falta${c.faltas > 1 ? "s" : ""} não paga${c.faltas > 1 ? "s" : ""})</span>` : "")}</div>
+          <div>${fmtDias(c.diasPagos)} × R$ ${fmt(diariaV)}${fixo ? " (sal. ÷ 30)" : ""} = <b>R$ ${fmt(c.bruto)}</b>${c.adiantDesconto > 0 ? ` − vales R$ ${fmt(c.adiantDesconto)}` : ""} → líquido <b>R$ ${fmt(c.liquido)}</b></div>
+        </div>
+      </div>`;
+    };
+    const paginasAnexo = [];
+    for (let k = 0; k < itens.length; k += POR_PAGINA_ANEXO) paginasAnexo.push(itens.slice(k, k + POR_PAGINA_ANEXO).map((x, j) => cartaoCalendario(x, k + j)).join(""));
+    const anexoHTML = !itens.length ? "" : paginasAnexo.map((cartoes, pi) => `<div class="anexo-pag quebra">
+        <div class="sec">Anexo · Memória de cálculo dos dias <small>${paginasAnexo.length > 1 ? `folha ${pi + 1} de ${paginasAnexo.length} do anexo · ` : ""}Nº = linha da tabela de apuração</small></div>
+        <div class="cal-legenda"><span class="cal-p">P</span> presente <span class="cal-m">½</span> meia diária (0,5) <span class="cal-f">F</span> falta <span class="cal-a">A</span> atestado <span class="cal-fe">FE</span> feriado nacional <span class="cal-s">&nbsp;</span> sem registro (diarista: não pago) <span class="cal-fut">&nbsp;</span> dia ainda por vir <span class="cal-fora">&nbsp;</span> fora do período${ehCiclo ? ` <span class="cal-nc">&nbsp;</span> fim de semana (não entra no ciclo)` : ""}</div>
+        <div class="cal-grid">${cartoes}</div>
+      </div>`).join("");
+
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Folha de Pagamento</title>
     <style>
       ${KM_PDF_PAGE_CSS}
@@ -1322,6 +1411,39 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       .quadro.compacto td { padding: 2px 4px; } /* 12-13 colunas: linhas mais densas */
       .km-assinaturas { margin-top: 4px; }
       .km-assinaturas .ass { margin-top: 24px; }
+      /* Anexo: 12 cartões por página (4 colunas × 3 linhas), cada página um bloco inteiro */
+      .anexo-pag { break-inside: avoid; page-break-inside: avoid; }
+      .anexo-pag .sec { margin-top: 0; }
+      .cal-legenda { font-size: 6.5pt; color: #5c6b73; margin: 0 0 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
+      .cal-legenda span { display: inline-block; min-width: 11px; text-align: center; border: 1px solid #d5dce6; border-radius: 2px; font-weight: 700; font-size: 6pt; padding: 0 2px; margin-left: 6px; }
+      .cal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 51mm; gap: 2.5mm; }
+      .cal-cartao { border: 1px solid #d5dce6; border-radius: 3px; padding: 1.5mm 2mm; display: flex; flex-direction: column; min-width: 0; overflow: hidden; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+      .cal-topo { font-size: 7.5pt; line-height: 1.15; color: #052f3d; max-height: 2.3em; overflow: hidden; overflow-wrap: anywhere; }
+      .cal-n { display: inline-block; background: #052f3d; color: #fff; font-size: 6pt; font-weight: 700; border-radius: 2px; padding: 0 3px; margin-right: 4px; vertical-align: 1px; }
+      .cal-sub { font-size: 6pt; color: #5c6b73; line-height: 1.2; margin: 0.5mm 0 1mm; overflow-wrap: anywhere; }
+      .cal-grade { flex: 1 1 0; min-height: 0; display: flex; }
+      .cal.cheia { height: 100%; }
+      .cal { width: 100%; align-self: flex-start; border-collapse: separate; border-spacing: 1px; table-layout: fixed; }
+      .cal th { font-size: 5.5pt; color: #5c6b73; font-weight: 700; text-align: center; padding: 0; height: 2.6mm; line-height: 1; }
+      .cal td { border: 1px solid #e3e8ee; border-radius: 1.5px; font-size: 5.5pt; line-height: 1; text-align: center; vertical-align: middle; padding: 0; position: relative; color: #1c2a30; }
+      .cal td b { font-weight: 600; display: block; }
+      .cal td i { position: absolute; top: 0; right: 1px; font-style: normal; font-size: 4pt; color: #5c6b73; }
+      .cal td span { display: block; font-weight: 800; font-size: 6pt; }
+      .cal-vazio { font-size: 7pt; color: #b7791f; margin: auto; text-align: center; }
+      .cal-p { background: #dcfce7; color: #15803d; } .cal td.cal-p span { color: #15803d; }
+      .cal-m { background: #e0f2fe; color: #0369a1; } .cal td.cal-m span { color: #0369a1; }
+      .cal-f { background: #fee2e2; color: #b91c1c; } .cal td.cal-f span { color: #b91c1c; }
+      .cal-a { background: #fef3c7; color: #a16207; } .cal td.cal-a span { color: #a16207; }
+      .cal-fe { background: #ede9fe; color: #6d28d9; } .cal td.cal-fe span { color: #6d28d9; }
+      .cal-s { background: #fff; }
+      .cal-fora { background: #f1f3f5; color: #b8c0c6 !important; border-color: #f1f3f5 !important; }
+      .cal-fut { background: #fff; color: #b8c0c6; border-style: dashed !important; }
+      .cal-nc { background: repeating-linear-gradient(135deg, #f1f3f5 0 2px, #e3e8ee 2px 4px); color: #8a959b; }
+      .cal td.cal-nc span { text-decoration: line-through; }
+      .cal td span.v { text-decoration: none; }
+      .cal-conta { font-size: 6pt; line-height: 1.3; color: #1c2a30; border-top: 1px solid #eef1f4; margin-top: 1mm; padding-top: 0.8mm; }
+      .cal-conta b { color: #052f3d; }
+      .cal-np { color: #b42318; }
     </style></head><body class="folha">
       ${gerarHeaderHTML({ tipo: "Folha de Pagamento", periodo: periodoTxt, empresa, subtitulo: regimeTxt, info_extra: "Modelo KMZ-PL-001" })}
       <div class="grade-dados g4">
@@ -1334,6 +1456,7 @@ export function TelaFolhaQuinzenal({ obras, trabalhadores, historico, adiantamen
       <table class="quadro compacto"><thead>${cabecalhoTabela}</thead><tbody>${corpoTabela}</tbody></table>
       <div class="nota">Presenças = dias presentes (meia diária = 0,5) · Atestados e feriados nacionais pagos conforme o cadastro de cada colaborador${temFeriadoPago ? " (\"+N feriado\" = feriados pagos, somados aos dias pagos)" : ""} · Faltas não pagas · Vales = adiantamentos do período, descontados do líquido.${temFixo ? " · Salário fixo (CLT): diária = salário ÷ 30 e dias pagos = dias do período (mês = 30 avos) menos as faltas; a presença não altera o valor." : ""}${ehCiclo ? " · Por ciclo: período de cada colaborador a partir do último pagamento, só seg–sex (semanal = 5 dias úteis, quinzenal = 10, mensal = até o dia de pagamento)." : ""}</div>
       ${gerarAssinaturasHTML({ empresa, assinantes: [{ nome: empresa?.responsavel || "", cargo: "Responsável pela folha" }, { nome: "", cargo: "Conferência / aprovação" }] })}
+      ${anexoHTML}
       ${gerarFooterHTML({ empresa, documento: "Folha de Pagamento · KMZ-PL-001" })}
     </body></html>`;
     abrirOuBaixarHTML(html, `Folha-Pagamento-${ehCiclo ? "ciclo" : tipoRegime}${equipeFiltro !== "todas" ? "-" + nomeEquipe(equipeFiltro).replace(/\s+/g, "") : ""}-${dataLocalIso()}.html`);

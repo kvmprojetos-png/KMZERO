@@ -916,7 +916,7 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
 
       <div style={{ display: "flex", justifyContent: "space-around", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borda}` }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: T.sucessoTexto }}>{contPresente}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.sucessoTexto }}>{Number.isInteger(contPresente) ? contPresente : contPresente.toLocaleString("pt-BR")}</div>
           <div style={{ fontSize: 9, color: T.texto2 }}>Presenças</div>
         </div>
         <div style={{ textAlign: "center" }}>
@@ -929,14 +929,15 @@ export function CalendarioPresenca({ trabalhador, historico, podeEditar = false,
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 10, fontSize: 9, color: T.texto3 }}>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: T.sucessoFundo, borderRadius: 2, marginRight: 3 }}></span>Presente</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: T.erroFundo, borderRadius: 2, marginRight: 3 }}></span>Falta</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: T.avisoFundo, borderRadius: 2, marginRight: 3 }}></span>Atestado</span>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 14, marginTop: 10, fontSize: 9, color: T.texto3 }}>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: corFundo("Presente"), borderRadius: 2, marginRight: 3 }}></span>Presente</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: corFundo("Meia"), borderRadius: 2, marginRight: 3 }}></span>½ Meia</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: corFundo("Falta"), borderRadius: 2, marginRight: 3 }}></span>Falta</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: corFundo("Atestado"), borderRadius: 2, marginRight: 3 }}></span>Atestado</span>
       </div>
       {podeEditar && (
         <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: T.titulo, fontWeight: 600, background: T.infoFundo, borderRadius: 8, padding: "6px 8px" }}>
-          ✏️ Modo gestor: toque no dia para corrigir (Presente → Falta → Atestado → limpar)
+          ✏️ Modo gestor: toque no dia para corrigir (Presente → Meia → Falta → Atestado → limpar)
         </div>
       )}
     </div>
@@ -952,12 +953,17 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
   if (!trabalhador) return null;
   const obra = obras.find(o => mesmoId(o.id, trabalhador.obraId));
   const dias = ultimosDias(30);
-  const stats = { Presente: 0, Falta: 0, Atestado: 0, "Sem registro": 0 };
+  const stats = { Presente: 0, Meia: 0, Falta: 0, Atestado: 0, "Sem registro": 0 };
   dias.forEach(d => {
     const s = (historico[d] || {})[trabalhador.id] || "Sem registro";
     stats[s] = (stats[s] || 0) + 1;
   });
-  const presPct = Math.round((stats.Presente / 30) * 100);
+  // Mesma regra da folha: meia diária = 0,5 presença. A taxa é sobre os dias COM registro
+  // (antes dividia por 30 dias corridos — fim de semana e dia sem lançamento derrubavam a taxa — e ignorava a meia).
+  const presencas = stats.Presente + 0.5 * stats.Meia;
+  const diasRegistrados = stats.Presente + stats.Meia + stats.Falta + stats.Atestado;
+  const presPct = diasRegistrados ? Math.round((presencas / diasRegistrados) * 100) : 0;
+  const fmtN = n => Number.isInteger(n) ? String(n) : n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
   // código da obra gravado canônico (sem criar o campo em quem não tem obra, ex.: escritório)
   const salvar = () => { onEditar("obraId" in form ? { ...form, obraId: normId(form.obraId) } : form); setEditando(false); };
@@ -1079,10 +1085,10 @@ export function TelaTrabalhadorDetalhe({ trabalhador, obras, historico, rdosEmit
           <div style={{ fontWeight: 800, color: T.titulo, marginBottom: 10, fontSize: 14 }}>📊 Frequência (30 dias)</div>
           <div style={{ textAlign: "center", marginBottom: 12 }}>
             <div style={{ fontSize: 36, fontWeight: 900, color: presPct >= 80 ? GREEN : presPct >= 50 ? ORANGE : RED }}>{presPct}%</div>
-            <div style={{ fontSize: 11, color: T.texto2 }}>Taxa de presença</div>
+            <div style={{ fontSize: 11, color: T.texto2 }}>Taxa de presença{diasRegistrados ? ` · ${fmtN(presencas)} de ${diasRegistrados} dia${diasRegistrados > 1 ? "s" : ""} com registro` : " · sem registros"}</div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            <div style={{ flex: 1, background: T.sucessoFundo, borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: GREEN }}>{stats.Presente}</div><div style={{ fontSize: 9, color: T.texto2 }}>Presente</div></div>
+            <div style={{ flex: 1, background: T.sucessoFundo, borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: GREEN }}>{fmtN(presencas)}</div><div style={{ fontSize: 9, color: T.texto2 }}>Presenças{stats.Meia ? ` (${stats.Meia} meia${stats.Meia > 1 ? "s" : ""})` : ""}</div></div>
             <div style={{ flex: 1, background: T.erroFundo, borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: RED }}>{stats.Falta}</div><div style={{ fontSize: 9, color: T.texto2 }}>Falta</div></div>
             <div style={{ flex: 1, background: T.avisoFundo, borderRadius: 8, padding: "6px 4px", textAlign: "center" }}><div style={{ fontWeight: 800, color: ORANGE }}>{stats.Atestado}</div><div style={{ fontSize: 9, color: T.texto2 }}>Atestado</div></div>
           </div>
