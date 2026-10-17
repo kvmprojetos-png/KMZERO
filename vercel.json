@@ -38,7 +38,7 @@
       ]
     },
     {
-      "source": "/projetos/casa-ana-paula(.*)",
+      "source": "/projetos/residencia-rio-espera(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -97,7 +97,9 @@
       "source": "/app",
       "destination": "/app/",
       "permanent": true
-    }
+    },
+    { "source": "/projetos/casa-ana-paula/:path*", "destination": "/projetos/residencia-rio-espera/:path*", "permanent": true },
+    { "source": "/projetos/casa-ana-paula", "destination": "/projetos/residencia-rio-espera/", "permanent": true }
   ],
   "rewrites": [
     {
@@ -109,8 +111,8 @@
       "destination": "/projetos/rodoviaria-sooretama/index.html"
     },
     {
-      "source": "/projetos/casa-ana-paula",
-      "destination": "/projetos/casa-ana-paula/index.html"
+      "source": "/projetos/residencia-rio-espera",
+      "destination": "/projetos/residencia-rio-espera/index.html"
     },
     {
       "source": "/__/auth/(.*)",

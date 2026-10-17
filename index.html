@@ -386,6 +386,8 @@
       .projeto-tour-texto .btn { margin-top: 24px; max-width: 100%; white-space: normal; text-align: center; }
       .projeto-tour-texto small { display: block; margin-top: 16px; color: var(--km-texto2); font-size: 12px; }
       @media (min-width: 960px) { .projeto-tour { grid-template-columns: 1.35fr 1fr; } }
+      .projeto-tour + .projeto-tour { margin-top: 24px; }
+      @media (min-width: 960px) { .projeto-tour-inverso { grid-template-columns: 1fr 1.35fr; } .projeto-tour-inverso .projeto-tour-imagem { order: 2; } }
       /* Quem faz */
       .quem { display: grid; gap: 24px; align-items: center; }
       @media (min-width: 720px) { .quem { grid-template-columns: 200px 1fr; gap: 40px; } }
@@ -800,7 +802,7 @@
         <div class="wrap">
           <div class="cab rev">
             <span class="rotulo">Portfólio · Engenharia e arquitetura</span>
-            <h2 id="projetos-titulo">Um projeto para explorar.</h2>
+            <h2 id="projetos-titulo">Projetos para explorar.</h2>
           </div>
           <article class="projeto-tour rev">
             <a class="projeto-tour-imagem" href="/projetos/rodoviaria-sooretama/" aria-label="Explorar a rodoviária de Sooretama em 3D">
@@ -812,6 +814,18 @@
               <p>Conheça o estudo preliminar R00 em uma visita 3D. Escolha o ponto de vista, percorra o terminal e experimente a luz do dia e da noite.</p>
               <a class="btn btn-ouro" href="/projetos/rodoviaria-sooretama/">Explorar a rodoviária em 3D <span aria-hidden="true">↗</span></a>
               <small>Imagens ilustrativas · terreno indicativo</small>
+            </div>
+          </article>
+          <article class="projeto-tour projeto-tour-inverso rev">
+            <a class="projeto-tour-imagem" href="/projetos/residencia-rio-espera/" aria-label="Explorar a residência em Rio Espera em 3D">
+              <img src="/projetos/residencia-rio-espera/imagens/05-piscina.jpg" width="1672" height="941" loading="lazy" decoding="async" alt="Imagem ilustrativa da residência em Rio Espera/MG: piscina de borda infinita voltada para a cidade.">
+            </a>
+            <div class="projeto-tour-texto">
+              <span class="rotulo">Residencial · projeto executivo</span>
+              <h3>Residência em Rio Espera/MG</h3>
+              <p>Casa térrea num lote em declive de 28%, com subsolo gourmet e piscina de borda infinita voltados para a cidade. Maquete 3D, 16 imagens e as pranchas do executivo de arquitetura.</p>
+              <a class="btn btn-ouro" href="/projetos/residencia-rio-espera/">Explorar a casa em 3D <span aria-hidden="true">↗</span></a>
+              <small>Imagens ilustrativas · dados da cliente protegidos</small>
             </div>
           </article>
         </div>
@@ -928,7 +942,7 @@
             <a class="lockup" href="#inicio" aria-label="KMZERO Obras, voltar ao início"><b>KM<span>ZERO</span></b><small>Gestão de obras</small></a>
             <p class="tag">A obra inteira no seu celular. O escritório vê tudo na hora.</p>
             <p style="margin-top:8px">Feito em Alegre/ES</p>
-            <p style="margin-top:12px"><a href="/projetos/rodoviaria-sooretama/">Projetos · Explorar a rodoviária em 3D</a></p>
+            <p style="margin-top:12px"><a href="/projetos/rodoviaria-sooretama/">Projetos · Rodoviária de Sooretama em 3D</a><br><a href="/projetos/residencia-rio-espera/">Projetos · Residência em Rio Espera em 3D</a></p>
           </div>
           <div>
             <h4>Contato</h4>
